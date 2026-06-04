@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-theme-mode="system">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hitch — one hook handler for every agent harness</title>
+    <meta name="description" content="Hitch is a local universal hook adapter for Codex, Pi, OMP, and Hermes. Write one handler protocol and reuse it across agent harnesses." />
+    <meta property="og:title" content="Hitch" />
+    <meta property="og:description" content="One portable hook handler protocol for Codex, Pi, OMP, and Hermes." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (() => {
+        const mode = localStorage.getItem('hitch:theme') || 'system';
+        const theme = mode === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.themeMode = mode;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+    <link rel="stylesheet" href="assets/site.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="./" aria-label="Hitch home">
+          <span class="brand-mark" aria-hidden="true">H</span>
+          <span>Hitch</span>
+        </a>
+        <div class="nav-links">
+          <a href="./" aria-current="page">Home</a>
+          <a href="docs/latest/">Docs</a>
+          <a href="https://github.com/sagebynature/hitch">GitHub</a>
+          <button class="theme-toggle" type="button" data-theme-toggle>System</button>
+        </div>
+      </nav>
+    </header>
+
+    <main id="content">
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <p class="eyebrow">Universal local hook adapter</p>
+          <h1 id="hero-title">One handler. Every harness.</h1>
+          <p class="lede">Hitch normalizes Codex, Pi, OMP, and Hermes hook events into one envelope, runs your local handlers, records the audit trail, and translates decisions back into each harness.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="docs/latest/">Read the docs</a>
+            <a class="button" href="https://github.com/sagebynature/hitch">View source</a>
+          </div>
+        </div>
+        <aside class="terminal-card" aria-label="Install Hitch from source">
+          <div class="terminal-top"><span>local install</span><span>127.0.0.1:8799</span></div>
+          <pre class="terminal-body"><code><span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
+<span class="ok">✓</span> hitch 0.1.0
+
+<span class="prompt">$</span> hitch serve --config ~/.config/hitch/config.toml
+<span class="comment"># normalized hooks, handler dispatch, SQLite audit</span>
+
+<span class="prompt">$</span> hitch install --only codex --yes --json
+{ "installed": ["codex"], "changed": true }</code></pre>
+        </aside>
+      </section>
+
+      <section class="section" aria-labelledby="why-title">
+        <div class="section-grid">
+          <div class="section-intro">
+            <p class="label">Why Hitch?</p>
+            <h2 id="why-title">Agent hooks should be portable.</h2>
+            <p>Every harness has its own event names, payloads, and response rules. Hitch gives tool authors a stable local contract instead of forcing guardrails, loggers, and policy scripts to chase every native hook format.</p>
+          </div>
+          <div class="card-grid">
+            <article class="card">
+              <h3>Normalize once</h3>
+              <p>Native hook JSON becomes a Hitch event envelope with harness identity, native event type, normalized event type, and payload.</p>
+              <div class="pill-row"><span class="pill"><code>tool.requested</code></span><span class="pill"><code>session.started</code></span></div>
+            </article>
+            <article class="card">
+              <h3>Dispatch locally</h3>
+              <p>Handlers are ordinary executables. They read one JSON object on stdin and return a handler result on stdout.</p>
+              <div class="pill-row"><span class="pill">shell</span><span class="pill">python</span><span class="pill">node</span><span class="pill">go</span></div>
+            </article>
+            <article class="card">
+              <h3>Translate safely</h3>
+              <p>Synchronous decisions are aggregated deterministically, persisted, then translated back to the native response shape the harness expects.</p>
+              <div class="pill-row"><span class="pill"><code>allow</code></span><span class="pill"><code>deny</code></span><span class="pill"><code>inject_context</code></span></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="flow-title">
+        <div class="section-grid">
+          <div class="section-intro">
+            <p class="label">The contract</p>
+            <h2 id="flow-title">A small control plane for local agent events.</h2>
+            <p>Hitch stays boring on purpose: JSON in, external commands out, SQLite records underneath, and harness-native responses at the edge.</p>
+          </div>
+          <div>
+            <div class="flow" aria-label="Hitch event flow">
+              <div class="flow-step"><span>01</span><strong>Hook</strong><p>Codex, Pi, OMP, or Hermes emits native hook data.</p></div>
+              <div class="flow-step"><span>02</span><strong>Adapter</strong><p>The harness adapter posts async or sync events to Hitch.</p></div>
+              <div class="flow-step"><span>03</span><strong>Envelope</strong><p>Hitch maps payloads into the universal event schema.</p></div>
+              <div class="flow-step"><span>04</span><strong>Handler</strong><p>Configured commands inspect, log, block, or transform.</p></div>
+              <div class="flow-step"><span>05</span><strong>Response</strong><p>Decisions become native harness output and audit records.</p></div>
+            </div>
+            <div class="split" style="margin-top: 1rem">
+              <article class="callout accent">
+                <h3>For tool builders</h3>
+                <p>Ship a reusable policy pack or observer without binding it to one agent CLI.</p>
+              </article>
+              <article class="callout">
+                <h3>For teams</h3>
+                <p>Keep local guardrails, audit logs, and replay workflows consistent as harnesses change.</p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="quickstart-title">
+        <div class="section-grid">
+          <div class="section-intro">
+            <p class="label">Quick start</p>
+            <h2 id="quickstart-title">Install, serve, verify.</h2>
+            <p>The current installer seeds Hitch config and installs managed Codex command hooks. Hermes, Pi, and OMP are detected and reported while their real hook patchers are still adapter-level work.</p>
+          </div>
+          <div class="callout">
+            <pre class="code-block"><code>curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
+hitch serve --config ~/.config/hitch/config.toml
+hitch status --json
+hitch doctor --json
+hitch install --only codex --dry-run --json
+hitch install --only codex --yes --json</code></pre>
+            <div class="actions">
+              <a class="button primary" href="docs/latest/#quickstart">Full quickstart</a>
+              <a class="button" href="docs/latest/#handler-protocol">Handler protocol</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="docs-title">
+        <div class="section-grid">
+          <div class="section-intro">
+            <p class="label">References</p>
+            <h2 id="docs-title">Docs for the hook surface area.</h2>
+            <p>Start with the latest reference page, then jump into the source markdown and schemas when you need implementation-level detail.</p>
+          </div>
+          <div class="docs-index">
+            <a class="doc-card" href="docs/latest/#handler-protocol"><small>Protocol</small><h3>Handler results</h3><p>Status values, decision behaviors, stdout parsing, timeout handling, and aggregation rules.</p></a>
+            <a class="doc-card" href="docs/latest/#http-api"><small>API</small><h3>Local HTTP API</h3><p>Health checks, event ingestion, synchronous dispatch, inspection, and replay entry points.</p></a>
+            <a class="doc-card" href="docs/latest/#harness-contracts"><small>Adapters</small><h3>Harness contracts</h3><p>Codex, Hermes, Pi, and OMP behavior at the native boundary.</p></a>
+            <a class="doc-card" href="docs/latest/#schemas"><small>Schemas</small><h3>JSON references</h3><p>Envelope, handler result, and dispatch result schema files for tests and integrations.</p></a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Hitch is a local universal hook adapter.</span>
+      <span> · </span>
+      <a href="docs/latest/">Docs</a>
+      <span> · </span>
+      <a href="https://github.com/sagebynature/hitch">GitHub</a>
+    </footer>
+    <script src="assets/site.js" defer></script>
+  </body>
+</html>

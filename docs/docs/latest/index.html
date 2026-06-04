@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-theme-mode="system">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hitch Documentation</title>
+    <meta name="description" content="Latest Hitch documentation: installation, configuration, handler protocol, HTTP API, harness contracts, replay, and schemas." />
+    <script>
+      (() => {
+        const mode = localStorage.getItem('hitch:theme') || 'system';
+        const theme = mode === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.themeMode = mode;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+    <link rel="stylesheet" href="../../assets/site.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="../../" aria-label="Hitch home">
+          <span class="brand-mark" aria-hidden="true">H</span>
+          <span>Hitch</span>
+        </a>
+        <div class="nav-links">
+          <a href="../../">Home</a>
+          <a href="./" aria-current="page">Docs</a>
+          <a href="https://github.com/sagebynature/hitch">GitHub</a>
+          <button class="theme-toggle" type="button" data-theme-toggle>System</button>
+        </div>
+      </nav>
+    </header>
+
+    <main id="content" class="docs-shell">
+      <aside class="docs-sidebar" aria-label="Documentation sections">
+        <a href="#top">Overview</a>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#installation">Installation</a>
+        <a href="#configuration">Configuration</a>
+        <a href="#handler-protocol">Handler protocol</a>
+        <a href="#http-api">HTTP API</a>
+        <a href="#harness-contracts">Harness contracts</a>
+        <a href="#replay">Replay and inspect</a>
+        <a href="#schemas">Schemas</a>
+        <a href="#source-docs">Source references</a>
+      </aside>
+
+      <article class="docs-content">
+        <p class="eyebrow" id="top">Latest reference</p>
+        <h1>Hitch Documentation</h1>
+        <p class="lede">Hitch is a local universal hook adapter for Codex, Pi, OMP, and Hermes. It gives open-source developers one portable handler protocol for guardrails, audit logs, policy checks, context injection, and result transformation.</p>
+
+        <section id="quickstart">
+          <h2>Quickstart</h2>
+          <p>Install from latest source, start the local server, check health, then preview and install supported hooks.</p>
+          <pre class="code-block"><code>curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
+hitch serve --config ~/.config/hitch/config.toml
+hitch status --json
+hitch doctor --json
+hitch install --only codex --dry-run --json
+hitch install --only codex --yes --json</code></pre>
+          <p>The default server listens on <code>127.0.0.1:8799</code> and stores SQLite audit records at <code>~/.local/share/hitch/events.sqlite</code>.</p>
+        </section>
+
+        <section id="installation">
+          <h2>Installation</h2>
+          <p>The source installer checks for <code>git</code> and <code>go</code>, builds <code>./cmd/hitch</code>, installs the binary into <code>$HITCH_INSTALL_DIR</code> or <code>~/.local/bin</code>, verifies <code>hitch --version</code>, and offers hook setup when stdin is interactive.</p>
+          <h3>Build locally</h3>
+          <pre class="code-block"><code>make build
+./bin/hitch --version
+./bin/hitch serve --config config/default.config.toml</code></pre>
+          <h3>Hook install commands</h3>
+          <pre class="code-block"><code>hitch install --dry-run --json
+hitch install --all --dry-run --json
+hitch install --only codex --yes --json
+hitch uninstall --only codex --yes --json</code></pre>
+          <p>The current installer seeds <code>~/.config/hitch/config.toml</code> when missing and installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>. Hermes, Pi, and OMP are detected and reported, but real hook patching is not implemented for them yet.</p>
+        </section>
+
+        <section id="configuration">
+          <h2>Configuration</h2>
+          <p>Hitch reads user configuration from <code>~/.config/hitch/config.toml</code>. Development commands default to <code>config/default.config.toml</code> unless a command receives <code>--config</code> or <code>-config</code>.</p>
+          <table>
+            <thead><tr><th>Section</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code>[server]</code></td><td>Local API bind address and request size limit.</td></tr>
+              <tr><td><code>[log]</code></td><td>Operational logging. Native payloads are not included by default.</td></tr>
+              <tr><td><code>[audit]</code></td><td>Event journal persistence. SQLite is the verified backend.</td></tr>
+              <tr><td><code>[handlers.&lt;name&gt;]</code></td><td>External command handlers, event filters, mode, timeout, and error policy.</td></tr>
+              <tr><td><code>[harness.&lt;name&gt;]</code></td><td>Per-harness enable flags.</td></tr>
+            </tbody>
+          </table>
+          <p>Strict validation rejects unknown config keys and invalid server ports, request sizes, log values, audit backends, handler event names, handler modes, and handler error or timeout policies.</p>
+          <pre class="code-block"><code>[handlers.noop_observer]
+command = ["hitch", "handler", "noop-observer"]
+events = ["*"]
+mode = "sync"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"</code></pre>
+        </section>
+
+        <section id="handler-protocol">
+          <h2>Handler protocol</h2>
+          <p>A handler is any executable command configured in Hitch. Hitch writes one normalized event envelope JSON object to handler stdin. The handler may write one JSON result object to stdout.</p>
+          <pre class="code-block"><code>{
+  "status": "ok",
+  "decision": {
+    "behavior": "none"
+  }
+}</code></pre>
+          <ul>
+            <li>Allowed statuses: <code>ok</code>, <code>error</code>, <code>timeout</code>.</li>
+            <li>Allowed decisions: <code>none</code>, <code>allow</code>, <code>deny</code>, <code>block</code>, <code>continue</code>, <code>stop</code>, <code>transform</code>, <code>replace_result</code>, <code>inject_context</code>, <code>handled</code>.</li>
+            <li>If <code>decision</code> is omitted, Hitch treats it as <code>{"behavior":"none"}</code>.</li>
+            <li>Hitch sets <code>HITCH_CHILD=1</code> on child handler processes for recursion guards.</li>
+          </ul>
+          <p>Verified behavior includes stdout JSON parsing, invalid stdout persistence as <code>error</code>, timeout persistence as <code>timeout</code>, separate stderr capture, decision precedence by configured handler order, ordered context injection concatenation, and rejection of multiple transforms unless transform chaining is explicitly configured.</p>
+        </section>
+
+        <section id="http-api">
+          <h2>Local HTTP API</h2>
+          <p>Hitch exposes a local API for health checks, event ingestion, synchronous dispatch, event inspection, and replay-driven workflows.</p>
+          <table>
+            <thead><tr><th>Endpoint</th><th>Use</th></tr></thead>
+            <tbody>
+              <tr><td><code>GET /v1/health</code></td><td>Return server health status.</td></tr>
+              <tr><td><code>POST /v1/events</code></td><td>Ingest async observer events.</td></tr>
+              <tr><td><code>POST /v1/dispatch-sync</code></td><td>Run sync handlers and return a harness-native response.</td></tr>
+              <tr><td><code>GET /v1/events/&lt;id&gt;</code></td><td>Inspect stored inbound, normalized, handler, and native response records.</td></tr>
+            </tbody>
+          </table>
+          <pre class="code-block"><code>curl -sS -X POST http://127.0.0.1:8799/v1/dispatch-sync \
+  -H 'content-type: application/json' \
+  -d '{
+    "harness": "codex",
+    "native_event_type": "PreToolUse",
+    "native_payload": {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Bash",
+      "tool_input": {"command": "pwd"}
+    }
+  }'</code></pre>
+        </section>
+
+        <section id="harness-contracts">
+          <h2>Harness contracts</h2>
+          <p>Hitch supports two dispatch modes: async observer events use <code>POST /v1/events</code>, and sync control events use <code>POST /v1/dispatch-sync</code> and return a native response.</p>
+          <table>
+            <thead><tr><th>Harness</th><th>Current contract</th></tr></thead>
+            <tbody>
+              <tr><td>Codex</td><td>Maps native command hook payloads and translates decisions to Codex stdout JSON. The verified path covers every supported Codex lifecycle event and <code>PreToolUse</code> deny translation.</td></tr>
+              <tr><td>Hermes</td><td>Maps shell hook payloads and translates decisions to Hermes stdout JSON. The verified <code>pre_tool_call</code> block response is <code>{"action":"block","message":"..."}</code>.</td></tr>
+              <tr><td>Pi / OMP</td><td>Maps extension callback events in Go and shares a TypeScript adapter-response contract for callback return values or in-place event mutation.</td></tr>
+            </tbody>
+          </table>
+          <p>Async adapter calls print nothing and ignore Hitch network failure. Sync adapter calls emit a harness-native no-op response when Hitch is unreachable or returns no native response.</p>
+        </section>
+
+        <section id="replay">
+          <h2>Replay and inspect</h2>
+          <p>Use <code>inspect-event</code> to inspect the persisted audit view for a normalized event. Use <code>replay</code> to re-run configured sync handlers against stored normalized events.</p>
+          <pre class="code-block"><code>hitch inspect-event --config config/default.config.toml norm_...
+hitch replay --config config/default.config.toml --dry-run norm_...
+hitch replay --config config/default.config.toml norm_...</code></pre>
+          <p>Dry-run replay returns the stored event envelope without writing records. Replay without <code>--dry-run</code> persists new handler invocation records linked by <code>replay_source_id</code> to the source normalized event id.</p>
+        </section>
+
+        <section id="schemas">
+          <h2>Schemas</h2>
+          <p>The repository includes JSON schemas for the normalized envelope and handler-facing responses.</p>
+          <div class="docs-index">
+            <a class="doc-card" href="https://github.com/sagebynature/hitch/blob/main/schemas/hitch-event-envelope.schema.json"><small>JSON schema</small><h3>Event envelope</h3><p><code>schemas/hitch-event-envelope.schema.json</code></p></a>
+            <a class="doc-card" href="https://github.com/sagebynature/hitch/blob/main/schemas/handler-result.schema.json"><small>JSON schema</small><h3>Handler result</h3><p><code>schemas/handler-result.schema.json</code></p></a>
+            <a class="doc-card" href="https://github.com/sagebynature/hitch/blob/main/schemas/dispatch-result.schema.json"><small>JSON schema</small><h3>Dispatch result</h3><p><code>schemas/dispatch-result.schema.json</code></p></a>
+          </div>
+        </section>
+
+        <section id="source-docs">
+          <h2>Source references</h2>
+          <p>These source markdown files remain the implementation-level references for contributors.</p>
+          <div class="docs-index">
+            <a class="doc-card" href="../../walkthrough.md"><small>Guide</small><h3>Walkthrough</h3><p>Fresh checkout to working Codex proof of concept.</p></a>
+            <a class="doc-card" href="../../installation.md"><small>Guide</small><h3>Installation</h3><p>Source install, hook setup, status, doctor, and uninstall behavior.</p></a>
+            <a class="doc-card" href="../../configuration.md"><small>Reference</small><h3>Configuration</h3><p>Config sections and strict validation rules.</p></a>
+            <a class="doc-card" href="../../handler-protocol.md"><small>Reference</small><h3>Handler protocol</h3><p>stdin/stdout contract and result aggregation rules.</p></a>
+            <a class="doc-card" href="../../harness-contracts.md"><small>Reference</small><h3>Harness contracts</h3><p>Supported dispatch modes and adapter behavior.</p></a>
+            <a class="doc-card" href="../../replay.md"><small>Reference</small><h3>Replay</h3><p>Event inspection and replay commands.</p></a>
+          </div>
+        </section>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <span>Hitch docs.</span>
+      <span> · </span>
+      <a href="../../">Home</a>
+      <span> · </span>
+      <a href="https://github.com/sagebynature/hitch">GitHub</a>
+    </footer>
+    <script src="../../assets/site.js" defer></script>
+  </body>
+</html>
