@@ -1,24 +1,149 @@
 # Hitch
 
-Hitch is a local universal hook adapter for agent harnesses. It normalizes native hook payloads from Codex, Pi, OMP, and Hermes, dispatches configured external-command handlers, persists audit records, and translates synchronous decisions back into each harness's native hook response format.
+Write one hook event handler for all your agent harnesses.
 
-Verified in this implementation:
+Hitch is a local universal hook adapter for Codex, Pi, OMP, and Hermes. It gives open-source developers a single, portable handler protocol instead of forcing every tool, guardrail, logger, or policy script to learn each harness's native hook format.
 
-- Local HTTP API: `GET /v1/health`, `POST /v1/events`, `POST /v1/dispatch-sync`, `GET /v1/events/<id>`.
-- SQLite audit persistence for inbound events, normalized events, handler invocations, and native responses.
-- Codex and Hermes shell adapter entrypoint via `hitch adapter`.
-- Pi/OMP-compatible TypeScript adapter response application helpers.
-- Installer placeholder management under `~/.config/hitch/integrations`.
-- `inspect-event` and `replay` CLI support for persisted normalized events.
+## Why Hitch?
 
-Run tests:
+Agent harnesses are moving fast, and each one ships its own hook payloads, event names, and response shapes. That fragmentation makes useful developer tools harder to share.
+
+Hitch normalizes those harness-specific hooks into one event envelope, runs your configured handlers, records what happened, and translates synchronous decisions back into the native response format the harness expects.
+
+Use Hitch to build:
+
+- shared guardrails for tool calls and command execution
+- audit logs for local agent activity
+- policy checks that work across multiple harnesses
+- context injection and result transformation handlers
+- reusable open-source hook packages that are not locked to one agent CLI
+
+## What it provides
+
+- **Universal event envelope** for native Codex, Pi, OMP, and Hermes hook payloads.
+- **External-command handler protocol**: handlers read normalized JSON from stdin and return JSON decisions on stdout.
+- **Synchronous decisions** translated back to each harness's native response format.
+- **SQLite audit trail** for inbound events, normalized events, handler invocations, and native responses.
+- **Local HTTP API** for event ingestion, synchronous dispatch, health checks, event inspection, and replay.
+- **CLI adapters** for shell-based harness integrations.
+
+Verified API endpoints:
+
+- `GET /v1/health`
+- `POST /v1/events`
+- `POST /v1/dispatch-sync`
+- `GET /v1/events/<id>`
+
+## Quick start
+
+Build the CLI:
+
+```sh
+make build
+```
+
+Run Hitch locally:
+
+```sh
+./bin/hitch serve --config config/default.config.toml
+```
+
+In another shell, check the installation:
+
+```sh
+./bin/hitch doctor --json
+./bin/hitch status --json
+```
+
+The default server listens on `127.0.0.1:8799` and stores audit records at `~/.local/share/hitch/events.sqlite`.
+
+## Handler model
+
+A Hitch handler is any executable command. It receives a normalized Hitch event envelope on stdin:
+
+```json
+{
+  "hitch_version": "0.1.0",
+  "event_id": "evt_...",
+  "received_at": "2026-06-04T10:47:00Z",
+  "harness": "codex",
+  "native_event_type": "PreToolUse",
+  "native_payload": {},
+  "hitch_event_type": "tool.requested",
+  "payload": {}
+}
+```
+
+It can return a handler result on stdout:
+
+```json
+{
+  "status": "ok",
+  "decision": {
+    "behavior": "deny",
+    "reason": "This command is blocked by local policy."
+  }
+}
+```
+
+That same handler can be reused across every supported harness.
+
+See `docs/handler-protocol.md` for the full handler result contract.
+
+## Common commands
+
+```sh
+make test              # Run Go and adapter tests
+make build             # Build bin/hitch
+make serve             # Run the local Hitch server
+make install-dry-run   # Preview managed integration files
+```
+
+Run tests directly:
 
 ```sh
 go test ./...
 bun test adapters/**/*.test.ts
 ```
 
-See:
+## Harness integration status
+
+Hitch currently includes:
+
+- Codex and Hermes shell adapter entrypoints via `hitch adapter`.
+- Pi and OMP TypeScript adapter response application helpers.
+- Installer placeholder management under `~/.config/hitch/integrations`.
+
+The current installer manages Hitch integration placeholder files. It does not yet patch real Codex, Hermes, Pi, or OMP user configuration files automatically.
+
+Preview integration files:
+
+```sh
+./bin/hitch install --all --dry-run --json
+```
+
+Run shell adapters directly from a harness hook configuration:
+
+```sh
+./bin/hitch adapter -harness codex -event PreToolUse -sync
+./bin/hitch adapter -harness hermes -event pre_tool_call -sync
+```
+
+## Configuration
+
+Hitch reads user configuration from `~/.config/hitch/config.toml`. Development commands default to `config/default.config.toml` unless a command receives `--config`.
+
+Configuration covers:
+
+- server host, port, and request size limits
+- logging sinks and payload visibility
+- SQLite audit persistence
+- handler commands, event filters, modes, timeouts, and error policy
+- per-harness enable flags
+
+See `docs/configuration.md` for details.
+
+## Documentation
 
 - `docs/configuration.md`
 - `docs/installation.md`
@@ -26,3 +151,15 @@ See:
 - `docs/harness-contracts.md`
 - `docs/replay.md`
 - `docs/adr/0001-hitch-architecture-and-technology-stack.md`
+
+## Contributing
+
+Hitch is for developers building the next layer of agent tooling: guardrails, observability, local policy, replay, and workflow automation.
+
+Contributions are especially useful in:
+
+- additional harness adapters
+- real installer support for harness configuration files
+- handler examples and reusable policy packs
+- event replay and audit tooling
+- protocol compatibility tests
