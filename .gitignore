@@ -1,0 +1,57 @@
+# OS/editor
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Environment/secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Go
+/bin/
+/build/
+/dist/
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Node/TypeScript adapters
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun.lockb
+.turbo/
+.next/
+coverage/
+
+# Hookah local runtime data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.log
+*.jsonl
+.local/
+
+# Temporary files
+tmp/
+temp/
+.cache/
+
+# Keep planning artifacts if present
+!.omx/
+!.omx/plans/
+!.omx/plans/**
