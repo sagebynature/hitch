@@ -114,3 +114,92 @@ func TestAdapterFailsOpenWhenHitchIsUnreachable(t *testing.T) {
 		t.Fatalf("unreachable Hitch should emit no-op response, got %#v", native)
 	}
 }
+
+func TestInstallDryRunPlansWithoutMutatingFilesystem(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	ops, err := plannedOps([]string{"codex"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ops) != 1 || ops[0]["action"] != "install" {
+		t.Fatalf("unexpected operations: %#v", ops)
+	}
+	if _, err := os.Stat(ops[0]["path"]); !os.IsNotExist(err) {
+		t.Fatalf("dry-run planning should not create integration file: %v", err)
+	}
+}
+
+func TestApplyOpsInstallsIdempotentlyAndBacksUpExistingFile(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	ops, err := plannedOps([]string{"pi"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	first, err := os.ReadFile(ops[0]["path"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(ops[0]["backup_path"]); !os.IsNotExist(err) {
+		t.Fatalf("idempotent install should not create backup: %v", err)
+	}
+
+	if err := os.WriteFile(ops[0]["path"], []byte("existing user content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	backup, err := os.ReadFile(ops[0]["backup_path"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(backup) != "existing user content\n" {
+		t.Fatalf("backup did not preserve previous content: %q", backup)
+	}
+	current, err := os.ReadFile(ops[0]["path"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(current) != string(first) {
+		t.Fatalf("installed content changed unexpectedly: %q", current)
+	}
+}
+
+func TestApplyOpsUninstallRemovesOnlyManagedIntegrationFile(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	ops, err := plannedOps([]string{"omp"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	removeOps, err := plannedOps([]string{"omp"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(removeOps, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(ops[0]["path"]); !os.IsNotExist(err) {
+		t.Fatalf("uninstall should remove managed file: %v", err)
+	}
+}
+
+func TestPlannedOpsRejectsUnknownHarness(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	if _, err := plannedOps([]string{"unknown"}, false); err == nil {
+		t.Fatal("expected unsupported harness error")
+	}
+}

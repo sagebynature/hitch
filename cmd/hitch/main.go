@@ -169,11 +169,19 @@ func install(args []string, uninstall bool) {
 	dryRun := fs.Bool("dry-run", false, "show changes without writing")
 	yes := fs.Bool("yes", false, "confirm filesystem changes")
 	jsonOut := fs.Bool("json", false, "emit JSON")
+	all := fs.Bool("all", false, "select all harnesses")
 	_ = fs.Parse(args)
 	if !*dryRun && !*yes {
 		fatal(fmt.Errorf("--yes is required unless --dry-run is used"))
 	}
-	ops := plannedOps(strings.Split(*only, ","), uninstall)
+	harnesses := strings.Split(*only, ",")
+	if *all {
+		harnesses = []string{"codex", "hermes", "pi", "omp"}
+	}
+	ops, err := plannedOps(harnesses, uninstall)
+	if err != nil {
+		fatal(err)
+	}
 	if !*dryRun {
 		if err := applyOps(ops, uninstall); err != nil {
 			fatal(err)
@@ -182,21 +190,29 @@ func install(args []string, uninstall bool) {
 	writeCLI(*jsonOut, map[string]interface{}{"dry_run": *dryRun, "uninstall": uninstall, "operations": ops})
 }
 
-func plannedOps(harnesses []string, uninstall bool) []map[string]string {
+func plannedOps(harnesses []string, uninstall bool) ([]map[string]string, error) {
 	ops := []map[string]string{}
+	known := map[string]struct{}{"codex": {}, "hermes": {}, "pi": {}, "omp": {}}
 	for _, h := range harnesses {
 		h = strings.TrimSpace(h)
 		if h == "" {
 			continue
+		}
+		if _, ok := known[h]; !ok {
+			return nil, fmt.Errorf("unsupported harness %q", h)
 		}
 		path := filepath.Join(config.ExpandHome("~/.config/hitch/integrations"), h+".txt")
 		action := "install"
 		if uninstall {
 			action = "uninstall"
 		}
-		ops = append(ops, map[string]string{"harness": h, "action": action, "path": path})
+		ops = append(ops, map[string]string{"harness": h, "action": action, "path": path, "backup_path": backupPath(h)})
 	}
-	return ops
+	return ops, nil
+}
+
+func backupPath(harnessName string) string {
+	return filepath.Join(config.ExpandHome("~/.config/hitch/backups"), harnessName+".txt.bak")
 }
 
 func applyOps(ops []map[string]string, uninstall bool) error {
@@ -208,11 +224,26 @@ func applyOps(ops []map[string]string, uninstall bool) error {
 			}
 			continue
 		}
+		content := []byte(fmt.Sprintf("# Managed by Hitch\nharness=%s\n", op["harness"]))
+		existing, err := os.ReadFile(p)
+		if err == nil {
+			if string(existing) == string(content) {
+				continue
+			}
+			backup := op["backup_path"]
+			if err := os.MkdirAll(filepath.Dir(backup), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(backup, existing, 0o600); err != nil {
+				return err
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			return err
 		}
-		content := fmt.Sprintf("# Managed by Hitch\nharness=%s\n", op["harness"])
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(p, content, 0o644); err != nil {
 			return err
 		}
 	}
