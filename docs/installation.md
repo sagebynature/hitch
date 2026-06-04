@@ -1,28 +1,43 @@
 # Installation
 
-The current installer seeds `~/.config/hitch/config.toml` when it is missing and manages Hitch integration placeholder files under `~/.config/hitch/integrations`. It does not yet patch real Codex, Hermes, Pi, or OMP user configuration files.
+Install from latest source:
 
-Dry run all harnesses:
+```sh
+curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
+```
+
+The source installer checks for `git` and `go`, builds `./cmd/hitch`, installs the binary to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies `hitch --version`, and then offers to run hook setup.
+
+The current `hitch install` command seeds `~/.config/hitch/config.toml` when it is missing, detects Codex, Hermes, Pi, and OMP binaries on `PATH`, and installs the supported Codex hook into `~/.codex/hooks.json`. Hermes, Pi, and OMP are detected and reported, but real hook patching is not implemented for them yet.
+
+Dry run detected supported harnesses:
+
+```sh
+hitch install --dry-run --json
+```
+
+Dry run all harnesses, including unsupported skip reasons:
 
 ```sh
 hitch install --all --dry-run --json
 ```
 
-Install selected managed integration files:
+Install selected hooks:
 
 ```sh
-hitch install --only codex,hermes --yes --json
+hitch install --only codex --yes --json
 ```
 
 Installer behavior verified by tests:
 
 - `--dry-run` does not mutate the filesystem.
-- Missing user config is created at `~/.config/hitch/config.toml` from the checked-in default config.
+- Missing user config is created at `~/.config/hitch/config.toml` from the embedded default config.
 - Existing user config is left unchanged.
+- Codex hook installation is idempotent.
+- Existing Codex hook configuration is backed up before Hitch modifies it.
+- Unsupported available harnesses are reported as skipped.
 - Unknown harness names are rejected.
-- Re-running install for identical managed integration content is idempotent.
-- Existing different integration-file content is backed up under `~/.config/hitch/backups` before overwrite.
-- Uninstall removes the selected managed integration file and leaves user config in place.
+- Uninstall removes only the Hitch-managed Codex hook and leaves user config in place.
 
 Status and doctor:
 
@@ -31,7 +46,7 @@ hitch status --json
 hitch doctor --json
 ```
 
-Uninstall selected managed files:
+Uninstall selected hooks:
 
 ```sh
 hitch uninstall --only codex --yes --json

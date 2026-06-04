@@ -36,7 +36,13 @@ Verified API endpoints:
 
 ## Quick start
 
-Build the CLI:
+Install from latest source:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
+```
+
+Or build the CLI locally:
 
 ```sh
 make build
@@ -96,7 +102,7 @@ See `docs/handler-protocol.md` for the full handler result contract.
 make test              # Run Go and adapter tests
 make build             # Build bin/hitch
 make serve             # Run the local Hitch server
-make install-dry-run   # Preview managed integration files
+make install-dry-run   # Preview hook installation
 ```
 
 Run tests directly:
@@ -110,17 +116,18 @@ bun test adapters/**/*.test.ts
 
 Hitch currently includes:
 
-- Codex and Hermes shell adapter entrypoints via `hitch adapter`.
+- Codex shell hook installation into `~/.codex/hooks.json`.
+- Hermes shell adapter entrypoint via `hitch adapter`.
 - Pi and OMP TypeScript adapter response application helpers.
 - Installer config seeding for `~/.config/hitch/config.toml`.
-- Installer placeholder management under `~/.config/hitch/integrations`.
+- Harness detection for Codex, Hermes, Pi, and OMP.
 
-The current installer creates missing Hitch user config and manages Hitch integration placeholder files. It does not yet patch real Codex, Hermes, Pi, or OMP user configuration files automatically.
+The current installer creates missing Hitch user config and installs the supported Codex hook. Hermes, Pi, and OMP are detected and reported, but real hook patching is not implemented for them yet.
 
-Preview integration files:
+Preview hook installation:
 
 ```sh
-./bin/hitch install --all --dry-run --json
+./bin/hitch install --dry-run --json
 ```
 
 Run shell adapters directly from a harness hook configuration:

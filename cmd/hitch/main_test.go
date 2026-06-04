@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -147,27 +148,45 @@ func TestAdapterFailsOpenWhenHitchIsUnreachable(t *testing.T) {
 	}
 }
 
-func TestInstallDryRunPlansWithoutMutatingFilesystem(t *testing.T) {
+func addFakeCommand(t *testing.T, name string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	return path
+}
+
+func prepareInstallerTest(t *testing.T, harness string) string {
+	t.Helper()
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HITCH_BINARY_PATH", filepath.Join(t.TempDir(), "hitch"))
+	return addFakeCommand(t, harness)
+}
+
+func TestInstallDryRunPlansWithoutMutatingFilesystem(t *testing.T) {
+	prepareInstallerTest(t, "codex")
 
 	ops, err := plannedOps([]string{"codex"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(ops) != 2 || ops[0]["action"] != "seed_config" || ops[1]["action"] != "install" {
+	if len(ops) != 2 || ops[0].Action != "seed_config" || ops[1].Action != "install_codex_hook" {
 		t.Fatalf("unexpected operations: %#v", ops)
 	}
-	if _, err := os.Stat(ops[0]["path"]); !os.IsNotExist(err) {
+	if _, err := os.Stat(ops[0].Path); !os.IsNotExist(err) {
 		t.Fatalf("dry-run planning should not create config file: %v", err)
 	}
-	if _, err := os.Stat(ops[1]["path"]); !os.IsNotExist(err) {
-		t.Fatalf("dry-run planning should not create integration file: %v", err)
+	if _, err := os.Stat(ops[1].Path); !os.IsNotExist(err) {
+		t.Fatalf("dry-run planning should not create Codex hooks file: %v", err)
 	}
 }
 
 func TestApplyOpsSeedsUserConfigWithoutOverwritingExistingFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	prepareInstallerTest(t, "codex")
 
 	ops, err := plannedOps([]string{"codex"}, false)
 	if err != nil {
@@ -204,69 +223,106 @@ func TestApplyOpsSeedsUserConfigWithoutOverwritingExistingFile(t *testing.T) {
 	}
 }
 
-func TestApplyOpsInstallsIdempotentlyAndBacksUpExistingFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+func TestApplyOpsInstallsCodexHookIdempotentlyAndBacksUpExistingFile(t *testing.T) {
+	prepareInstallerTest(t, "codex")
 
-	ops, err := plannedOps([]string{"pi"}, false)
+	ops, err := plannedOps([]string{"codex"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	integrationOp := ops[1]
-	first, err := os.ReadFile(integrationOp["path"])
+	hookOp := ops[1]
+	first, err := os.ReadFile(hookOp.Path)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(string(first), "adapter -harness codex -event PreToolUse -sync") {
+		t.Fatalf("codex hook was not installed: %s", first)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(integrationOp["backup_path"]); !os.IsNotExist(err) {
+	if _, err := os.Stat(hookOp.BackupPath); !os.IsNotExist(err) {
 		t.Fatalf("idempotent install should not create backup: %v", err)
 	}
 
-	if err := os.WriteFile(integrationOp["path"], []byte("existing user content\n"), 0o644); err != nil {
+	existing := `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"existing"}]}]}}` + "\n"
+	if err := os.WriteFile(hookOp.Path, []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	backup, err := os.ReadFile(integrationOp["backup_path"])
+	backup, err := os.ReadFile(hookOp.BackupPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(backup) != "existing user content\n" {
+	if string(backup) != existing {
 		t.Fatalf("backup did not preserve previous content: %q", backup)
 	}
-	current, err := os.ReadFile(integrationOp["path"])
+	current, err := os.ReadFile(hookOp.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(current) != string(first) {
-		t.Fatalf("installed content changed unexpectedly: %q", current)
+	if !strings.Contains(string(current), "existing") || !strings.Contains(string(current), "adapter -harness codex") {
+		t.Fatalf("installed content did not preserve existing hook and add Hitch hook: %s", current)
 	}
 }
 
-func TestApplyOpsUninstallRemovesOnlyManagedIntegrationFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+func TestApplyOpsUninstallRemovesOnlyManagedCodexHook(t *testing.T) {
+	prepareInstallerTest(t, "codex")
 
-	ops, err := plannedOps([]string{"omp"}, false)
+	ops, err := plannedOps([]string{"codex"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	removeOps, err := plannedOps([]string{"omp"}, true)
+	removeOps, err := plannedOps([]string{"codex"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := applyOps(removeOps, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(ops[1]["path"]); !os.IsNotExist(err) {
-		t.Fatalf("uninstall should remove managed file: %v", err)
+	current, err := os.ReadFile(ops[1].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(current), "adapter -harness codex") {
+		t.Fatalf("uninstall should remove managed Codex hook: %s", current)
+	}
+
+}
+
+func TestDetectHarnessesReportsAvailabilityAndSupport(t *testing.T) {
+	path := prepareInstallerTest(t, "codex")
+
+	detections := detectHarnesses()
+	var codex harnessDetection
+	for _, d := range detections {
+		if d.Harness == "codex" {
+			codex = d
+			break
+		}
+	}
+	if !codex.Available || codex.BinaryPath != path || !codex.Supported {
+		t.Fatalf("unexpected codex detection: %#v", codex)
+	}
+}
+
+func TestPlannedOpsSkipsUnsupportedAvailableHarness(t *testing.T) {
+	prepareInstallerTest(t, "pi")
+
+	ops, err := plannedOps([]string{"pi"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ops) != 2 || ops[1].Action != "skip" || ops[1].Status != "skipped" {
+		t.Fatalf("unexpected unsupported harness plan: %#v", ops)
 	}
 }
 
