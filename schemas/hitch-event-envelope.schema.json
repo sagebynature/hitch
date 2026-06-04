@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hitch.local/schemas/hitch-event-envelope.schema.json",
+  "type": "object",
+  "required": ["hitch_version", "event_id", "received_at", "harness", "native_event_type", "native_payload", "hitch_event_type", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "hitch_version": { "type": "string", "minLength": 1 },
+    "event_id": { "type": "string", "minLength": 1 },
+    "received_at": { "type": "string", "format": "date-time" },
+    "harness": { "enum": ["codex", "hermes", "pi", "omp"] },
+    "harness_version": { "type": "string" },
+    "native_event_type": { "type": "string", "minLength": 1 },
+    "native_payload": true,
+    "hitch_event_type": {
+      "enum": [
+        "session.started", "session.resumed", "session.ended", "session.compacted",
+        "turn.started", "turn.user_prompt", "turn.assistant_started", "turn.completed",
+        "tool.requested", "tool.permission_requested", "tool.completed",
+        "subagent.started", "subagent.completed", "error.reported"
+      ]
+    },
+    "session_id": { "type": "string" },
+    "turn_id": { "type": "string" },
+    "cwd": { "type": "string" },
+    "model": { "type": "string" },
+    "transcript_path": { "type": "string" },
+    "payload": true
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hitch.local/schemas/handler-result.schema.json",
+  "type": "object",
+  "required": ["status"],
+  "additionalProperties": false,
+  "properties": {
+    "status": { "enum": ["ok", "error", "timeout"] },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "behavior": { "enum": ["none", "allow", "deny", "block", "continue", "stop", "transform", "replace_result", "inject_context", "handled"] },
+        "reason": { "type": "string" },
+        "context": { "type": "string" },
+        "updated_input": true,
+        "updated_output": true,
+        "native_response": true
+      }
+    },
+    "logs": { "type": "array" },
+    "metrics": { "type": "object", "additionalProperties": { "type": "number" } }
+  }
+}

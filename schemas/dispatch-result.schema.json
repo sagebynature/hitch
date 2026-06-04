@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hitch.local/schemas/dispatch-result.schema.json",
+  "type": "object",
+  "required": ["decision"],
+  "additionalProperties": false,
+  "properties": {
+    "decision": { "$ref": "handler-result.schema.json#/properties/decision" },
+    "handler_results": { "type": "array", "items": { "$ref": "handler-result.schema.json" } },
+    "errors": { "type": "array", "items": { "type": "string" } }
+  }
+}
