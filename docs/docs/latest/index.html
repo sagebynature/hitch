@@ -78,6 +78,7 @@ hitch install --only codex --yes --json</code></pre>
 hitch install --all --dry-run --json
 hitch install --only codex --yes --json
 hitch install --only hermes --yes --json
+hitch install --only hermes --url http://127.0.0.1:8797 --yes --json
 hitch uninstall --only codex --yes --json
 hitch uninstall --only hermes --yes --json</code></pre>
           <p>The current installer seeds <code>~/.config/hitch/config.toml</code> when missing, installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>, and installs Hitch-managed Hermes shell hooks into <code>~/.hermes/config.yaml</code>. Pi and OMP are detected and reported, but real hook patching is not implemented for them yet.</p>
@@ -160,7 +161,7 @@ mode = "async"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"</code></pre>
-          <p>Run <code>python3 examples/test_payload_logger.py</code> from the repository root. The script starts Hitch on <code>127.0.0.1:8797</code>, sends events through all four harness mappers, sends one async observer event, and verifies <code>tmp/hitch-payload-logger/payloads.jsonl</code>.</p>
+          <p>Run <code>python3 examples/test_payload_logger.py</code> from the repository root. The script starts Hitch on <code>127.0.0.1:8797</code>, sends events through all four harness mappers, sends one async observer event, and verifies <code>tmp/hitch-payload-logger/payloads.jsonl</code>. If port <code>8797</code> is already in use, run with <code>HITCH_PAYLOAD_LOGGER_PORT=8796 python3 examples/test_payload_logger.py</code>. If you install real Hermes hooks against this example server, use <code>hitch install --only hermes --url http://127.0.0.1:8797 --yes --json</code>.</p>
           <p>Matching handlers run in lexicographic handler-name order. Higher-precedence decisions win; blocking decisions outrank transforms, context injection, and allow decisions. Multiple context injections concatenate, but multiple transform or replace-result decisions are rejected.</p>
           <div class="docs-index">
             <a class="doc-card" href="../../handler-development.md"><small>Guide</small><h3>Building handlers</h3><p>Detailed handler modes, config mapping, decision behavior reference, test-drive commands, inspection, replay, and troubleshooting.</p></a>

@@ -225,7 +225,7 @@ func prepareInstallerTest(t *testing.T, harness string) string {
 func TestInstallDryRunPlansWithoutMutatingFilesystem(t *testing.T) {
 	prepareInstallerTest(t, "codex")
 
-	ops, err := plannedOps([]string{"codex"}, false)
+	ops, err := plannedOps([]string{"codex"}, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestInstallDryRunPlansWithoutMutatingFilesystem(t *testing.T) {
 func TestApplyOpsSeedsUserConfigWithoutOverwritingExistingFile(t *testing.T) {
 	prepareInstallerTest(t, "codex")
 
-	ops, err := plannedOps([]string{"codex"}, false)
+	ops, err := plannedOps([]string{"codex"}, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestApplyOpsSeedsUserConfigWithoutOverwritingExistingFile(t *testing.T) {
 func TestApplyOpsInstallsCodexHookIdempotentlyAndBacksUpExistingFile(t *testing.T) {
 	prepareInstallerTest(t, "codex")
 
-	ops, err := plannedOps([]string{"codex"}, false)
+	ops, err := plannedOps([]string{"codex"}, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +295,7 @@ func TestApplyOpsInstallsCodexHookIdempotentlyAndBacksUpExistingFile(t *testing.
 		t.Fatal(err)
 	}
 	for _, event := range codexLifecycleEvents {
-		needle := "adapter -harness codex -event " + event + " -sync"
+		needle := "-harness codex -event " + event + " -sync"
 		if !strings.Contains(string(first), needle) {
 			t.Fatalf("codex %s hook was not installed: %s", event, first)
 		}
@@ -325,7 +325,7 @@ func TestApplyOpsInstallsCodexHookIdempotentlyAndBacksUpExistingFile(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(current), "existing") || !strings.Contains(string(current), "adapter -harness codex") {
+	if !strings.Contains(string(current), "existing") || !strings.Contains(string(current), "-harness codex") {
 		t.Fatalf("installed content did not preserve existing hook and add Hitch hook: %s", current)
 	}
 }
@@ -333,14 +333,14 @@ func TestApplyOpsInstallsCodexHookIdempotentlyAndBacksUpExistingFile(t *testing.
 func TestApplyOpsUninstallRemovesOnlyManagedCodexHook(t *testing.T) {
 	prepareInstallerTest(t, "codex")
 
-	ops, err := plannedOps([]string{"codex"}, false)
+	ops, err := plannedOps([]string{"codex"}, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	removeOps, err := plannedOps([]string{"codex"}, true)
+	removeOps, err := plannedOps([]string{"codex"}, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +351,7 @@ func TestApplyOpsUninstallRemovesOnlyManagedCodexHook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(current), "adapter -harness codex") {
+	if strings.Contains(string(current), "-harness codex") {
 		t.Fatalf("uninstall should remove managed Codex hook: %s", current)
 	}
 
@@ -360,7 +360,7 @@ func TestApplyOpsUninstallRemovesOnlyManagedCodexHook(t *testing.T) {
 func TestApplyOpsInstallsHermesHooksIdempotentlyAndBacksUpExistingFile(t *testing.T) {
 	prepareInstallerTest(t, "hermes")
 
-	ops, err := plannedOps([]string{"hermes"}, false)
+	ops, err := plannedOps([]string{"hermes"}, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +376,7 @@ func TestApplyOpsInstallsHermesHooksIdempotentlyAndBacksUpExistingFile(t *testin
 		t.Fatal(err)
 	}
 	for _, event := range hermesHookEvents {
-		needle := "adapter -harness hermes -event " + event + " -sync"
+		needle := "-harness hermes -event " + event + " -sync"
 		if !strings.Contains(string(first), needle) {
 			t.Fatalf("hermes %s hook was not installed: %s", event, first)
 		}
@@ -406,15 +406,34 @@ func TestApplyOpsInstallsHermesHooksIdempotentlyAndBacksUpExistingFile(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(current), "command: existing") || !strings.Contains(string(current), "adapter -harness hermes") || !strings.Contains(string(current), "hooks_auto_accept: false") {
+	if !strings.Contains(string(current), "command: existing") || !strings.Contains(string(current), "-harness hermes") || !strings.Contains(string(current), "hooks_auto_accept: false") {
 		t.Fatalf("Hermes install did not preserve existing config and add Hitch hooks: %s", current)
+	}
+}
+
+func TestPlannedOpsEmbedsAdapterURLInHermesHookCommand(t *testing.T) {
+	prepareInstallerTest(t, "hermes")
+
+	ops, err := plannedOps([]string{"hermes"}, false, "http://127.0.0.1:8797")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	current, err := os.ReadFile(ops[1].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(current), "-url ''http://127.0.0.1:8797'' -harness hermes") {
+		t.Fatalf("Hermes hook command did not embed configured Hitch URL: %s", current)
 	}
 }
 
 func TestApplyOpsUninstallRemovesOnlyManagedHermesHooks(t *testing.T) {
 	prepareInstallerTest(t, "hermes")
 
-	ops, err := plannedOps([]string{"hermes"}, false)
+	ops, err := plannedOps([]string{"hermes"}, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +448,7 @@ func TestApplyOpsUninstallRemovesOnlyManagedHermesHooks(t *testing.T) {
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	removeOps, err := plannedOps([]string{"hermes"}, true)
+	removeOps, err := plannedOps([]string{"hermes"}, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +459,7 @@ func TestApplyOpsUninstallRemovesOnlyManagedHermesHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(current), "adapter -harness hermes") {
+	if strings.Contains(string(current), "-harness hermes") {
 		t.Fatalf("uninstall should remove managed Hermes hooks: %s", current)
 	}
 	if !strings.Contains(string(current), "command: existing") {
@@ -467,7 +486,7 @@ func TestDetectHarnessesReportsAvailabilityAndSupport(t *testing.T) {
 func TestPlannedOpsSkipsUnsupportedAvailableHarness(t *testing.T) {
 	prepareInstallerTest(t, "pi")
 
-	ops, err := plannedOps([]string{"pi"}, false)
+	ops, err := plannedOps([]string{"pi"}, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -479,7 +498,7 @@ func TestPlannedOpsSkipsUnsupportedAvailableHarness(t *testing.T) {
 func TestPlannedOpsRejectsUnknownHarness(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
-	if _, err := plannedOps([]string{"unknown"}, false); err == nil {
+	if _, err := plannedOps([]string{"unknown"}, false, ""); err == nil {
 		t.Fatal("expected unsupported harness error")
 	}
 }

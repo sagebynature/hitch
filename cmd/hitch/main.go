@@ -115,7 +115,7 @@ func adapter(args []string) {
 	harness := fs.String("harness", "", "source harness")
 	event := fs.String("event", "", "native event type")
 	syncMode := fs.Bool("sync", false, "dispatch synchronously")
-	url := fs.String("url", "http://127.0.0.1:8799", "hitch API URL")
+	url := fs.String("url", defaultAdapterURL(), "hitch API URL")
 	_ = fs.Parse(args)
 	if *harness == "" || *event == "" {
 		fatal(fmt.Errorf("-harness and -event are required"))

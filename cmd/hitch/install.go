@@ -87,6 +87,7 @@ func install(args []string, uninstall bool) {
 	yes := fs.Bool("yes", false, "confirm filesystem changes")
 	jsonOut := fs.Bool("json", false, "emit JSON")
 	all := fs.Bool("all", false, "select all harnesses")
+	apiURL := fs.String("url", "", "hitch API URL embedded in installed adapter commands")
 	_ = fs.Parse(args)
 
 	detections := detectHarnesses()
@@ -107,7 +108,7 @@ func install(args []string, uninstall bool) {
 		}
 	}
 
-	ops, err := plannedOps(selected, uninstall)
+	ops, err := plannedOps(selected, uninstall, *apiURL)
 	if err != nil {
 		fatal(err)
 	}
@@ -234,7 +235,7 @@ func titleForHarness(name string) string {
 	return name
 }
 
-func plannedOps(harnesses []string, uninstall bool) ([]installOperation, error) {
+func plannedOps(harnesses []string, uninstall bool, apiURL string) ([]installOperation, error) {
 	ops := []installOperation{}
 	if !uninstall {
 		ops = append(ops, installOperation{Harness: "hitch", Action: "seed_config", Path: config.ExpandHome(config.DefaultPath)})
@@ -246,6 +247,9 @@ func plannedOps(harnesses []string, uninstall bool) ([]installOperation, error) 
 	binaryPath, err := installedBinaryPath()
 	if err != nil && !uninstall {
 		return nil, err
+	}
+	if apiURL == "" {
+		apiURL = defaultAdapterURL()
 	}
 	for _, h := range harnesses {
 		h = strings.TrimSpace(h)
@@ -271,13 +275,13 @@ func plannedOps(harnesses []string, uninstall bool) ([]installOperation, error) 
 			if uninstall {
 				action = "uninstall_codex_hook"
 			}
-			ops = append(ops, installOperation{Harness: h, Action: action, Path: detection.ConfigPath, BackupPath: timestampedBackupPath(h, filepath.Base(detection.ConfigPath)), Status: "planned", Reason: binaryPath})
+			ops = append(ops, installOperation{Harness: h, Action: action, Path: detection.ConfigPath, BackupPath: timestampedBackupPath(h, filepath.Base(detection.ConfigPath)), Status: "planned", Reason: adapterCommandBase(binaryPath, apiURL)})
 		case "hermes":
 			action := "install_hermes_hook"
 			if uninstall {
 				action = "uninstall_hermes_hook"
 			}
-			ops = append(ops, installOperation{Harness: h, Action: action, Path: detection.ConfigPath, BackupPath: timestampedBackupPath(h, filepath.Base(detection.ConfigPath)), Status: "planned", Reason: binaryPath})
+			ops = append(ops, installOperation{Harness: h, Action: action, Path: detection.ConfigPath, BackupPath: timestampedBackupPath(h, filepath.Base(detection.ConfigPath)), Status: "planned", Reason: adapterCommandBase(binaryPath, apiURL)})
 		}
 	}
 	return ops, nil
@@ -301,6 +305,24 @@ func installedBinaryPath() (string, error) {
 		return "", err
 	}
 	return filepath.Abs(p)
+}
+
+func adapterCommandBase(binaryPath, apiURL string) string {
+	return shellQuote(binaryPath) + " adapter -url " + shellQuote(apiURL)
+}
+
+func defaultAdapterURL() string {
+	if v := os.Getenv("HITCH_API_URL"); v != "" {
+		return v
+	}
+	if v := os.Getenv("HITCH_URL"); v != "" {
+		return v
+	}
+	cfg, err := config.Load(config.DefaultPath)
+	if err == nil && cfg.Server.Host != "" && cfg.Server.Port != 0 {
+		return fmt.Sprintf("http://%s:%d", cfg.Server.Host, cfg.Server.Port)
+	}
+	return "http://127.0.0.1:8799"
 }
 
 func applyOps(ops []installOperation, uninstall bool) error {
@@ -538,8 +560,8 @@ func ensureDocumentMapping(doc *yaml.Node) *yaml.Node {
 	return doc.Content[0]
 }
 
-func hermesAdapterCommand(binaryPath, event string) string {
-	return shellQuote(binaryPath) + " adapter -harness hermes -event " + event + " -sync"
+func hermesAdapterCommand(commandBase, event string) string {
+	return commandBase + " -harness hermes -event " + event + " -sync"
 }
 
 func upsertHermesHook(doc *yaml.Node, event, command string) bool {
@@ -610,8 +632,9 @@ func hermesEventHasManagedHook(doc *yaml.Node, event string) bool {
 	}
 	return false
 }
+
 func hermesManagedHookNeedle(event string) string {
-	return "adapter -harness hermes -event " + event
+	return "-harness hermes -event " + event
 }
 
 func hermesHookNode(command string) *yaml.Node {
@@ -721,8 +744,8 @@ func readCodexHooks(path string) (map[string]any, bool, error) {
 	return doc, true, nil
 }
 
-func codexAdapterCommand(binaryPath, event string) string {
-	return shellQuote(binaryPath) + " adapter -harness codex -event " + event + " -sync"
+func codexAdapterCommand(commandBase, event string) string {
+	return commandBase + " -harness codex -event " + event + " -sync"
 }
 
 func upsertCodexHook(doc map[string]any, event, command string) bool {
@@ -808,7 +831,7 @@ func codexEventHasManagedHook(doc map[string]any, event string) bool {
 }
 
 func codexManagedHookNeedle(event string) string {
-	return "adapter -harness codex -event " + event
+	return "-harness codex -event " + event
 }
 
 func codexEventGroups(doc map[string]any, event string) []any {

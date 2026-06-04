@@ -22,11 +22,12 @@ Dry run all harnesses, including unsupported skip reasons:
 hitch install --all --dry-run --json
 ```
 
-Install selected hooks:
+Install selected hooks. Use `--url` when Hitch is running on a non-default port or config:
 
 ```sh
 hitch install --only codex --yes --json
 hitch install --only hermes --yes --json
+hitch install --only hermes --url http://127.0.0.1:8797 --yes --json
 ```
 
 Installer behavior verified by tests:

@@ -264,13 +264,21 @@ Run the all-harness local test drive:
 python3 examples/test_payload_logger.py
 ```
 
-The script starts Hitch on `127.0.0.1:8797`, sends one event through each harness mapper, sends one async observer event, verifies that `tmp/hitch-payload-logger/payloads.jsonl` contains payload records for `codex`, `hermes`, `pi`, and `omp`, and stops the server.
+The script starts Hitch on `127.0.0.1:8797`, sends one event through each harness mapper, sends one async observer event, verifies that `tmp/hitch-payload-logger/payloads.jsonl` contains payload records for `codex`, `hermes`, `pi`, and `omp`, and stops the server. If port `8797` is already in use, run with `HITCH_PAYLOAD_LOGGER_PORT=8796 python3 examples/test_payload_logger.py`.
 
 To test manually, start Hitch:
 
 ```bash
 go run ./cmd/hitch serve --config examples/payload-logger.config.toml
 ```
+
+If you installed real Hermes shell hooks against this example server, include the same URL when installing:
+
+```bash
+hitch install --only hermes --url http://127.0.0.1:8797 --yes --json
+```
+
+Without `--url`, installed hooks target the default Hitch API URL resolved from `~/.config/hitch/config.toml`, or `http://127.0.0.1:8799` when no default config is available.
 
 Then send a sync event through any harness adapter:
 

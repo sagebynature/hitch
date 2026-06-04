@@ -23,9 +23,11 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE_URL = "http://127.0.0.1:8797"
-CONFIG = ROOT / "examples" / "payload-logger.config.toml"
+PORT = int(os.environ.get("HITCH_PAYLOAD_LOGGER_PORT", "8797"))
+BASE_URL = f"http://127.0.0.1:{PORT}"
+SOURCE_CONFIG = ROOT / "examples" / "payload-logger.config.toml"
 RUNTIME_DIR = ROOT / "tmp" / "hitch-payload-logger"
+CONFIG = RUNTIME_DIR / "payload-logger.runtime.config.toml"
 DB = RUNTIME_DIR / "events.sqlite"
 LOG = RUNTIME_DIR / "payloads.jsonl"
 
@@ -44,6 +46,20 @@ def request(method: str, path: str, body: dict[str, Any] | None = None) -> dict[
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode()
         raise RuntimeError(f"{method} {path} failed with HTTP {exc.code}: {detail}") from exc
+
+
+def assert_port_is_free() -> None:
+    try:
+        request("GET", "/v1/health")
+    except (urllib.error.URLError, TimeoutError, ConnectionError, RuntimeError):
+        return
+    raise RuntimeError(f"{BASE_URL} is already serving Hitch; stop it or set HITCH_PAYLOAD_LOGGER_PORT to a free port")
+
+
+def write_runtime_config() -> None:
+    text = SOURCE_CONFIG.read_text()
+    text = text.replace("port = 8797", f"port = {PORT}", 1)
+    CONFIG.write_text(text)
 
 
 def wait_for_health(proc: subprocess.Popen[str]) -> None:
@@ -104,9 +120,11 @@ def dispatch_async(harness: str, native_event_type: str, native_payload: dict[st
 
 def main() -> int:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    assert_port_is_free()
     for path in (DB, Path(f"{DB}-shm"), Path(f"{DB}-wal"), LOG):
         if path.exists():
             path.unlink()
+    write_runtime_config()
 
     proc = subprocess.Popen(
         ["go", "run", "./cmd/hitch", "serve", "--config", str(CONFIG)],
