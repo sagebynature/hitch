@@ -22,6 +22,7 @@ concurrency:
 jobs:
   analyze:
     name: Analyze ${{ matrix.language }}
+    if: github.event.repository.private == false
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
