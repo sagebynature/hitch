@@ -1,12 +1,12 @@
-# Hookah Implementation Plan
+# Hitch Implementation Plan
 
 Status: Proposed  
 Date: 2026-06-04  
-Primary ADR: `docs/adr/0001-hookah-architecture-and-technology-stack.md`
+Primary ADR: `docs/adr/0001-hitch-architecture-and-technology-stack.md`
 
 ## Requirements Summary
 
-Hookah is a local universal hook adapter for agent harnesses. Initial harnesses are Codex, Pi, OMP, and Hermes. Hookah receives native harness hook events, preserves native JSON payloads, maps them to a stable normalized Hookah envelope, dispatches user-configured handlers, persists event/handler records, and translates synchronous decisions back to each source harness when the native hook contract expects output.
+Hitch is a local universal hook adapter for agent harnesses. Initial harnesses are Codex, Pi, OMP, and Hermes. Hitch receives native harness hook events, preserves native JSON payloads, maps them to a stable normalized Hitch envelope, dispatches user-configured handlers, persists event/handler records, and translates synchronous decisions back to each source harness when the native hook contract expects output.
 
 Core decisions already aligned in ADR-0001:
 
@@ -21,14 +21,14 @@ Core decisions already aligned in ADR-0001:
 
 ## Target Repository Shape
 
-This plan assumes a new repository rooted at `~/workspace/hookah`.
+This plan assumes a new repository rooted at `~/workspace/hitch`.
 
 Expected initial structure after implementation:
 
 ```text
 .
 ├── cmd/
-│   └── hookah/
+│   └── hitch/
 │       └── main.go
 ├── internal/
 │   ├── api/
@@ -78,14 +78,14 @@ Consumers: API, store, dispatcher, all harness mappers, adapters, tests.
 
 ```json
 {
-  "hookah_version": "0.1.0",
+  "hitch_version": "0.1.0",
   "event_id": "01J...",
   "received_at": "2026-06-04T00:00:00Z",
   "harness": "codex",
   "harness_version": "optional",
   "native_event_type": "PreToolUse",
   "native_payload": {},
-  "hookah_event_type": "tool.requested",
+  "hitch_event_type": "tool.requested",
   "session_id": "optional",
   "turn_id": "optional",
   "cwd": "optional",
@@ -198,7 +198,7 @@ Acceptance:
 Owner: Task C1/C2/C3/C4 per harness.  
 Consumers: adapters and sync API tests.
 
-Translator input is a normalized Hookah aggregate result. Translator output is harness-native:
+Translator input is a normalized Hitch aggregate result. Translator output is harness-native:
 
 - Codex: stdout JSON shape or text/exit-code policy as required by event type.
 - Hermes shell hooks: stdout JSON shape.
@@ -232,7 +232,7 @@ enabled = true
 
 [log.file]
 enabled = false
-path = "~/.local/state/hookah/hookah.log"
+path = "~/.local/state/hitch/hitch.log"
 max_size_mb = 100
 max_backups = 10
 max_age_days = 14
@@ -248,7 +248,7 @@ enabled = true
 backend = "sqlite"
 
 [audit.sqlite]
-path = "~/.local/share/hookah/events.sqlite"
+path = "~/.local/share/hitch/events.sqlite"
 
 [handlers]
 # handler definitions live under [handlers.<name>]
@@ -270,13 +270,13 @@ Handler example:
 
 ```toml
 [handlers.audit]
-command = ["hookah-handler-audit"]
+command = ["hitch-handler-audit"]
 events = ["*"]
 mode = "async"
 timeout_ms = 1000
 
 [handlers.security_gate]
-command = ["hookah-handler-security"]
+command = ["hitch-handler-security"]
 events = ["tool.requested", "tool.permission_requested"]
 mode = "sync"
 timeout_ms = 750
@@ -440,7 +440,7 @@ Context:
 
 Inputs:
 
-- ADR: `docs/adr/0001-hookah-architecture-and-technology-stack.md`
+- ADR: `docs/adr/0001-hitch-architecture-and-technology-stack.md`
 
 Changes:
 
@@ -453,13 +453,13 @@ Changes:
 Outputs:
 
 - `go.mod`
-- `cmd/hookah/main.go` placeholder that supports `hookah --version` or equivalent minimal command.
+- `cmd/hitch/main.go` placeholder that supports `hitch --version` or equivalent minimal command.
 - Directory skeleton under `internal/`, `adapters/`, `schemas/`, `testdata/`, `config/`.
 
 Acceptance:
 
 - `go test ./...` runs successfully with placeholder packages.
-- `go run ./cmd/hookah --version` returns a deterministic version string.
+- `go run ./cmd/hitch --version` returns a deterministic version string.
 
 Post-alignment:
 
@@ -486,7 +486,7 @@ Inputs:
 Changes:
 
 - Create JSON schemas in `schemas/`:
-  - `hookah-event-envelope.schema.json`
+  - `hitch-event-envelope.schema.json`
   - `handler-result.schema.json`
   - `dispatch-result.schema.json`
 - Create Go types in `internal/protocol`.
@@ -527,7 +527,7 @@ Parallelism: can run with A1 and A3 after A0.
 Context:
 
 - Owns contract C5.
-- Config path is `~/.config/hookah/config.toml`.
+- Config path is `~/.config/hitch/config.toml`.
 - Repository default config lives at `config/default.config.toml`.
 
 Inputs:
@@ -721,8 +721,8 @@ Inputs:
 Changes:
 
 - Implement `internal/harness/codex`.
-- Map native Codex events into Hookah envelopes.
-- Translate aggregate Hookah decisions into Codex-native response JSON.
+- Map native Codex events into Hitch envelopes.
+- Translate aggregate Hitch decisions into Codex-native response JSON.
 - Cover at least:
   - `SessionStart`
   - `UserPromptSubmit`
@@ -774,7 +774,7 @@ Inputs:
 Changes:
 
 - Implement `internal/harness/hermes`.
-- Map shell-hook payloads into Hookah envelopes.
+- Map shell-hook payloads into Hitch envelopes.
 - Translate aggregate decisions into Hermes stdout JSON.
 - Cover at least:
   - `pre_tool_call`
@@ -801,7 +801,7 @@ Acceptance:
 
 Post-alignment:
 
-- D1 shell adapter calls Hookah API and emits translator output.
+- D1 shell adapter calls Hitch API and emits translator output.
 - B3 imports translator only through harness-neutral interface.
 
 ---
@@ -813,7 +813,7 @@ Parallelism: can run after A1; independent of C1/C2/C4.
 Context:
 
 - Pi extension callbacks return JS objects or mutate event inputs.
-- Hookah daemon remains Go; TypeScript adapter consumes a daemon response.
+- Hitch daemon remains Go; TypeScript adapter consumes a daemon response.
 
 Inputs:
 
@@ -991,10 +991,10 @@ Changes:
   - `adapters/hermes/`
 - Read native payload from stdin.
 - Determine harness and native event type.
-- POST to Hookah `/v1/dispatch-sync` for return-capable events.
-- POST to Hookah `/v1/events` for observer-only events.
+- POST to Hitch `/v1/dispatch-sync` for return-capable events.
+- POST to Hitch `/v1/events` for observer-only events.
 - Write native response JSON/text to stdout as required.
-- Fail open if Hookah is unreachable unless event policy requires fail-closed and policy is locally available.
+- Fail open if Hitch is unreachable unless event policy requires fail-closed and policy is locally available.
 
 Outputs:
 
@@ -1024,7 +1024,7 @@ Parallelism: can run after C3 and C4; can run with D1.
 Context:
 
 - Pi/OMP extensions run in JS/TS callback environment.
-- They must apply Hookah mutation instructions correctly.
+- They must apply Hitch mutation instructions correctly.
 
 Inputs:
 
@@ -1055,7 +1055,7 @@ Acceptance:
 - `tool_call` block returns `{ block: true, reason }`.
 - `input` transform/handled/continue returns correct Pi shape.
 - `tool_result` patch returns correct patch shape.
-- Hookah unreachable fails open for observer events and documented fallback for control events.
+- Hitch unreachable fails open for observer events and documented fallback for control events.
 
 Post-alignment:
 
@@ -1087,12 +1087,12 @@ Inputs:
 Changes:
 
 - Add CLI subcommands:
-  - `hookah install --all|--only <list> --dry-run --yes --json`
-  - `hookah status --json`
-  - `hookah doctor --json`
-  - `hookah uninstall --all|--only <list> --yes --json`
-- Write managed integration files under `~/.config/hookah/integrations/`.
-- Write backups under `~/.config/hookah/backups/` before patching user config.
+  - `hitch install --all|--only <list> --dry-run --yes --json`
+  - `hitch status --json`
+  - `hitch doctor --json`
+  - `hitch uninstall --all|--only <list> --yes --json`
+- Write managed integration files under `~/.config/hitch/integrations/`.
+- Write backups under `~/.config/hitch/backups/` before patching user config.
 - Use managed block markers for patched files.
 - Avoid shell aliases.
 
@@ -1107,7 +1107,7 @@ Acceptance:
 
 - Dry-run does not mutate filesystem.
 - Install is idempotent.
-- Uninstall removes only managed Hookah entries.
+- Uninstall removes only managed Hitch entries.
 - Existing unrelated hooks/config are preserved.
 - Backups are created before every patch.
 - JSON output is machine-readable and stable.
@@ -1135,8 +1135,8 @@ Inputs:
 Changes:
 
 - Add CLI commands:
-  - `hookah inspect-event <id> --json`
-  - `hookah replay <id> [--handler <name>] [--dry-run] --json`
+  - `hitch inspect-event <id> --json`
+  - `hitch replay <id> [--handler <name>] [--dry-run] --json`
 - Replay reads persisted inbound/normalized events.
 - Replay can re-run configured handlers without modifying original records; new invocations must reference replay source id.
 
@@ -1172,7 +1172,7 @@ Inputs:
 
 Changes:
 
-- Add end-to-end tests that launch Hookah on a random local port.
+- Add end-to-end tests that launch Hitch on a random local port.
 - Exercise shell adapters against fake Codex/Hermes payloads.
 - Exercise TypeScript adapter response application for Pi/OMP.
 - Exercise installer in temp HOME.
@@ -1229,7 +1229,7 @@ Outputs:
 
 Acceptance:
 
-- Docs include exact config path: `~/.config/hookah/config.toml`.
+- Docs include exact config path: `~/.config/hitch/config.toml`.
 - Docs include fail-open/fail-closed behavior.
 - Docs explain operational logs vs event journal.
 - Docs include handler stdin/stdout contract.
@@ -1253,7 +1253,7 @@ Must not implement: storage, API, harness-specific mapping.
 
 Complete context:
 
-- Implement JSON schemas and Go types for Hookah event envelope and handler result exactly as defined in this plan.
+- Implement JSON schemas and Go types for Hitch event envelope and handler result exactly as defined in this plan.
 - Use normalized event taxonomy exactly as listed.
 - Add tests for valid/invalid event envelopes and handler results.
 - Downstream packages will import `internal/protocol` and must not duplicate enums.
@@ -1311,7 +1311,7 @@ Must not implement: shell adapter network client or installer.
 
 Complete context:
 
-- Map Codex native payloads into Hookah envelope.
+- Map Codex native payloads into Hitch envelope.
 - Translate aggregate decisions back to Codex stdout JSON.
 - Cover return-capable Codex events listed in this plan.
 - Unsupported decision/event combinations must be native no-op unless configured fail-closed.
@@ -1325,7 +1325,7 @@ Must not implement: shell adapter network client or installer.
 
 Complete context:
 
-- Map Hermes shell-hook payloads into Hookah envelope.
+- Map Hermes shell-hook payloads into Hitch envelope.
 - Translate aggregate decisions to Hermes stdout JSON.
 - Cover return-capable Hermes events listed in this plan.
 
@@ -1366,8 +1366,8 @@ Must not implement: installer.
 Complete context:
 
 - Shell adapters read JSON stdin and write native stdout response.
-- TS adapters register callbacks and apply Hookah adapter response instructions.
-- All adapters fail open for observer events if Hookah is unreachable.
+- TS adapters register callbacks and apply Hitch adapter response instructions.
+- All adapters fail open for observer events if Hitch is unreachable.
 - Include recursion guard behavior for `HOOKAH_CHILD=1`.
 
 ### Assignment 10: Installer CLI
@@ -1414,7 +1414,7 @@ Complete context:
 
 The implementation is complete when all criteria are met:
 
-1. `hookah` starts a local API service bound to `127.0.0.1` by default.
+1. `hitch` starts a local API service bound to `127.0.0.1` by default.
 2. `POST /v1/events` accepts a supported native harness event, maps it, persists inbound + normalized records, and returns an event id.
 3. `POST /v1/dispatch-sync` accepts a supported control event, runs configured handlers with deadlines, persists handler invocations, aggregates deterministically, persists native response, and returns the aggregate decision.
 4. Codex mapper/translator covers the initial return-capable Codex event list.
@@ -1444,9 +1444,9 @@ Behavioral gates:
 
 - Unit: protocol schema validation, config validation, store CRUD, aggregation precedence, native translators.
 - Integration: HTTP API with temp SQLite and fake handler commands.
-- Adapter: shell adapters with fake Hookah server; TS adapter response application tests.
+- Adapter: shell adapters with fake Hitch server; TS adapter response application tests.
 - Installer: temp HOME dry-run/install/status/uninstall.
-- E2E: launch Hookah on random local port, send golden native payloads through adapters, assert persisted records and native outputs.
+- E2E: launch Hitch on random local port, send golden native payloads through adapters, assert persisted records and native outputs.
 
 ## Risks and Mitigations
 

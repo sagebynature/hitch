@@ -1,4 +1,4 @@
-# ADR-0001: Hookah Hook Adapter Architecture and Technology Stack
+# ADR-0001: Hitch Hook Adapter Architecture and Technology Stack
 
 ## Status
 
@@ -10,20 +10,20 @@ Proposed
 
 ## Context
 
-Hookah is a spin-off from Agent Pulse / sentiment-viewer. Agent Pulse proved that local agent harnesses can emit useful lifecycle information, but its event model was intentionally narrow: classify user intent, user reaction, and agent action for a desktop status panel.
+Hitch is a spin-off from Agent Pulse / sentiment-viewer. Agent Pulse proved that local agent harnesses can emit useful lifecycle information, but its event model was intentionally narrow: classify user intent, user reaction, and agent action for a desktop status panel.
 
-Hookah has a broader goal: provide a universal hook adapter for agent harnesses, initially Codex, Pi, Oh My Pi (OMP), and Hermes. Source harnesses have different hook mechanisms, event names, payload schemas, return contracts, trust models, and installation surfaces. Hookah must normalize those into a homogeneous event protocol while preserving the original native payload as JSON.
+Hitch has a broader goal: provide a universal hook adapter for agent harnesses, initially Codex, Pi, Oh My Pi (OMP), and Hermes. Source harnesses have different hook mechanisms, event names, payload schemas, return contracts, trust models, and installation surfaces. Hitch must normalize those into a homogeneous event protocol while preserving the original native payload as JSON.
 
-The key architectural complication is that harness hooks are not all fire-and-forget. Some are observational, while others are control points that expect a synchronous decision, transformed input, injected context, or rewritten output. Hookah therefore needs to handle both asynchronous event ingestion and synchronous native-response translation.
+The key architectural complication is that harness hooks are not all fire-and-forget. Some are observational, while others are control points that expect a synchronous decision, transformed input, injected context, or rewritten output. Hitch therefore needs to handle both asynchronous event ingestion and synchronous native-response translation.
 
 ## Decision Drivers
 
 - Preserve native harness payloads exactly enough for audit, replay, and future remapping.
 - Provide a stable normalized event envelope for portable handlers.
-- Support one native event mapping to many Hookah handlers.
+- Support one native event mapping to many Hitch handlers.
 - Execute independent handlers concurrently without nondeterministic final behavior.
 - Support synchronous control hooks where the source harness expects a return value.
-- Fail open for observability paths so Hookah downtime does not break normal agent work.
+- Fail open for observability paths so Hitch downtime does not break normal agent work.
 - Allow configurable fail-open or fail-closed behavior for security/control hooks.
 - Avoid inventing logging infrastructure; use established logging and telemetry frameworks.
 - Persist inbound events, normalized events, handler outputs, and emitted native responses.
@@ -82,18 +82,18 @@ OMP should be treated as Pi-compatible until its extensions diverge in tested be
 
 ## Decision
 
-Hookah will be built as a local daemon exposing both asynchronous and synchronous REST endpoints. Harness-specific native adapters will translate native hook payloads into Hookah requests and translate Hookah responses back into the native return mechanism expected by each harness.
+Hitch will be built as a local daemon exposing both asynchronous and synchronous REST endpoints. Harness-specific native adapters will translate native hook payloads into Hitch requests and translate Hitch responses back into the native return mechanism expected by each harness.
 
-Hookah will use a stable normalized envelope and preserve the source-native payload as JSON.
+Hitch will use a stable normalized envelope and preserve the source-native payload as JSON.
 
-Hookah will distinguish two execution modes:
+Hitch will distinguish two execution modes:
 
 1. **Async observer mode** for lifecycle and telemetry events whose native return value is ignored or optional.
 2. **Sync control mode** for hooks where the harness expects or accepts a decision, transformation, context injection, or result replacement.
 
-Handler execution will be concurrent where safe, but final control decisions will be aggregated deterministically by Hookah, not by completion race.
+Handler execution will be concurrent where safe, but final control decisions will be aggregated deterministically by Hitch, not by completion race.
 
-Hookah will separate operational logging from event persistence:
+Hitch will separate operational logging from event persistence:
 
 - Operational logs use a standard logging framework and OpenTelemetry-compatible export path.
 - Event persistence stores inbound events, normalized events, handler invocations, handler outputs, and native responses in SQLite initially, with optional JSONL audit output.
@@ -103,8 +103,8 @@ Hookah will separate operational logging from event persistence:
 Every inbound hook should be represented internally as:
 
 ```ts
-type HookahEventEnvelope = {
-  hookah_version: string
+type HitchEventEnvelope = {
+  hitch_version: string
   event_id: string
   received_at: string
 
@@ -113,7 +113,7 @@ type HookahEventEnvelope = {
   native_event_type: string
   native_payload: unknown
 
-  hookah_event_type: string
+  hitch_event_type: string
   session_id?: string
   turn_id?: string
   cwd?: string
@@ -151,10 +151,10 @@ Semantic classifications such as intent, sentiment, or trust trend are out of sc
 
 ## Handler Output Model
 
-Hookah handlers return a normalized result:
+Hitch handlers return a normalized result:
 
 ```ts
-type HookahHandlerResult = {
+type HitchHandlerResult = {
   status: "ok" | "error" | "timeout"
 
   decision?: {
@@ -177,7 +177,7 @@ type HookahHandlerResult = {
     native_response?: unknown
   }
 
-  logs?: HookahLogRecord[]
+  logs?: HitchLogRecord[]
   metrics?: Record<string, number>
 }
 ```
@@ -185,16 +185,16 @@ type HookahHandlerResult = {
 Each harness adapter owns native translation:
 
 ```text
-HookahHandlerResult -> Codex stdout JSON
-HookahHandlerResult -> Hermes stdout JSON
-HookahHandlerResult -> Pi/OMP callback return object or event mutation
+HitchHandlerResult -> Codex stdout JSON
+HitchHandlerResult -> Hermes stdout JSON
+HitchHandlerResult -> Pi/OMP callback return object or event mutation
 ```
 
 `native_response` exists as an escape hatch, not as the normal portable API.
 
 ## Deterministic Aggregation Rules
 
-For sync control events, Hookah will aggregate handler results in configured handler order, not completion order.
+For sync control events, Hitch will aggregate handler results in configured handler order, not completion order.
 
 Decision precedence:
 
@@ -226,7 +226,7 @@ POST /v1/replay
 
 `/v1/events` accepts observer events and returns quickly after validation and durable enqueue/persist.
 
-`/v1/dispatch-sync` accepts control events and returns a normalized Hookah decision that native adapters translate into harness-specific response formats.
+`/v1/dispatch-sync` accepts control events and returns a normalized Hitch decision that native adapters translate into harness-specific response formats.
 
 ## Persistence Model
 
@@ -247,7 +247,7 @@ inbound_events
 normalized_events
   id
   inbound_event_id
-  hookah_event_type
+  hitch_event_type
   normalized_payload_json
   mapping_version
 
@@ -278,9 +278,9 @@ Persistence is append-first. Mutating derived state can be added later, but the 
 
 ## Logging Decision
 
-Hookah will not implement custom log rolling, remote shipping, retry buffering, or vendor-specific logging integrations.
+Hitch will not implement custom log rolling, remote shipping, retry buffering, or vendor-specific logging integrations.
 
-Hookah operational logs will use the standard logging stack for the selected implementation language and expose OpenTelemetry-compatible export. Remote logging should be handled by the OpenTelemetry Collector or existing log infrastructure.
+Hitch operational logs will use the standard logging stack for the selected implementation language and expose OpenTelemetry-compatible export. Remote logging should be handled by the OpenTelemetry Collector or existing log infrastructure.
 
 Logging configuration should support:
 
@@ -295,7 +295,7 @@ enabled = true
 
 [log.file]
 enabled = true
-path = "~/.local/state/hookah/hookah.log"
+path = "~/.local/state/hitch/hitch.log"
 max_size_mb = 100
 max_backups = 10
 max_age_days = 14
@@ -312,10 +312,10 @@ enabled = true
 backend = "sqlite,jsonl"
 
 [audit.sqlite]
-path = "~/.local/share/hookah/events.sqlite"
+path = "~/.local/share/hitch/events.sqlite"
 
 [audit.jsonl]
-path = "~/.local/state/hookah/events.jsonl"
+path = "~/.local/state/hitch/events.jsonl"
 ```
 
 Operational logs are not the event journal. Event journal records go to SQLite and optional JSONL audit output.
@@ -353,7 +353,7 @@ Cons:
 
 Assessment:
 
-Go is the recommended implementation language for the Hookah daemon and installers if the priority is reliable local service behavior, simple deployment, good concurrency, and low operational surprise.
+Go is the recommended implementation language for the Hitch daemon and installers if the priority is reliable local service behavior, simple deployment, good concurrency, and low operational surprise.
 
 ### Option 2: Rust
 
@@ -383,7 +383,7 @@ Cons:
 
 Assessment:
 
-Rust is technically excellent but likely too expensive for the first implementation unless Hookah’s security boundary becomes the dominant requirement. It is the best choice if we later need sandboxed in-process policy engines, WASM integrations, or very strict memory/resource guarantees.
+Rust is technically excellent but likely too expensive for the first implementation unless Hitch’s security boundary becomes the dominant requirement. It is the best choice if we later need sandboxed in-process policy engines, WASM integrations, or very strict memory/resource guarantees.
 
 ### Option 3: TypeScript / Node.js
 
@@ -415,7 +415,7 @@ Cons:
 
 Assessment:
 
-TypeScript is excellent for native harness adapters and SDKs. It is less ideal for the core daemon if we want Hookah to feel like infrastructure rather than an npm app. A hybrid model is attractive: Go daemon, TypeScript adapters/SDK initially where harnesses require JS.
+TypeScript is excellent for native harness adapters and SDKs. It is less ideal for the core daemon if we want Hitch to feel like infrastructure rather than an npm app. A hybrid model is attractive: Go daemon, TypeScript adapters/SDK initially where harnesses require JS.
 
 ### Option 4: Python
 
@@ -441,7 +441,7 @@ Cons:
 - Packaging a reliable cross-platform daemon is more cumbersome.
 - Runtime dependency management is more fragile than Go/Rust binaries.
 - Async subprocess cancellation and parallel execution are workable but easier to get subtly wrong.
-- Performance is sufficient for Hookah, but tail-latency predictability under many concurrent handlers is weaker.
+- Performance is sufficient for Hitch, but tail-latency predictability under many concurrent handlers is weaker.
 - Larger operational surface for users who just want a local service.
 
 Assessment:
@@ -450,7 +450,7 @@ Python is good for handler authoring and prototypes, but not the best core daemo
 
 ## Technology Stack Decision
 
-Use **Go for the Hookah daemon, persistence layer, installer/doctor CLI, native response aggregation, and operational logging**.
+Use **Go for the Hitch daemon, persistence layer, installer/doctor CLI, native response aggregation, and operational logging**.
 
 Use **TypeScript for harness adapters where the harness integration surface is JavaScript/TypeScript-native**, especially Pi and OMP extensions. Codex and Hermes shell-hook adapters may be small Go, Node, or shell-launcher binaries/scripts, but the long-term preferred distribution is to ship generated or embedded adapter scripts from the Go installer.
 
@@ -458,7 +458,7 @@ Support user handlers as external commands first. This avoids committing to an i
 
 ## Rationale
 
-Hookah is fundamentally a local control-plane daemon. It needs to be easy to install, reliable under timeout pressure, strict about request size and schemas, and boring to operate. Go fits that shape best.
+Hitch is fundamentally a local control-plane daemon. It needs to be easy to install, reliable under timeout pressure, strict about request size and schemas, and boring to operate. Go fits that shape best.
 
 Rust provides stronger guarantees but increases implementation complexity before the protocol has settled. TypeScript gives the fastest adapter development but makes the daemon feel more fragile and runtime-dependent. Python gives excellent handler ergonomics but is the weakest packaging and daemon choice.
 
@@ -475,7 +475,7 @@ A Go core with external command handlers and TypeScript harness adapters gives t
 
 ### Positive
 
-- Hookah can be distributed as a small local binary.
+- Hitch can be distributed as a small local binary.
 - Operational logging can use established Go logging and OpenTelemetry libraries.
 - SQLite persistence and handler dispatch can remain in one process without complex runtime dependencies.
 - Native adapter scripts remain thin and harness-specific.
@@ -502,7 +502,7 @@ A Go core with external command handlers and TypeScript harness adapters gives t
 - **Risk: Multiple transforms conflict.**
   - Mitigation: disallow multiple transforms by default; require explicit ordered transform chains.
 
-- **Risk: Hookah outage blocks harness work.**
+- **Risk: Hitch outage blocks harness work.**
   - Mitigation: native adapters fail open for async events; control events use configured fallback behavior.
 
 ## Implementation Notes
@@ -518,12 +518,12 @@ Recommended initial Go packages:
 
 Required test fixtures:
 
-- Native Codex payload -> Hookah envelope.
-- Native Hermes payload -> Hookah envelope.
-- Native Pi/OMP event -> Hookah envelope.
-- Hookah decision -> Codex stdout JSON.
-- Hookah decision -> Hermes stdout JSON.
-- Hookah decision -> Pi/OMP return object or event mutation.
+- Native Codex payload -> Hitch envelope.
+- Native Hermes payload -> Hitch envelope.
+- Native Pi/OMP event -> Hitch envelope.
+- Hitch decision -> Codex stdout JSON.
+- Hitch decision -> Hermes stdout JSON.
+- Hitch decision -> Pi/OMP return object or event mutation.
 - Conflicting handler decisions aggregate deterministically.
 - Handler timeout obeys configured fallback policy.
 - LLM-backed handler recursion guard prevents re-entry.

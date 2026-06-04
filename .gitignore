@@ -36,7 +36,7 @@ bun.lockb
 .next/
 coverage/
 
-# Hookah local runtime data
+# Hitch local runtime data
 *.db
 *.db-shm
 *.db-wal
