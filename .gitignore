@@ -45,6 +45,7 @@ coverage/
 *.log
 *.jsonl
 .local/
+.worktrees/
 
 # Temporary files
 tmp/
