@@ -1,6 +1,6 @@
 # Handler Protocol
 
-Handlers are external commands configured in `~/.config/hitch/config.toml`.
+Handlers are external commands configured in `~/.config/hitch/config.toml` or the config passed with `--config`.
 
 Input: Hitch writes one normalized event envelope JSON object to handler stdin.
 
@@ -15,8 +15,20 @@ Output: handlers may write one JSON object to stdout:
 }
 ```
 
+If `decision` is omitted, Hitch treats it as `{"behavior":"none"}`.
+
 Allowed statuses: `ok`, `error`, `timeout`.
 
 Allowed decisions: `none`, `allow`, `deny`, `block`, `continue`, `stop`, `transform`, `replace_result`, `inject_context`, `handled`.
 
-Invalid JSON is persisted as a handler error and does not crash Hitch. Handler stderr is captured for audit records.
+Handler behavior verified by tests:
+
+- stdout JSON is parsed into a handler result.
+- invalid stdout JSON is persisted as `status = error`.
+- timeouts are persisted as `status = timeout`.
+- stderr is captured separately from parsed stdout.
+- deterministic aggregation uses decision precedence and configured handler order.
+- multiple context injections concatenate in configured handler order.
+- multiple transforms are rejected unless transform chaining is explicitly configured.
+
+Hitch sets `HOOKAH_CHILD=1` on child handler processes for recursion guards.

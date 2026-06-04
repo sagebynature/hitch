@@ -3,13 +3,20 @@
 Inspect a normalized event by id:
 
 ```sh
-hitch inspect-event <normalized-event-id> --config config/default.config.toml
+hitch inspect-event --config config/default.config.toml <normalized-event-id>
 ```
+
+`inspect-event` returns the audit view for the normalized event:
+
+- inbound event record
+- normalized event record
+- handler invocation records
+- native response records
 
 Dry-run replay returns the stored event envelope without writing records:
 
 ```sh
-hitch replay <normalized-event-id> --dry-run --config config/default.config.toml
+hitch replay --config config/default.config.toml --dry-run <normalized-event-id>
 ```
 
-Replay without `--dry-run` re-runs configured sync handlers for the stored normalized event and persists new handler invocation records linked to the source event id.
+Replay without `--dry-run` re-runs configured sync handlers for the stored normalized event and persists new handler invocation records linked by `replay_source_id` to the source normalized event id.
