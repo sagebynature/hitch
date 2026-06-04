@@ -32,7 +32,7 @@ function applyMutation(target: HookEvent, mutation: HitchMutation): void {
 }
 
 export function applyHitchResponse(event: HookEvent, response: HitchAdapterResponse): unknown {
-  if (process.env.HITCH_CHILD === "1" || process.env.HOOKAH_CHILD === "1") return undefined;
+  if (process.env.HITCH_CHILD === "1") return undefined;
   if (response.adapter_action === "mutate_and_return") {
     for (const mutation of response.mutations ?? []) applyMutation(event, mutation);
     return response.return_value;

@@ -98,7 +98,7 @@ func runHandler(parent context.Context, name string, cfg config.HandlerConfig, e
 	}
 	cmd := exec.CommandContext(ctx, cfg.Command[0], cfg.Command[1:]...)
 	cmd.Stdin = bytes.NewReader(stdin)
-	cmd.Env = append(cmd.Environ(), "HOOKAH_CHILD=1")
+	cmd.Env = append(cmd.Environ(), "HITCH_CHILD=1")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

@@ -678,7 +678,7 @@ Changes:
 - Implement per-handler timeout.
 - Implement total sync dispatch deadline.
 - Implement deterministic aggregation.
-- Add recursion guard env var for future LLM-backed handlers: `HOOKAH_CHILD=1` on child process.
+- Add recursion guard env var for future LLM-backed handlers: `HITCH_CHILD=1` on child process.
 
 Outputs:
 
@@ -1041,7 +1041,7 @@ Changes:
 - For return-capable events, call `/v1/dispatch-sync`.
 - For observer events, call `/v1/events` and return native no-op/continue.
 - Apply mutation instructions before returning from callback.
-- Add recursion guard `HOOKAH_CHILD=1` behavior: if present, extension no-ops.
+- Add recursion guard `HITCH_CHILD=1` behavior: if present, extension no-ops.
 
 Outputs:
 
@@ -1368,7 +1368,7 @@ Complete context:
 - Shell adapters read JSON stdin and write native stdout response.
 - TS adapters register callbacks and apply Hitch adapter response instructions.
 - All adapters fail open for observer events if Hitch is unreachable.
-- Include recursion guard behavior for `HOOKAH_CHILD=1`.
+- Include recursion guard behavior for `HITCH_CHILD=1`.
 
 ### Assignment 10: Installer CLI
 

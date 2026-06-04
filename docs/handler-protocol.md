@@ -31,4 +31,4 @@ Handler behavior verified by tests:
 - multiple context injections concatenate in configured handler order.
 - multiple transforms are rejected unless transform chaining is explicitly configured.
 
-Hitch sets `HOOKAH_CHILD=1` on child handler processes for recursion guards.
+Hitch sets `HITCH_CHILD=1` on child handler processes for recursion guards.

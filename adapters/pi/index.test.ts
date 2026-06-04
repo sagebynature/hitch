@@ -37,8 +37,8 @@ describe("applyHitchResponse", () => {
   });
 
   test("recursion guard no-ops without mutating or returning", () => {
-    const previous = process.env.HOOKAH_CHILD;
-    process.env.HOOKAH_CHILD = "1";
+    const previous = process.env.HITCH_CHILD;
+    process.env.HITCH_CHILD = "1";
     const event = { input: { command: "pwd" } };
 
     try {
@@ -52,9 +52,9 @@ describe("applyHitchResponse", () => {
       expect(event.input.command).toBe("pwd");
     } finally {
       if (previous === undefined) {
-        delete process.env.HOOKAH_CHILD;
+        delete process.env.HITCH_CHILD;
       } else {
-        process.env.HOOKAH_CHILD = previous;
+        process.env.HITCH_CHILD = previous;
       }
     }
   });
