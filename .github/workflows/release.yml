@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*.*.*
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release, for example v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Validate tag
+        run: |
+          case "$TAG_NAME" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *)
+              echo "release tag must look like vX.Y.Z: $TAG_NAME" >&2
+              exit 1
+              ;;
+          esac
+          git rev-parse --verify "$TAG_NAME^{commit}" >/dev/null
+          echo "VERSION=${TAG_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run Go tests
+        run: make test-go
+
+      - name: Run adapter tests
+        run: make test-adapters
+
+      - name: Build CLI
+        run: make build
+
+      - name: Run install dry-run smoke test
+        run: make install-dry-run
+
+      - name: Check installer shell syntax
+        run: sh -n install.sh
+
+      - name: Package release artifacts
+        run: scripts/package-release.sh "$VERSION"
+
+      - name: Verify release binary version
+        run: |
+          output=$(./dist/build/hitch_${VERSION}_linux_amd64/hitch --version)
+          if [ "$output" != "hitch $VERSION" ]; then
+            echo "unexpected version output: $output" >&2
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$TAG_NAME" dist/packages/* --verify-tag --title "$TAG_NAME" --generate-notes

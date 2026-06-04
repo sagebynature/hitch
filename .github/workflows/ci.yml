@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go tests and CLI smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run Go tests
+        run: make test-go
+
+      - name: Build CLI
+        run: make build
+
+      - name: Run install dry-run smoke test
+        run: make install-dry-run
+
+      - name: Check installer shell syntax
+        run: sh -n install.sh
+
+      - name: Run source installer smoke test
+        env:
+          HITCH_SOURCE_DIR: ${{ github.workspace }}
+          HITCH_INSTALL_DIR: ${{ runner.temp }}/hitch-bin
+          HITCH_SKIP_HOOK_INSTALL: "1"
+        run: |
+          ./install.sh
+          "$HITCH_INSTALL_DIR/hitch" --version
+
+  adapters:
+    name: Adapter tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Run adapter tests
+        run: make test-adapters
