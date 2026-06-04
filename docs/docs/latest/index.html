@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hitch Documentation</title>
-    <meta name="description" content="Latest Hitch documentation: installation, configuration, handler protocol, HTTP API, harness contracts, replay, and schemas." />
+    <meta name="description" content="Latest Hitch documentation: installation, configuration, Hitch events, handler protocol, HTTP API, harness contracts, replay, and schemas." />
     <script>
       (() => {
         const mode = localStorage.getItem('hitch:theme') || 'system';
@@ -40,6 +40,7 @@
         <a href="#installation">Installation</a>
         <a href="#configuration">Configuration</a>
         <a href="#handler-protocol">Handler protocol</a>
+        <a href="#hitch-events">Hitch events</a>
         <a href="#http-api">HTTP API</a>
         <a href="#harness-contracts">Harness contracts</a>
         <a href="#replay">Replay and inspect</a>
@@ -120,6 +121,99 @@ on_timeout = "fail_open"</code></pre>
           <p>Verified behavior includes stdout JSON parsing, invalid stdout persistence as <code>error</code>, timeout persistence as <code>timeout</code>, separate stderr capture, decision precedence by configured handler order, ordered context injection concatenation, and rejection of multiple transforms unless transform chaining is explicitly configured.</p>
         </section>
 
+        <section id="hitch-events">
+          <h2>Hitch events</h2>
+          <p>Hitch normalizes Codex, Hermes, Pi, and OMP source events into one stable envelope. Current mappers preserve the harness payload unchanged in both <code>native_payload</code> and <code>payload</code>, then set <code>hitch_event_type</code> from the native event name.</p>
+          <h3>Normalized event types</h3>
+          <table>
+            <thead><tr><th>Hitch event</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>session.started</code></td><td>A harness session or top-level agent lifecycle starts.</td></tr>
+              <tr><td><code>session.resumed</code></td><td>A switch, fork, or resume-like session transition is about to occur.</td></tr>
+              <tr><td><code>session.ended</code></td><td>A session or agent lifecycle ends.</td></tr>
+              <tr><td><code>session.compacted</code></td><td>Context compaction starts, completes, or is about to run.</td></tr>
+              <tr><td><code>turn.started</code></td><td>A model turn, agent turn, or provider request begins.</td></tr>
+              <tr><td><code>turn.user_prompt</code></td><td>User input or gateway dispatch is submitted.</td></tr>
+              <tr><td><code>turn.assistant_started</code></td><td>Reserved. No current mapper emits this event.</td></tr>
+              <tr><td><code>turn.completed</code></td><td>A model turn, agent turn, or assistant output completes.</td></tr>
+              <tr><td><code>tool.requested</code></td><td>A tool command, shell command, or tool call is requested before execution.</td></tr>
+              <tr><td><code>tool.permission_requested</code></td><td>A harness-specific permission decision is requested.</td></tr>
+              <tr><td><code>tool.completed</code></td><td>A tool result, terminal output, or transformed tool result is available.</td></tr>
+              <tr><td><code>subagent.started</code></td><td>A subagent starts.</td></tr>
+              <tr><td><code>subagent.completed</code></td><td>A subagent completes or stops.</td></tr>
+              <tr><td><code>error.reported</code></td><td>Reserved. No current mapper emits this event.</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Codex event mapping</h3>
+          <table>
+            <thead><tr><th>Native event</th><th>Hitch event</th><th>Translated response</th></tr></thead>
+            <tbody>
+              <tr><td><code>SessionStart</code></td><td><code>session.started</code></td><td><code>inject_context</code> adds <code>additionalContext</code>; <code>block</code> or <code>deny</code> returns <code>decision:"block"</code>.</td></tr>
+              <tr><td><code>SubagentStart</code></td><td><code>subagent.started</code></td><td><code>inject_context</code> adds <code>additionalContext</code>; <code>block</code> or <code>deny</code> returns <code>decision:"block"</code>.</td></tr>
+              <tr><td><code>UserPromptSubmit</code></td><td><code>turn.user_prompt</code></td><td><code>inject_context</code> adds <code>additionalContext</code>; <code>block</code> or <code>deny</code> returns <code>decision:"block"</code>.</td></tr>
+              <tr><td><code>PreToolUse</code></td><td><code>tool.requested</code></td><td><code>deny</code>, <code>block</code>, or <code>stop</code> returns <code>permissionDecision:"deny"</code>; <code>allow</code> or <code>transform</code> returns <code>permissionDecision:"allow"</code>, with optional <code>updatedInput</code>.</td></tr>
+              <tr><td><code>PermissionRequest</code></td><td><code>tool.permission_requested</code></td><td><code>deny</code>, <code>block</code>, or <code>stop</code> returns <code>hookSpecificOutput.decision.behavior:"deny"</code>; <code>allow</code> returns <code>"allow"</code>.</td></tr>
+              <tr><td><code>PostToolUse</code></td><td><code>tool.completed</code></td><td><code>inject_context</code> adds <code>additionalContext</code>; <code>block</code> or <code>deny</code> returns <code>decision:"block"</code>.</td></tr>
+              <tr><td><code>PreCompact</code></td><td><code>session.compacted</code></td><td><code>stop</code> or <code>block</code> returns <code>decision:"stop"</code>.</td></tr>
+              <tr><td><code>PostCompact</code></td><td><code>session.compacted</code></td><td><code>stop</code> or <code>block</code> returns <code>decision:"stop"</code>.</td></tr>
+              <tr><td><code>SubagentStop</code></td><td><code>subagent.completed</code></td><td><code>continue</code> returns <code>continue:true</code>.</td></tr>
+              <tr><td><code>Stop</code></td><td><code>turn.completed</code></td><td><code>stop</code> or <code>block</code> returns <code>decision:"stop"</code>.</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Hermes event mapping</h3>
+          <table>
+            <thead><tr><th>Native event</th><th>Hitch event</th><th>Translated response</th></tr></thead>
+            <tbody>
+              <tr><td><code>pre_tool_call</code></td><td><code>tool.requested</code></td><td><code>block</code>, <code>deny</code>, or <code>stop</code> returns <code>action:"block"</code> and <code>message</code>.</td></tr>
+              <tr><td><code>post_tool_call</code></td><td><code>tool.completed</code></td><td>No special translation.</td></tr>
+              <tr><td><code>pre_llm_call</code></td><td><code>turn.started</code></td><td><code>inject_context</code> returns <code>context</code>.</td></tr>
+              <tr><td><code>post_llm_call</code></td><td><code>turn.completed</code></td><td>No special translation.</td></tr>
+              <tr><td><code>on_session_start</code></td><td><code>session.started</code></td><td>No special translation.</td></tr>
+              <tr><td><code>on_session_end</code></td><td><code>session.ended</code></td><td>No special translation.</td></tr>
+              <tr><td><code>subagent_stop</code></td><td><code>subagent.completed</code></td><td>No special translation.</td></tr>
+              <tr><td><code>transform_tool_result</code></td><td><code>tool.completed</code></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
+              <tr><td><code>transform_terminal_output</code></td><td><code>tool.completed</code></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
+              <tr><td><code>transform_llm_output</code></td><td><code>turn.completed</code></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
+              <tr><td><code>pre_gateway_dispatch</code></td><td><code>turn.user_prompt</code></td><td><code>handled</code> returns <code>action:"skip"</code>; <code>transform</code> returns <code>action:"rewrite"</code>; <code>allow</code> returns <code>action:"allow"</code>.</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Pi event mapping</h3>
+          <p>Pi uses <code>adapter_action</code> responses: <code>noop</code>, <code>return</code>, or <code>mutate_and_return</code>.</p>
+          <table>
+            <thead><tr><th>Native event</th><th>Hitch event</th><th>Adapter response</th></tr></thead>
+            <tbody>
+              <tr><td><code>input</code></td><td><code>turn.user_prompt</code></td><td><code>transform</code> returns a transformed input action; <code>handled</code> returns handled; <code>continue</code> or <code>allow</code> returns continue.</td></tr>
+              <tr><td><code>before_agent_start</code>, <code>agent_start</code>, <code>turn_start</code>, <code>context</code>, <code>before_provider_request</code></td><td><code>turn.started</code></td><td><code>context</code> and <code>before_provider_request</code> may return transformed input; otherwise <code>noop</code>.</td></tr>
+              <tr><td><code>tool_call</code></td><td><code>tool.requested</code></td><td><code>block</code>, <code>deny</code>, or <code>stop</code> returns a block object; <code>transform</code> mutates source path <code>input</code>.</td></tr>
+              <tr><td><code>tool_result</code></td><td><code>tool.completed</code></td><td><code>replace_result</code> or <code>transform</code> returns <code>updated_output</code>.</td></tr>
+              <tr><td><code>turn_end</code>, <code>agent_end</code></td><td><code>turn.completed</code></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>session_start</code></td><td><code>session.started</code></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>session_shutdown</code></td><td><code>session.ended</code></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>session_before_switch</code>, <code>session_before_fork</code></td><td><code>session.resumed</code></td><td><code>block</code> or <code>stop</code> returns <code>{cancel:true}</code>.</td></tr>
+              <tr><td><code>session_before_compact</code>, <code>session_compact</code></td><td><code>session.compacted</code></td><td><code>session_before_compact</code> can return <code>{cancel:true}</code>; <code>session_compact</code> is <code>noop</code>.</td></tr>
+              <tr><td><code>user_bash</code></td><td><code>tool.requested</code></td><td><code>noop</code>.</td></tr>
+            </tbody>
+          </table>
+
+          <h3>OMP event mapping</h3>
+          <p>OMP reuses the Pi adapter response contract for translated native responses.</p>
+          <table>
+            <thead><tr><th>Native event</th><th>Hitch event</th><th>Adapter response</th></tr></thead>
+            <tbody>
+              <tr><td><code>input</code></td><td><code>turn.user_prompt</code></td><td>Same translation as Pi <code>input</code>.</td></tr>
+              <tr><td><code>before_agent_start</code>, <code>turn_start</code>, <code>todo_reminder</code></td><td><code>turn.started</code></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>tool_call</code></td><td><code>tool.requested</code></td><td>Same translation as Pi <code>tool_call</code>.</td></tr>
+              <tr><td><code>tool_result</code></td><td><code>tool.completed</code></td><td>Same translation as Pi <code>tool_result</code>.</td></tr>
+              <tr><td><code>turn_end</code></td><td><code>turn.completed</code></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>auto_compaction_start</code></td><td><code>session.compacted</code></td><td><code>noop</code>.</td></tr>
+            </tbody>
+          </table>
+          <p>For every harness, <code>decision.native_response</code> bypasses Hitch's translator and returns harness-native JSON unchanged. See <a href="../../events.md">the markdown event reference</a> for the complete envelope table and response details.</p>
+        </section>
+
         <section id="http-api">
           <h2>Local HTTP API</h2>
           <p>Hitch exposes a local API for health checks, event ingestion, synchronous dispatch, event inspection, and replay-driven workflows.</p>
@@ -186,6 +280,7 @@ hitch replay --config config/default.config.toml norm_...</code></pre>
             <a class="doc-card" href="../../installation.md"><small>Guide</small><h3>Installation</h3><p>Source install, hook setup, status, doctor, and uninstall behavior.</p></a>
             <a class="doc-card" href="../../configuration.md"><small>Reference</small><h3>Configuration</h3><p>Config sections and strict validation rules.</p></a>
             <a class="doc-card" href="../../handler-protocol.md"><small>Reference</small><h3>Handler protocol</h3><p>stdin/stdout contract and result aggregation rules.</p></a>
+            <a class="doc-card" href="../../events.md"><small>Reference</small><h3>Hitch events</h3><p>Normalized event taxonomy and source-event mappings for Codex, Hermes, Pi, and OMP.</p></a>
             <a class="doc-card" href="../../harness-contracts.md"><small>Reference</small><h3>Harness contracts</h3><p>Supported dispatch modes and adapter behavior.</p></a>
             <a class="doc-card" href="../../replay.md"><small>Reference</small><h3>Replay</h3><p>Event inspection and replay commands.</p></a>
           </div>

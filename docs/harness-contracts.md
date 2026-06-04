@@ -1,5 +1,7 @@
 # Harness Contracts
 
+For the full normalized event taxonomy and native source-event mapping, see [Hitch Events](events.md).
+
 Hitch supports two dispatch modes:
 
 - Async observer events use `POST /v1/events`.
