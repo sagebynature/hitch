@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"time"
 
-	"github.com/sage-scm/hitch/internal/protocol"
+	"github.com/sagebynature/hitch/internal/protocol"
 )
 
 func NewEnvelope(h protocol.Harness, nativeEventType string, nativePayload protocol.RawJSON, eventType protocol.EventType, payload protocol.RawJSON) protocol.EventEnvelope {

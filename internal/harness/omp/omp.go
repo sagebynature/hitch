@@ -3,9 +3,9 @@ package omp
 import (
 	"fmt"
 
-	"github.com/sage-scm/hitch/internal/harness"
-	piharness "github.com/sage-scm/hitch/internal/harness/pi"
-	"github.com/sage-scm/hitch/internal/protocol"
+	"github.com/sagebynature/hitch/internal/harness"
+	piharness "github.com/sagebynature/hitch/internal/harness/pi"
+	"github.com/sagebynature/hitch/internal/protocol"
 )
 
 type Mapper struct{}

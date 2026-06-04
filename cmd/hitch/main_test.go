@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sage-scm/hitch/internal/api"
-	"github.com/sage-scm/hitch/internal/config"
-	"github.com/sage-scm/hitch/internal/protocol"
-	"github.com/sage-scm/hitch/internal/store"
+	"github.com/sagebynature/hitch/internal/api"
+	"github.com/sagebynature/hitch/internal/config"
+	"github.com/sagebynature/hitch/internal/protocol"
+	"github.com/sagebynature/hitch/internal/store"
 )
 
 func runAdapterForTest(t *testing.T, args []string, input string) string {

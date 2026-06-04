@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sage-scm/hitch/internal/config"
+	"github.com/sagebynature/hitch/internal/config"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 

@@ -1,6 +1,6 @@
 package harness
 
-import "github.com/sage-scm/hitch/internal/protocol"
+import "github.com/sagebynature/hitch/internal/protocol"
 
 type Mapper interface {
 	Map(nativeEventType string, nativePayload protocol.RawJSON) (protocol.EventEnvelope, error)

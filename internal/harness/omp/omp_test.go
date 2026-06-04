@@ -3,7 +3,7 @@ package omp
 import (
 	"testing"
 
-	"github.com/sage-scm/hitch/internal/protocol"
+	"github.com/sagebynature/hitch/internal/protocol"
 )
 
 func TestMapOMPToolCall(t *testing.T) {

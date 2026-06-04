@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sage-scm/hitch/internal/config"
+	"github.com/sagebynature/hitch/internal/config"
 )
 
 func TestNewFileLogger(t *testing.T) {

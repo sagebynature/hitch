@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sage-scm/hitch/internal/config"
-	"github.com/sage-scm/hitch/internal/protocol"
+	"github.com/sagebynature/hitch/internal/config"
+	"github.com/sagebynature/hitch/internal/protocol"
 )
 
 type Invocation struct {

@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sage-scm/hitch/internal/config"
-	"github.com/sage-scm/hitch/internal/dispatch"
-	"github.com/sage-scm/hitch/internal/harness"
-	"github.com/sage-scm/hitch/internal/harness/codex"
-	"github.com/sage-scm/hitch/internal/harness/hermes"
-	"github.com/sage-scm/hitch/internal/harness/omp"
-	"github.com/sage-scm/hitch/internal/harness/pi"
-	"github.com/sage-scm/hitch/internal/protocol"
-	"github.com/sage-scm/hitch/internal/store"
+	"github.com/sagebynature/hitch/internal/config"
+	"github.com/sagebynature/hitch/internal/dispatch"
+	"github.com/sagebynature/hitch/internal/harness"
+	"github.com/sagebynature/hitch/internal/harness/codex"
+	"github.com/sagebynature/hitch/internal/harness/hermes"
+	"github.com/sagebynature/hitch/internal/harness/omp"
+	"github.com/sagebynature/hitch/internal/harness/pi"
+	"github.com/sagebynature/hitch/internal/protocol"
+	"github.com/sagebynature/hitch/internal/store"
 )
 
 type Server struct {

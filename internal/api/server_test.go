@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sage-scm/hitch/internal/config"
-	"github.com/sage-scm/hitch/internal/store"
+	"github.com/sagebynature/hitch/internal/config"
+	"github.com/sagebynature/hitch/internal/store"
 )
 
 func testConfig() config.Config {

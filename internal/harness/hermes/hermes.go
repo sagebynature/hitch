@@ -3,8 +3,8 @@ package hermes
 import (
 	"fmt"
 
-	"github.com/sage-scm/hitch/internal/harness"
-	"github.com/sage-scm/hitch/internal/protocol"
+	"github.com/sagebynature/hitch/internal/harness"
+	"github.com/sagebynature/hitch/internal/protocol"
 )
 
 type Mapper struct{}

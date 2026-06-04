@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sage-scm/hitch/internal/protocol"
+	"github.com/sagebynature/hitch/internal/protocol"
 )
 
 func TestStoreRoundTrip(t *testing.T) {

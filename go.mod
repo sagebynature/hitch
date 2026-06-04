@@ -1,4 +1,4 @@
-module github.com/sage-scm/hitch
+module github.com/sagebynature/hitch
 
 go 1.26.3
 

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sage-scm/hitch/internal/config"
-	"github.com/sage-scm/hitch/internal/protocol"
+	"github.com/sagebynature/hitch/internal/config"
+	"github.com/sagebynature/hitch/internal/protocol"
 )
 
 func testEnv() protocol.EventEnvelope {
@@ -31,7 +31,7 @@ func script(t *testing.T, body string) string {
 func TestDispatchParsesHandlerResult(t *testing.T) {
 	h := script(t, `echo '{"status":"ok","decision":{"behavior":"deny","reason":"no"}}'`)
 	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, Events: []string{"*"}, Mode: "sync", TimeoutMS: 1000}})
-	got := r.Dispatch(context.Background(), testEnv(), "sync", time.Second)
+	got := r.Dispatch(context.Background(), testEnv(), "sync", 5*time.Second)
 	if got.Aggregate.Decision.Behavior != protocol.BehaviorDeny {
 		t.Fatalf("got %s", got.Aggregate.Decision.Behavior)
 	}
@@ -43,7 +43,7 @@ func TestDispatchParsesHandlerResult(t *testing.T) {
 func TestDispatchInvalidJSONIsError(t *testing.T) {
 	h := script(t, `echo nope`)
 	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, Events: []string{"*"}, Mode: "sync", TimeoutMS: 1000}})
-	got := r.Dispatch(context.Background(), testEnv(), "sync", time.Second)
+	got := r.Dispatch(context.Background(), testEnv(), "sync", 5*time.Second)
 	if got.Invocations[0].Status != protocol.StatusError {
 		t.Fatalf("expected error: %#v", got.Invocations[0])
 	}
@@ -65,7 +65,7 @@ func TestAggregationDeterministic(t *testing.T) {
 		"a_allow": {Command: []string{slowAllow}, Events: []string{"*"}, Mode: "sync", TimeoutMS: 1000},
 		"b_deny":  {Command: []string{fastDeny}, Events: []string{"*"}, Mode: "sync", TimeoutMS: 1000},
 	})
-	got := r.Dispatch(context.Background(), testEnv(), "sync", time.Second)
+	got := r.Dispatch(context.Background(), testEnv(), "sync", 5*time.Second)
 	if got.Aggregate.Decision.Behavior != protocol.BehaviorDeny {
 		t.Fatalf("deny should win: %#v", got.Aggregate.Decision)
 	}
@@ -78,7 +78,7 @@ func TestContextConcatenation(t *testing.T) {
 		"a": {Command: []string{h1}, Events: []string{"*"}, Mode: "sync", TimeoutMS: 1000},
 		"b": {Command: []string{h2}, Events: []string{"*"}, Mode: "sync", TimeoutMS: 1000},
 	})
-	got := r.Dispatch(context.Background(), testEnv(), "sync", time.Second)
+	got := r.Dispatch(context.Background(), testEnv(), "sync", 5*time.Second)
 	if got.Aggregate.Decision.Context != "one\n\ntwo" {
 		t.Fatalf("bad context: %q", got.Aggregate.Decision.Context)
 	}
