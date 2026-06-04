@@ -77,8 +77,10 @@ hitch install --only codex --yes --json</code></pre>
           <pre class="code-block"><code>hitch install --dry-run --json
 hitch install --all --dry-run --json
 hitch install --only codex --yes --json
-hitch uninstall --only codex --yes --json</code></pre>
-          <p>The current installer seeds <code>~/.config/hitch/config.toml</code> when missing and installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>. Hermes, Pi, and OMP are detected and reported, but real hook patching is not implemented for them yet.</p>
+hitch install --only hermes --yes --json
+hitch uninstall --only codex --yes --json
+hitch uninstall --only hermes --yes --json</code></pre>
+          <p>The current installer seeds <code>~/.config/hitch/config.toml</code> when missing, installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>, and installs Hitch-managed Hermes shell hooks into <code>~/.hermes/config.yaml</code>. Pi and OMP are detected and reported, but real hook patching is not implemented for them yet.</p>
         </section>
 
         <section id="configuration">
@@ -132,7 +134,7 @@ on_timeout = "fail_open"</code></pre>
             <li>Add a <code>[handlers.&lt;name&gt;]</code> config entry with <code>command</code>, <code>events</code>, <code>mode</code>, <code>timeout_ms</code>, and fail-open or fail-closed policy.</li>
             <li>Read <code>hitch_event_type</code> first. Inspect <code>harness</code> and <code>native_event_type</code> only when a harness-specific field is needed.</li>
             <li>Return a decision behavior: <code>none</code>, <code>allow</code>, <code>deny</code>, <code>block</code>, <code>continue</code>, <code>stop</code>, <code>transform</code>, <code>replace_result</code>, <code>inject_context</code>, or <code>handled</code>.</li>
-            <li>Test with <code>python3 examples/test_drive.py</code>. The example starts Hitch, sends sync dispatch requests, verifies native responses, and inspects the stored audit record.</li>
+            <li>Test policy decisions with <code>python3 examples/test_drive.py</code>, or test payload logging across all harnesses with <code>python3 examples/test_payload_logger.py</code>.</li>
           </ol>
           <pre class="code-block"><code>[handlers.example_policy]
 command = ["python3", "examples/handlers/policy_handler.py"]
@@ -141,10 +143,28 @@ mode = "sync"
 timeout_ms = 1000
 on_error = "fail_closed"
 on_timeout = "fail_closed"</code></pre>
+          <h3>Payload logger for every harness</h3>
+          <p><code>examples/handlers/payload_logger.py</code> appends each event payload to a JSONL log and returns <code>behavior:"none"</code>. Configure one sync handler and one async handler with <code>events = ["*"]</code> to observe Codex, Hermes, Pi, and OMP without changing control flow.</p>
+          <pre class="code-block"><code>[handlers.payload_logger_sync]
+command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
+events = ["*"]
+mode = "sync"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+
+[handlers.payload_logger_async]
+command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
+events = ["*"]
+mode = "async"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"</code></pre>
+          <p>Run <code>python3 examples/test_payload_logger.py</code> from the repository root. The script starts Hitch on <code>127.0.0.1:8797</code>, sends events through all four harness mappers, sends one async observer event, and verifies <code>tmp/hitch-payload-logger/payloads.jsonl</code>.</p>
           <p>Matching handlers run in lexicographic handler-name order. Higher-precedence decisions win; blocking decisions outrank transforms, context injection, and allow decisions. Multiple context injections concatenate, but multiple transform or replace-result decisions are rejected.</p>
           <div class="docs-index">
             <a class="doc-card" href="../../handler-development.md"><small>Guide</small><h3>Building handlers</h3><p>Detailed handler modes, config mapping, decision behavior reference, test-drive commands, inspection, replay, and troubleshooting.</p></a>
-            <a class="doc-card" href="https://github.com/sagebynature/hitch/tree/main/examples"><small>Examples</small><h3>Runnable handler test drive</h3><p>Example policy handler, config, and Python script that exercises the Hitch HTTP API end to end.</p></a>
+            <a class="doc-card" href="https://github.com/sagebynature/hitch/tree/main/examples"><small>Examples</small><h3>Runnable handler test drives</h3><p>Policy and payload-logger examples that exercise the Hitch HTTP API end to end.</p></a>
           </div>
         </section>
 

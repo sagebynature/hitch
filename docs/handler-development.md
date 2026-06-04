@@ -213,9 +213,93 @@ hermes pre_gateway_dispatch rewrite response:
 Hitch test drive completed.
 ```
 
-## Step 7: Test a handler manually
+## Step 7: Log payloads for every harness
 
-You can call Hitch through the adapter CLI. Start the server:
+Use `examples/handlers/payload_logger.py` when you want an observer that records the normalized payload from every harness without changing control flow.
+
+The handler appends JSON Lines records to a file and returns `behavior: "none"`. It does not print payloads to stdout because Hitch parses stdout as the handler result.
+
+Example log record:
+
+```json
+{
+  "logged_at": "2026-06-04T00:00:00+00:00",
+  "event_id": "evt_...",
+  "harness": "codex",
+  "native_event_type": "PreToolUse",
+  "hitch_event_type": "tool.requested",
+  "payload": {
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {"command": "pwd"}
+  }
+}
+```
+
+Use both sync and async handler entries when you want to observe both Hitch dispatch paths:
+
+```toml
+[handlers.payload_logger_sync]
+command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
+events = ["*"]
+mode = "sync"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+
+[handlers.payload_logger_async]
+command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
+events = ["*"]
+mode = "async"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+```
+
+`examples/payload-logger.config.toml` enables Codex, Hermes, Pi, and OMP and includes both handler entries.
+
+Run the all-harness local test drive:
+
+```bash
+python3 examples/test_payload_logger.py
+```
+
+The script starts Hitch on `127.0.0.1:8797`, sends one event through each harness mapper, sends one async observer event, verifies that `tmp/hitch-payload-logger/payloads.jsonl` contains payload records for `codex`, `hermes`, `pi`, and `omp`, and stops the server.
+
+To test manually, start Hitch:
+
+```bash
+go run ./cmd/hitch serve --config examples/payload-logger.config.toml
+```
+
+Then send a sync event through any harness adapter:
+
+```bash
+printf '%s\n' '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"pwd"}}' \
+  | go run ./cmd/hitch adapter \
+      --harness codex \
+      --event PreToolUse \
+      --sync \
+      --url http://127.0.0.1:8797
+```
+
+Inspect the JSON Lines payload log one record at a time:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+for line in Path("tmp/hitch-payload-logger/payloads.jsonl").read_text().splitlines():
+    print(json.dumps(json.loads(line), indent=2, sort_keys=True))
+PY
+```
+
+Use `fail_open` for payload logging so a logging failure does not block the harness.
+
+
+## Step 8: Test a policy handler manually
+
+You can call Hitch through the adapter CLI. Start the policy test server:
 
 ```bash
 go run ./cmd/hitch serve --config examples/test-drive.config.toml
@@ -238,7 +322,7 @@ Expected native Codex response:
 {"permissionDecision":"deny","permissionDecisionReason":"Dangerous shell command blocked by Hitch example policy"}
 ```
 
-## Step 8: Inspect and replay
+## Step 9: Inspect and replay
 
 The sync dispatch response contains `normalized_event_id`. Use it to inspect the audit trail:
 

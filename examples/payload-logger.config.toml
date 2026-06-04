@@ -1,0 +1,60 @@
+[server]
+host = "127.0.0.1"
+port = 8797
+max_request_bytes = 1048576
+
+[log]
+level = "warn"
+format = "json"
+include_native_payload = false
+
+[log.stdout]
+enabled = true
+
+[log.file]
+enabled = false
+path = "tmp/hitch-payload-logger/hitch.log"
+max_size_mb = 10
+max_backups = 3
+max_age_days = 7
+compress = true
+
+[log.otlp]
+enabled = false
+endpoint = "http://127.0.0.1:4318"
+protocol = "http/protobuf"
+
+[audit]
+enabled = true
+backend = "sqlite"
+
+[audit.sqlite]
+path = "tmp/hitch-payload-logger/events.sqlite"
+
+[harness.codex]
+enabled = true
+
+[harness.hermes]
+enabled = true
+
+[harness.pi]
+enabled = true
+
+[harness.omp]
+enabled = true
+
+[handlers.payload_logger_sync]
+command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
+events = ["*"]
+mode = "sync"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+
+[handlers.payload_logger_async]
+command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
+events = ["*"]
+mode = "async"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"

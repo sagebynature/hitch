@@ -357,6 +357,97 @@ func TestApplyOpsUninstallRemovesOnlyManagedCodexHook(t *testing.T) {
 
 }
 
+func TestApplyOpsInstallsHermesHooksIdempotentlyAndBacksUpExistingFile(t *testing.T) {
+	prepareInstallerTest(t, "hermes")
+
+	ops, err := plannedOps([]string{"hermes"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ops) != 2 || ops[0].Action != "seed_config" || ops[1].Action != "install_hermes_hook" {
+		t.Fatalf("unexpected operations: %#v", ops)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	hookOp := ops[1]
+	first, err := os.ReadFile(hookOp.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range hermesHookEvents {
+		needle := "adapter -harness hermes -event " + event + " -sync"
+		if !strings.Contains(string(first), needle) {
+			t.Fatalf("hermes %s hook was not installed: %s", event, first)
+		}
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(hookOp.BackupPath); !os.IsNotExist(err) {
+		t.Fatalf("idempotent Hermes install should not create backup: %v", err)
+	}
+
+	existing := "model: test\nhooks:\n  pre_tool_call:\n    - matcher: terminal\n      command: existing\nhooks_auto_accept: false\n"
+	if err := os.WriteFile(hookOp.Path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	backup, err := os.ReadFile(hookOp.BackupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(backup) != existing {
+		t.Fatalf("backup did not preserve previous Hermes config: %q", backup)
+	}
+	current, err := os.ReadFile(hookOp.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(current), "command: existing") || !strings.Contains(string(current), "adapter -harness hermes") || !strings.Contains(string(current), "hooks_auto_accept: false") {
+		t.Fatalf("Hermes install did not preserve existing config and add Hitch hooks: %s", current)
+	}
+}
+
+func TestApplyOpsUninstallRemovesOnlyManagedHermesHooks(t *testing.T) {
+	prepareInstallerTest(t, "hermes")
+
+	ops, err := plannedOps([]string{"hermes"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hookOp := ops[1]
+	existing := "hooks:\n  pre_tool_call:\n    - matcher: terminal\n      command: existing\n"
+	if err := os.MkdirAll(filepath.Dir(hookOp.Path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hookOp.Path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	removeOps, err := plannedOps([]string{"hermes"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(removeOps, true); err != nil {
+		t.Fatal(err)
+	}
+	current, err := os.ReadFile(hookOp.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(current), "adapter -harness hermes") {
+		t.Fatalf("uninstall should remove managed Hermes hooks: %s", current)
+	}
+	if !strings.Contains(string(current), "command: existing") {
+		t.Fatalf("uninstall should preserve user Hermes hooks: %s", current)
+	}
+}
+
 func TestDetectHarnessesReportsAvailabilityAndSupport(t *testing.T) {
 	path := prepareInstallerTest(t, "codex")
 
