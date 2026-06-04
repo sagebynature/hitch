@@ -39,4 +39,18 @@ func TestStoreRoundTrip(t *testing.T) {
 	if got.EventID != env.EventID || got.HitchEventType != env.HitchEventType {
 		t.Fatalf("wrong event: %#v", got)
 	}
+
+	inspection, err := s.InspectEvent(ctx, "norm_1")
+	if err != nil {
+		t.Fatalf("inspect event: %v", err)
+	}
+	if inspection.Inbound.ID != "in_1" || inspection.Normalized.ID != "norm_1" {
+		t.Fatalf("wrong inspection event ids: %#v", inspection)
+	}
+	if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].ID != "handler_1" {
+		t.Fatalf("wrong handler invocations: %#v", inspection.HandlerInvocations)
+	}
+	if len(inspection.NativeResponses) != 1 || inspection.NativeResponses[0].ID != "resp_1" {
+		t.Fatalf("wrong native responses: %#v", inspection.NativeResponses)
+	}
 }

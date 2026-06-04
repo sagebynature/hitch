@@ -279,11 +279,11 @@ func inspectEvent(args []string) {
 		fatal(err)
 	}
 	defer st.Close()
-	env, err := st.GetEvent(context.Background(), fs.Arg(0))
+	inspection, err := st.InspectEvent(context.Background(), fs.Arg(0))
 	if err != nil {
 		fatal(err)
 	}
-	writeCLI(true, env)
+	writeCLI(true, inspection)
 }
 
 func replay(args []string) {

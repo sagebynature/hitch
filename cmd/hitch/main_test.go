@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/sage-scm/hitch/internal/protocol"
+	"github.com/sage-scm/hitch/internal/store"
 )
 
 func runAdapterForTest(t *testing.T, args []string, input string) string {
@@ -35,6 +41,29 @@ func runAdapterForTest(t *testing.T, args []string, input string) string {
 	}()
 
 	adapter(args)
+	_ = outW.Close()
+	out, err := io.ReadAll(outR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+func captureStdoutForTest(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = outW
+	defer func() {
+		os.Stdout = oldStdout
+		_ = outR.Close()
+	}()
+
+	fn()
 	_ = outW.Close()
 	out, err := io.ReadAll(outR)
 	if err != nil {
@@ -202,4 +231,160 @@ func TestPlannedOpsRejectsUnknownHarness(t *testing.T) {
 	if _, err := plannedOps([]string{"unknown"}, false); err == nil {
 		t.Fatal("expected unsupported harness error")
 	}
+}
+
+func TestInspectEventCLIReturnsAuditRecords(t *testing.T) {
+	ctx := context.Background()
+	dbPath, cfgPath, normalizedID := seedReplayFixture(t, ctx, "")
+
+	out := captureStdoutForTest(t, func() {
+		inspectEvent([]string{"-config", cfgPath, normalizedID})
+	})
+
+	var inspection store.EventInspection
+	if err := json.Unmarshal([]byte(out), &inspection); err != nil {
+		t.Fatalf("inspect-event output is not JSON: %v; output=%q", err, out)
+	}
+	if inspection.Inbound.ID == "" || inspection.Normalized.ID != normalizedID {
+		t.Fatalf("inspect-event omitted event records from %s: %#v", dbPath, inspection)
+	}
+	if len(inspection.HandlerInvocations) != 1 || len(inspection.NativeResponses) != 1 {
+		t.Fatalf("inspect-event omitted related records: %#v", inspection)
+	}
+}
+
+func TestReplayDryRunDoesNotCreateInvocationAndReplayRecordsMetadata(t *testing.T) {
+	ctx := context.Background()
+	handlerJSON := `{"status":"ok","decision":{"behavior":"allow"}}`
+	dbPath, cfgPath, normalizedID := seedReplayFixture(t, ctx, handlerJSON)
+
+	_ = captureStdoutForTest(t, func() {
+		replay([]string{"-config", cfgPath, "-dry-run", normalizedID})
+	})
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := st.InspectEvent(ctx, normalizedID)
+	_ = st.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inspection.HandlerInvocations) != 1 {
+		t.Fatalf("dry-run replay created handler invocation: %#v", inspection.HandlerInvocations)
+	}
+
+	_ = captureStdoutForTest(t, func() {
+		replay([]string{"-config", cfgPath, normalizedID})
+	})
+	st, err = store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspection, err = st.InspectEvent(ctx, normalizedID)
+	_ = st.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inspection.HandlerInvocations) != 2 {
+		t.Fatalf("replay did not create exactly one new invocation: %#v", inspection.HandlerInvocations)
+	}
+	replayed := inspection.HandlerInvocations[1]
+	if replayed.ReplaySourceID != normalizedID {
+		t.Fatalf("replay invocation missing source id: %#v", replayed)
+	}
+	if replayed.Status != protocol.StatusOK {
+		t.Fatalf("replay handler did not run successfully: %#v", replayed)
+	}
+}
+
+func seedReplayFixture(t *testing.T, ctx context.Context, handlerJSON string) (string, string, string) {
+	t.Helper()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "events.sqlite")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	now := time.Now().UTC()
+	env := protocol.EventEnvelope{HitchVersion: protocol.Version, EventID: "evt_replay", ReceivedAt: now, Harness: protocol.HarnessCodex, NativeEventType: "PreToolUse", NativePayload: protocol.Raw(map[string]interface{}{"tool": "bash"}), HitchEventType: protocol.EventToolRequested, Payload: protocol.Raw(map[string]interface{}{"tool": "bash"})}
+	if err := st.InsertInbound(ctx, store.InboundEvent{ID: "in_replay", ReceivedAt: now, Harness: env.Harness, NativeEventType: env.NativeEventType, NativePayload: env.NativePayload}); err != nil {
+		t.Fatal(err)
+	}
+	normalizedID := "norm_replay"
+	if err := st.InsertNormalized(ctx, store.NormalizedEvent{ID: normalizedID, InboundEventID: "in_replay", HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: "handler_original", NormalizedEventID: normalizedID, HandlerName: "original", Mode: "sync", StartedAt: now, CompletedAt: now, Status: protocol.StatusOK, Output: protocol.Raw(map[string]interface{}{"status": "ok"}), Decision: protocol.Raw(map[string]interface{}{"behavior": "none"})}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.InsertNativeResponse(ctx, store.NativeResponse{ID: "native_original", NormalizedEventID: normalizedID, Harness: env.Harness, NativeEventType: env.NativeEventType, Response: protocol.Raw(map[string]interface{}{}), EmittedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	cfgPath := filepath.Join(dir, "config.toml")
+	handlerBlock := ""
+	if handlerJSON != "" {
+		handlerBlock = `
+[handlers.replay]
+command = ["/bin/sh", "-c", "printf '%s' \"$HANDLER_JSON\""]
+events = ["tool.requested"]
+mode = "sync"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+`
+	}
+	configText := `[server]
+host = "127.0.0.1"
+port = 8799
+max_request_bytes = 1048576
+
+[log]
+level = "info"
+format = "json"
+include_native_payload = false
+
+[log.stdout]
+enabled = true
+
+[log.file]
+enabled = false
+path = "` + filepath.ToSlash(filepath.Join(dir, "hitch.log")) + `"
+max_size_mb = 100
+max_backups = 10
+max_age_days = 14
+compress = true
+
+[log.otlp]
+enabled = false
+endpoint = "http://127.0.0.1:4318"
+protocol = "http/protobuf"
+
+[audit]
+enabled = true
+backend = "sqlite"
+
+[audit.sqlite]
+path = "` + filepath.ToSlash(dbPath) + `"
+
+[harness.codex]
+enabled = true
+[harness.hermes]
+enabled = true
+[harness.pi]
+enabled = true
+[harness.omp]
+enabled = true
+` + handlerBlock
+	if err := os.WriteFile(cfgPath, []byte(configText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if handlerJSON != "" {
+		t.Setenv("HANDLER_JSON", handlerJSON)
+	}
+	return dbPath, cfgPath, normalizedID
 }
