@@ -18,6 +18,10 @@ import (
 	"github.com/sage-scm/hitch/internal/config"
 	"github.com/sage-scm/hitch/internal/dispatch"
 	"github.com/sage-scm/hitch/internal/harness"
+	"github.com/sage-scm/hitch/internal/harness/codex"
+	"github.com/sage-scm/hitch/internal/harness/hermes"
+	"github.com/sage-scm/hitch/internal/harness/omp"
+	"github.com/sage-scm/hitch/internal/harness/pi"
 	"github.com/sage-scm/hitch/internal/logging"
 	"github.com/sage-scm/hitch/internal/protocol"
 	"github.com/sage-scm/hitch/internal/store"
@@ -126,16 +130,37 @@ func adapter(args []string) {
 	req := api.NewEventRequest(*harness, *event, protocol.RawJSON(payload))
 	if *syncMode {
 		resp, err := client.Dispatch(req)
-		if err != nil {
-			return
+		native := resp.NativeResponse
+		if err != nil || len(native) == 0 {
+			native = nativeNoop(*harness, *event)
 		}
-		if len(resp.NativeResponse) != 0 {
-			_, _ = os.Stdout.Write(resp.NativeResponse)
+		if len(native) != 0 {
+			_, _ = os.Stdout.Write(native)
 			_, _ = os.Stdout.Write([]byte("\n"))
 		}
 		return
 	}
 	_, _ = client.Event(req)
+}
+
+func nativeNoop(harnessName, nativeEventType string) protocol.RawJSON {
+	aggregate := protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorNone}}
+	switch protocol.Harness(harnessName) {
+	case protocol.HarnessCodex:
+		native, _ := codex.Mapper{}.Translate(nativeEventType, aggregate)
+		return native
+	case protocol.HarnessHermes:
+		native, _ := hermes.Mapper{}.Translate(nativeEventType, aggregate)
+		return native
+	case protocol.HarnessPi:
+		native, _ := pi.Mapper{}.Translate(nativeEventType, aggregate)
+		return native
+	case protocol.HarnessOMP:
+		native, _ := omp.Mapper{}.Translate(nativeEventType, aggregate)
+		return native
+	default:
+		return nil
+	}
 }
 
 func install(args []string, uninstall bool) {
