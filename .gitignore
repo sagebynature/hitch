@@ -52,6 +52,6 @@ temp/
 .cache/
 
 # Keep planning artifacts if present
-!.omx/
+.omx/
 !.omx/plans/
 !.omx/plans/**
