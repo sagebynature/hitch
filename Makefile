@@ -1,6 +1,7 @@
 .PHONY: help build test test-go test-adapters run serve status doctor install-dry-run clean
 
 BINARY ?= bin/hitch
+CLIENT_BINARY ?= bin/hitch-client
 CONFIG ?= config/default.config.toml
 GO_PACKAGES ?= ./...
 ADAPTER_TESTS ?= adapters/**/*.test.ts
@@ -8,7 +9,7 @@ ADAPTER_TESTS ?= adapters/**/*.test.ts
 help:
 	@printf '%s\n' \
 		'Common targets:' \
-		'  make build           Build the hitch binary into bin/hitch' \
+		'  make build           Build hitch and hitch-client into bin/' \
 		'  make test            Run Go and adapter tests' \
 		'  make test-go         Run Go tests' \
 		'  make test-adapters   Run TypeScript adapter tests with bun' \
@@ -20,8 +21,9 @@ help:
 		'  make clean           Remove build outputs'
 
 build:
-	@mkdir -p $(dir $(BINARY))
+	@mkdir -p $(dir $(BINARY)) $(dir $(CLIENT_BINARY))
 	go build -o $(BINARY) ./cmd/hitch
+	go build -o $(CLIENT_BINARY) ./cmd/hitch-client
 
 test: test-go test-adapters
 

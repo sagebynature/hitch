@@ -6,9 +6,9 @@ Install from latest source:
 curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
 ```
 
-The source installer checks for `git` and `go`, builds `./cmd/hitch`, installs the binary to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies `hitch --version`, and then offers to run hook setup.
+The source installer checks for `git` and `go`, builds `./cmd/hitch` and `./cmd/hitch-client`, installs both binaries to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies `hitch --version` and `hitch-client --version`, and then offers to run hook setup.
 
-The current `hitch install` command seeds `~/.config/hitch/config.toml` when it is missing, detects Codex, Hermes, Pi, and OMP binaries on `PATH`, installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`, and installs Hitch shell hooks for supported Hermes events into `~/.hermes/config.yaml`. Pi and OMP are detected and reported, but real hook patching is not implemented for them yet.
+The current `hitch install` command seeds `~/.config/hitch/config.toml` when it is missing, detects Codex, Hermes, Pi, and OMP binaries on `PATH`, installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`, and installs Hitch shell hooks for supported Hermes events into `~/.hermes/config.yaml`. Managed hook commands prefer `hitch-client` and fall back to `hitch adapter` when the client binary is not installed beside `hitch`. Pi and OMP are detected and reported, but real hook patching is not implemented for them yet.
 
 Dry run detected supported harnesses:
 
@@ -37,6 +37,7 @@ Installer behavior verified by tests:
 - Existing user config is left unchanged.
 - Codex hook installation covers `SessionStart`, `SubagentStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStop`, and `Stop`, and is idempotent.
 - Hermes hook installation covers `pre_tool_call`, `post_tool_call`, `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`, `subagent_stop`, `transform_tool_result`, `transform_terminal_output`, `transform_llm_output`, and `pre_gateway_dispatch`, and is idempotent.
+- Generated Codex and Hermes hook commands embed the resolved Hitch API URL and use `hitch-client` when it is available.
 - Existing Codex and Hermes hook configuration is backed up before Hitch modifies it.
 - Unsupported available harnesses are reported as skipped.
 - Unknown harness names are rejected.
@@ -68,11 +69,12 @@ on_error = "fail_open"
 on_timeout = "fail_open"
 ```
 
-Shell adapter entrypoints can be used directly by harness hook configuration once installed manually:
+Shell hook shim entrypoints can be used directly by harness hook configuration once installed manually. `hitch-client` is the preferred shim; `hitch adapter` remains a compatibility alias for existing hooks:
 
 ```sh
-hitch adapter -harness codex -event SessionStart -sync
-hitch adapter -harness codex -event PreToolUse -sync
-hitch adapter -harness codex -event Stop -sync
+hitch-client -harness codex -event SessionStart -sync
+hitch-client -harness codex -event PreToolUse -sync
+hitch-client -harness codex -event Stop -sync
+hitch-client -harness hermes -event pre_tool_call -sync
 hitch adapter -harness hermes -event pre_tool_call -sync
 ```

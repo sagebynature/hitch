@@ -17,6 +17,8 @@ import (
 	"github.com/sagebynature/hitch/internal/config"
 	"github.com/sagebynature/hitch/internal/protocol"
 	"github.com/sagebynature/hitch/internal/store"
+
+	"gopkg.in/yaml.v3"
 )
 
 func init() {
@@ -427,6 +429,73 @@ func TestPlannedOpsEmbedsAdapterURLInHermesHookCommand(t *testing.T) {
 	}
 	if !strings.Contains(string(current), "-url ''http://127.0.0.1:8797'' -harness hermes") {
 		t.Fatalf("Hermes hook command did not embed configured Hitch URL: %s", current)
+	}
+}
+
+func TestPlannedOpsUsesHitchClientWhenAvailable(t *testing.T) {
+	for _, harnessName := range []string{"codex", "hermes"} {
+		t.Run(harnessName, func(t *testing.T) {
+			prepareInstallerTest(t, harnessName)
+			dir := t.TempDir()
+			hitchPath := filepath.Join(dir, "hitch")
+			clientPath := filepath.Join(dir, "hitch-client")
+			if err := os.WriteFile(clientPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("HITCH_BINARY_PATH", hitchPath)
+
+			ops, err := plannedOps([]string{harnessName}, false, "http://127.0.0.1:8797")
+			if err != nil {
+				t.Fatal(err)
+			}
+			command := ops[1].Reason
+			if !strings.Contains(command, shellQuote(clientPath)+" -url 'http://127.0.0.1:8797'") {
+				t.Fatalf("hook command should prefer hitch-client, got %q", command)
+			}
+			if strings.Contains(command, " adapter ") {
+				t.Fatalf("hitch-client command should not include adapter subcommand: %q", command)
+			}
+		})
+	}
+}
+
+func TestUninstallMatchesLegacyAndClientManagedHooks(t *testing.T) {
+	codexDoc := map[string]any{"hooks": map[string]any{"PreToolUse": []any{
+		map[string]any{"matcher": "*", "hooks": []any{
+			map[string]any{"type": "command", "command": "'/bin/hitch' adapter -url 'http://127.0.0.1:8797' -harness codex -event PreToolUse -sync"},
+			map[string]any{"type": "command", "command": "'/bin/hitch-client' -url 'http://127.0.0.1:8797' -harness codex -event PreToolUse -sync"},
+			map[string]any{"type": "command", "command": "existing"},
+		}},
+	}}}
+	if !removeCodexHook(codexDoc, "PreToolUse") {
+		t.Fatal("expected Codex managed hooks to be removed")
+	}
+	codexRaw, _ := json.Marshal(codexDoc)
+	if strings.Contains(string(codexRaw), "-harness codex -event PreToolUse") {
+		t.Fatalf("Codex uninstall kept a managed hook: %s", codexRaw)
+	}
+	if !strings.Contains(string(codexRaw), "existing") {
+		t.Fatalf("Codex uninstall removed user hook: %s", codexRaw)
+	}
+
+	hermesDoc := emptyYAMLDocument()
+	root := ensureDocumentMapping(hermesDoc)
+	hooks := ensureYAMLMapping(root, "hooks")
+	entries := ensureYAMLSequence(hooks, "pre_tool_call")
+	entries.Content = append(entries.Content,
+		hermesHookNode("'/bin/hitch' adapter -url 'http://127.0.0.1:8797' -harness hermes -event pre_tool_call -sync"),
+		hermesHookNode("'/bin/hitch-client' -url 'http://127.0.0.1:8797' -harness hermes -event pre_tool_call -sync"),
+		hermesHookNode("existing"),
+	)
+	if !removeHermesHook(hermesDoc, "pre_tool_call") {
+		t.Fatal("expected Hermes managed hooks to be removed")
+	}
+	hermesRaw, _ := yaml.Marshal(hermesDoc)
+	if strings.Contains(string(hermesRaw), "-harness hermes -event pre_tool_call") {
+		t.Fatalf("Hermes uninstall kept a managed hook: %s", hermesRaw)
+	}
+	if !strings.Contains(string(hermesRaw), "existing") {
+		t.Fatalf("Hermes uninstall removed user hook: %s", hermesRaw)
 	}
 }
 

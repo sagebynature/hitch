@@ -82,7 +82,7 @@ OMP should be treated as Pi-compatible until its extensions diverge in tested be
 
 ## Decision
 
-Hitch will be built as a local daemon exposing both asynchronous and synchronous REST endpoints. Harness-specific native adapters will translate native hook payloads into Hitch requests and translate Hitch responses back into the native return mechanism expected by each harness.
+Hitch will be built as a local daemon exposing both asynchronous and synchronous REST endpoints. `hitch-client` is the preferred lightweight harness hook shim: it reads native JSON from stdin, posts to the local Hitch HTTP API, and writes only the native sync response to stdout. The legacy `hitch adapter` subcommand remains as a compatibility alias over the same implementation.
 
 Hitch will use a stable normalized envelope and preserve the source-native payload as JSON.
 
@@ -182,15 +182,16 @@ type HitchHandlerResult = {
 }
 ```
 
-Each harness adapter owns native translation:
+Each harness mapper owns native translation, while the hook shim owns only the transport/native boundary:
 
 ```text
+stdin native payload -> hitch-client or hitch adapter -> Hitch HTTP API -> stdout native response
 HitchHandlerResult -> Codex stdout JSON
 HitchHandlerResult -> Hermes stdout JSON
 HitchHandlerResult -> Pi/OMP callback return object or event mutation
 ```
 
-`native_response` exists as an escape hatch, not as the normal portable API.
+The client shim must not run handlers, open the audit database, initialize server logging, or make policy decisions. `native_response` exists as an escape hatch, not as the normal portable API.
 
 ## Deterministic Aggregation Rules
 
@@ -450,9 +451,9 @@ Python is good for handler authoring and prototypes, but not the best core daemo
 
 ## Technology Stack Decision
 
-Use **Go for the Hitch daemon, persistence layer, installer/doctor CLI, native response aggregation, and operational logging**.
+Use **Go for the Hitch daemon, `hitch-client` hook shim, persistence layer, installer/doctor CLI, native response aggregation, and operational logging**.
 
-Use **TypeScript for harness adapters where the harness integration surface is JavaScript/TypeScript-native**, especially Pi and OMP extensions. Codex and Hermes shell-hook adapters may be small Go, Node, or shell-launcher binaries/scripts, but the long-term preferred distribution is to ship generated or embedded adapter scripts from the Go installer.
+Use **TypeScript for harness adapters where the harness integration surface is JavaScript/TypeScript-native**, especially Pi and OMP extensions. Codex and Hermes shell-hook adapters should use the shipped `hitch-client` binary, with `hitch adapter` kept for compatibility with existing managed hooks.
 
 Support user handlers as external commands first. This avoids committing to an in-process plugin ABI and lets handlers be written in any language.
 
@@ -475,10 +476,10 @@ A Go core with external command handlers and TypeScript harness adapters gives t
 
 ### Positive
 
-- Hitch can be distributed as a small local binary.
+- Hitch can be distributed as small local binaries: `hitch` for the daemon/CLI and `hitch-client` for harness hook execution.
 - Operational logging can use established Go logging and OpenTelemetry libraries.
-- SQLite persistence and handler dispatch can remain in one process without complex runtime dependencies.
-- Native adapter scripts remain thin and harness-specific.
+- SQLite persistence and handler dispatch remain in the server process, not the hook client.
+- Native adapter shims remain thin and harness-specific.
 - User handlers remain language-agnostic.
 
 ### Negative

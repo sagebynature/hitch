@@ -117,12 +117,12 @@ bun test adapters/**/*.test.ts
 Hitch currently includes:
 
 - Codex shell hook installation into `~/.codex/hooks.json`.
-- Hermes shell adapter entrypoint via `hitch adapter`.
+- Codex and Hermes shell hook shim entrypoints via `hitch-client`, with `hitch adapter` retained as a compatibility alias.
 - Pi and OMP TypeScript adapter response application helpers.
 - Installer config seeding for `~/.config/hitch/config.toml`.
 - Harness detection for Codex, Hermes, Pi, and OMP.
 
-The current installer creates missing Hitch user config and installs the supported Codex hook. Hermes, Pi, and OMP are detected and reported, but real hook patching is not implemented for them yet.
+The current installer creates missing Hitch user config, installs supported Codex and Hermes hooks, and prefers `hitch-client` in managed hook commands when it is installed beside `hitch`. Pi and OMP are detected and reported, but real hook patching is not implemented for them yet.
 
 Preview hook installation:
 
@@ -130,10 +130,11 @@ Preview hook installation:
 ./bin/hitch install --dry-run --json
 ```
 
-Run shell adapters directly from a harness hook configuration:
+Run the hook client directly from a harness hook configuration:
 
 ```sh
-./bin/hitch adapter -harness codex -event PreToolUse -sync
+./bin/hitch-client -harness codex -event PreToolUse -sync
+./bin/hitch-client -harness hermes -event pre_tool_call -sync
 ./bin/hitch adapter -harness hermes -event pre_tool_call -sync
 ```
 

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sagebynature/hitch/internal/clientshim"
 	"github.com/sagebynature/hitch/internal/config"
 	"gopkg.in/yaml.v3"
 )
@@ -307,22 +308,42 @@ func installedBinaryPath() (string, error) {
 	return filepath.Abs(p)
 }
 
-func adapterCommandBase(binaryPath, apiURL string) string {
-	return shellQuote(binaryPath) + " adapter -url " + shellQuote(apiURL)
+func adapterCommandBase(hitchPath, apiURL string) string {
+	if clientPath, ok := hookClientPath(hitchPath); ok {
+		return shellQuote(clientPath) + " -url " + shellQuote(apiURL)
+	}
+	return shellQuote(hitchPath) + " adapter -url " + shellQuote(apiURL)
+}
+
+func hookClientPath(hitchPath string) (string, bool) {
+	if override := os.Getenv("HITCH_CLIENT_BINARY_PATH"); override != "" {
+		p, err := filepath.Abs(override)
+		if err == nil && executableFile(p) {
+			return p, true
+		}
+		return "", false
+	}
+	if hitchPath == "" {
+		return "", false
+	}
+	name := "hitch-client"
+	if strings.HasSuffix(filepath.Base(hitchPath), ".exe") {
+		name += ".exe"
+	}
+	p := filepath.Join(filepath.Dir(hitchPath), name)
+	if executableFile(p) {
+		return p, true
+	}
+	return "", false
+}
+
+func executableFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Mode()&0o111 != 0
 }
 
 func defaultAdapterURL() string {
-	if v := os.Getenv("HITCH_API_URL"); v != "" {
-		return v
-	}
-	if v := os.Getenv("HITCH_URL"); v != "" {
-		return v
-	}
-	cfg, err := config.Load(config.DefaultPath)
-	if err == nil && cfg.Server.Host != "" && cfg.Server.Port != 0 {
-		return fmt.Sprintf("http://%s:%d", cfg.Server.Host, cfg.Server.Port)
-	}
-	return "http://127.0.0.1:8799"
+	return clientshim.DefaultURL()
 }
 
 func applyOps(ops []installOperation, uninstall bool) error {

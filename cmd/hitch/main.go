@@ -11,20 +11,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/sagebynature/hitch/internal/api"
+	"github.com/sagebynature/hitch/internal/clientshim"
 	"github.com/sagebynature/hitch/internal/config"
 	"github.com/sagebynature/hitch/internal/dispatch"
 	"github.com/sagebynature/hitch/internal/harness"
-	"github.com/sagebynature/hitch/internal/harness/codex"
-	"github.com/sagebynature/hitch/internal/harness/hermes"
-	"github.com/sagebynature/hitch/internal/harness/omp"
-	"github.com/sagebynature/hitch/internal/harness/pi"
 	"github.com/sagebynature/hitch/internal/logging"
-	"github.com/sagebynature/hitch/internal/protocol"
 	"github.com/sagebynature/hitch/internal/store"
 )
 
@@ -115,36 +110,11 @@ func adapter(args []string) {
 	harness := fs.String("harness", "", "source harness")
 	event := fs.String("event", "", "native event type")
 	syncMode := fs.Bool("sync", false, "dispatch synchronously")
-	url := fs.String("url", defaultAdapterURL(), "hitch API URL")
+	url := fs.String("url", clientshim.DefaultURL(), "hitch API URL")
 	_ = fs.Parse(args)
-	if *harness == "" || *event == "" {
-		fatal(fmt.Errorf("-harness and -event are required"))
-	}
-	payload, err := io.ReadAll(os.Stdin)
-	if err != nil {
+	if err := clientshim.Run(context.Background(), clientshim.Options{Harness: *harness, Event: *event, Sync: *syncMode, URL: *url, Stdin: os.Stdin, Stdout: os.Stdout}); err != nil {
 		fatal(err)
 	}
-	if len(strings.TrimSpace(string(payload))) == 0 {
-		payload = []byte(`{}`)
-	}
-	if !json.Valid(payload) {
-		fatal(fmt.Errorf("stdin must be JSON"))
-	}
-	client := api.Client{BaseURL: *url}
-	req := api.NewEventRequest(*harness, *event, protocol.RawJSON(payload))
-	if *syncMode {
-		resp, err := client.Dispatch(req)
-		native := resp.NativeResponse
-		if err != nil || len(native) == 0 {
-			native = nativeNoop(*harness, *event)
-		}
-		if len(native) != 0 {
-			_, _ = os.Stdout.Write(native)
-			_, _ = os.Stdout.Write([]byte("\n"))
-		}
-		return
-	}
-	_, _ = client.Event(req)
 }
 
 func handler(args []string) {
@@ -164,26 +134,6 @@ func noopObserverHandler() {
 		return
 	}
 	_, _ = os.Stdout.Write([]byte(`{"status":"ok","decision":{"behavior":"none"}}` + "\n"))
-}
-
-func nativeNoop(harnessName, nativeEventType string) protocol.RawJSON {
-	aggregate := protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorNone}}
-	switch protocol.Harness(harnessName) {
-	case protocol.HarnessCodex:
-		native, _ := codex.Mapper{}.Translate(nativeEventType, aggregate)
-		return native
-	case protocol.HarnessHermes:
-		native, _ := hermes.Mapper{}.Translate(nativeEventType, aggregate)
-		return native
-	case protocol.HarnessPi:
-		native, _ := pi.Mapper{}.Translate(nativeEventType, aggregate)
-		return native
-	case protocol.HarnessOMP:
-		native, _ := omp.Mapper{}.Translate(nativeEventType, aggregate)
-		return native
-	default:
-		return nil
-	}
 }
 
 func status(args []string) {

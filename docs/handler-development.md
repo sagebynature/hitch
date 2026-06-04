@@ -278,13 +278,13 @@ If you installed real Hermes shell hooks against this example server, include th
 hitch install --only hermes --url http://127.0.0.1:8797 --yes --json
 ```
 
-Without `--url`, installed hooks target the default Hitch API URL resolved from `~/.config/hitch/config.toml`, or `http://127.0.0.1:8799` when no default config is available.
+Without `--url`, installed hooks target the default Hitch API URL resolved from `~/.config/hitch/config.toml`, or `http://127.0.0.1:8799` when no default config is available. Generated hook commands include the resolved `-url`; handler config changes affect `hitch serve`, not the hook shim directly.
 
-Then send a sync event through any harness adapter:
+Then send a sync event through the harness client:
 
 ```bash
 printf '%s\n' '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"pwd"}}' \
-  | go run ./cmd/hitch adapter \
+  | go run ./cmd/hitch-client \
       --harness codex \
       --event PreToolUse \
       --sync \
@@ -307,7 +307,7 @@ Use `fail_open` for payload logging so a logging failure does not block the harn
 
 ## Step 8: Test a policy handler manually
 
-You can call Hitch through the adapter CLI. Start the policy test server:
+You can call Hitch through the client shim. Start the policy test server:
 
 ```bash
 go run ./cmd/hitch serve --config examples/test-drive.config.toml
@@ -317,7 +317,7 @@ In another terminal, send a Codex `PreToolUse` event:
 
 ```bash
 printf '%s\n' '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' \
-  | go run ./cmd/hitch adapter \
+  | go run ./cmd/hitch-client \
       --harness codex \
       --event PreToolUse \
       --sync \

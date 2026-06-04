@@ -50,9 +50,9 @@ curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh 
 The installer:
 
 - clones the Hitch repository
-- builds `./cmd/hitch`
-- installs the binary to `~/.local/bin/hitch` by default
-- prints `hitch --version`
+- builds `./cmd/hitch` and `./cmd/hitch-client`
+- installs the binaries to `~/.local/bin/hitch` and `~/.local/bin/hitch-client` by default
+- prints `hitch --version` and `hitch-client --version`
 - offers to run hook setup when stdin is interactive
 
 If `~/.local/bin` is not first on `PATH`, follow the installer output and restart your shell.
@@ -195,10 +195,10 @@ Hitch installs one sync command hook for every supported Codex lifecycle event:
 Each installed command has this shape, with the event name changed per lifecycle event:
 
 ```sh
-hitch adapter -harness codex -event PreToolUse -sync
+hitch-client -harness codex -event PreToolUse -sync
 ```
 
-The adapter reads Codex hook JSON from stdin, forwards it to Hitch, and writes the Codex-native response JSON to stdout.
+`hitch adapter` remains a compatibility alias for older managed hooks. The client reads Codex hook JSON from stdin, forwards it to Hitch, and writes the Codex-native response JSON to stdout.
 
 ## Trust hooks in Codex
 
@@ -225,7 +225,7 @@ Use the normal `/hooks` review flow for routine setup.
 This example sends a fake Codex `SessionStart` payload through Hitch. It exercises the same path that an installed Codex hook uses:
 
 ```text
-Codex hook JSON -> hitch adapter -> Hitch API -> normalized event -> noop_observer handler -> Codex-native response -> audit store
+Codex hook JSON -> hitch-client -> Hitch API -> normalized event -> noop_observer handler -> Codex-native response -> audit store
 ```
 
 Run:
@@ -239,7 +239,7 @@ printf '%s\n' '{
   "model": "demo-model",
   "permission_mode": "default",
   "source": "startup"
-}' | hitch adapter -harness codex -event SessionStart -sync
+}' | hitch-client -harness codex -event SessionStart -sync
 ```
 
 Expected stdout:

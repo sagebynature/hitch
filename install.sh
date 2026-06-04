@@ -92,13 +92,16 @@ main() {
 
   printf 'Building Hitch from %s...\n' "$src_dir"
   (cd "$src_dir" && go build -o "$tmp_dir/hitch" ./cmd/hitch)
+  (cd "$src_dir" && go build -o "$tmp_dir/hitch-client" ./cmd/hitch-client)
 
   mkdir -p "$HITCH_INSTALL_DIR"
   cp "$tmp_dir/hitch" "$HITCH_INSTALL_DIR/hitch"
-  chmod 755 "$HITCH_INSTALL_DIR/hitch"
+  cp "$tmp_dir/hitch-client" "$HITCH_INSTALL_DIR/hitch-client"
+  chmod 755 "$HITCH_INSTALL_DIR/hitch" "$HITCH_INSTALL_DIR/hitch-client"
 
   "$HITCH_INSTALL_DIR/hitch" --version
-  printf 'Installed Hitch to %s/hitch.\n' "$HITCH_INSTALL_DIR"
+  "$HITCH_INSTALL_DIR/hitch-client" --version
+  printf 'Installed Hitch to %s/hitch and %s/hitch-client.\n' "$HITCH_INSTALL_DIR" "$HITCH_INSTALL_DIR"
   maybe_update_path
 
   if [ "$HITCH_SKIP_HOOK_INSTALL" = 1 ]; then
