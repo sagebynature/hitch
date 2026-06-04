@@ -237,6 +237,90 @@ func TestPlannedOpsEmbedsAdapterURLInHermesHookCommand(t *testing.T) {
 	}
 }
 
+func TestApplyOpsInstallsPiExtensionIdempotentlyAndBacksUpExistingFile(t *testing.T) {
+	prepareInstallerTest(t, "pi")
+
+	ops, err := plannedOps([]string{"pi"}, false, "http://127.0.0.1:8797")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ops) != 2 || ops[0].Action != "seed_config" || ops[1].Action != "install_pi_extension" {
+		t.Fatalf("unexpected operations: %#v", ops)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	hookOp := ops[1]
+	first, err := os.ReadFile(hookOp.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(first), `const HITCH_API_URL = "http://127.0.0.1:8797";`) || !strings.Contains(string(first), `pi.on(nativeEventType`) || !strings.Contains(string(first), `"tool_call"`) {
+		t.Fatalf("Pi extension did not embed expected adapter logic: %s", first)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(hookOp.BackupPath); !os.IsNotExist(err) {
+		t.Fatalf("idempotent Pi install should not create backup: %v", err)
+	}
+
+	existing := "// user-owned extension\nexport default function(pi) {}\n"
+	if err := os.WriteFile(hookOp.Path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	backup, err := os.ReadFile(hookOp.BackupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(backup) != existing {
+		t.Fatalf("backup did not preserve previous Pi extension: %q", backup)
+	}
+}
+
+func TestApplyOpsUninstallRemovesOnlyManagedPiExtension(t *testing.T) {
+	prepareInstallerTest(t, "pi")
+
+	ops, err := plannedOps([]string{"pi"}, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	removeOps, err := plannedOps([]string{"pi"}, true, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(removeOps, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(ops[1].Path); !os.IsNotExist(err) {
+		t.Fatalf("managed Pi extension should be removed: %v", err)
+	}
+
+	userOwned := "// user extension\n"
+	if err := os.MkdirAll(filepath.Dir(ops[1].Path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ops[1].Path, []byte(userOwned), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(removeOps, true); err != nil {
+		t.Fatal(err)
+	}
+	current, err := os.ReadFile(ops[1].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(current) != userOwned {
+		t.Fatalf("Pi uninstall removed or changed user-owned extension: %q", current)
+	}
+}
+
 func TestPlannedOpsUsesHitchClientWhenAvailable(t *testing.T) {
 	for _, harnessName := range []string{"codex", "hermes"} {
 		t.Run(harnessName, func(t *testing.T) {
@@ -357,9 +441,9 @@ func TestDetectHarnessesReportsAvailabilityAndSupport(t *testing.T) {
 }
 
 func TestPlannedOpsSkipsUnsupportedAvailableHarness(t *testing.T) {
-	prepareInstallerTest(t, "pi")
+	prepareInstallerTest(t, "omp")
 
-	ops, err := plannedOps([]string{"pi"}, false, "")
+	ops, err := plannedOps([]string{"omp"}, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
