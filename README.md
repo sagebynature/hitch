@@ -127,7 +127,7 @@ The current installer creates missing Hitch user config, installs supported Code
 Preview hook installation:
 
 ```sh
-./bin/hitch install --dry-run --json
+./bin/hitch-client install --dry-run --json
 ```
 
 Run the hook client directly from a harness hook configuration:

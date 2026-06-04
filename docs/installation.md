@@ -8,26 +8,26 @@ curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh 
 
 The source installer checks for `git` and `go`, builds `./cmd/hitch` and `./cmd/hitch-client`, installs both binaries to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies `hitch --version` and `hitch-client --version`, and then offers to run hook setup.
 
-The current `hitch install` command seeds `~/.config/hitch/config.toml` when it is missing, detects Codex, Hermes, Pi, and OMP binaries on `PATH`, installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`, and installs Hitch shell hooks for supported Hermes events into `~/.hermes/config.yaml`. Managed hook commands prefer `hitch-client` and fall back to `hitch adapter` when the client binary is not installed beside `hitch`. Pi and OMP are detected and reported, but real hook patching is not implemented for them yet.
+The current `hitch-client install` command seeds `~/.config/hitch/config.toml` when it is missing, detects Codex, Hermes, Pi, and OMP binaries on `PATH`, installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`, and installs Hitch shell hooks for supported Hermes events into `~/.hermes/config.yaml`. Managed hook commands execute `hitch-client` directly. `hitch-client uninstall` also recognizes legacy managed hooks that used `hitch adapter`. Pi and OMP are detected and reported, but real hook patching is not implemented for them yet.
 
 Dry run detected supported harnesses:
 
 ```sh
-hitch install --dry-run --json
+hitch-client install --dry-run --json
 ```
 
 Dry run all harnesses, including unsupported skip reasons:
 
 ```sh
-hitch install --all --dry-run --json
+hitch-client install --all --dry-run --json
 ```
 
 Install selected hooks. Use `--url` when Hitch is running on a non-default port or config:
 
 ```sh
-hitch install --only codex --yes --json
-hitch install --only hermes --yes --json
-hitch install --only hermes --url http://127.0.0.1:8797 --yes --json
+hitch-client install --only codex --yes --json
+hitch-client install --only hermes --yes --json
+hitch-client install --only hermes --url http://127.0.0.1:8797 --yes --json
 ```
 
 Installer behavior verified by tests:
@@ -53,8 +53,8 @@ hitch doctor --json
 Uninstall selected hooks:
 
 ```sh
-hitch uninstall --only codex --yes --json
-hitch uninstall --only hermes --yes --json
+hitch-client uninstall --only codex --yes --json
+hitch-client uninstall --only hermes --yes --json
 ```
 
 The seeded config includes a sync `noop_observer` handler:

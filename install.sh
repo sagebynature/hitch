@@ -111,7 +111,7 @@ main() {
   if [ -t 0 ]; then
     "$HITCH_INSTALL_DIR/hitch" install < /dev/tty
   else
-    printf 'Run hook setup with:\n\n  %s/hitch install\n\n' "$HITCH_INSTALL_DIR"
+    printf 'Run hook setup with:\n\n  %s/hitch-client install\n\n' "$HITCH_INSTALL_DIR"
   fi
 }
 

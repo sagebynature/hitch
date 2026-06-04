@@ -37,12 +37,6 @@ func main() {
 		case "handler":
 			handler(os.Args[2:])
 			return
-		case "install":
-			install(os.Args[2:], false)
-			return
-		case "uninstall":
-			install(os.Args[2:], true)
-			return
 		case "status":
 			status(os.Args[2:])
 			return
@@ -63,7 +57,7 @@ func main() {
 		fmt.Printf("hitch %s\n", version)
 		return
 	}
-	fmt.Fprintln(os.Stderr, "usage: hitch --version | hitch serve | hitch adapter | hitch handler noop-observer | hitch install | hitch status | hitch doctor | hitch inspect-event | hitch replay")
+	fmt.Fprintln(os.Stderr, "usage: hitch --version | hitch serve | hitch adapter | hitch handler noop-observer | hitch status | hitch doctor | hitch inspect-event | hitch replay")
 	os.Exit(2)
 }
 

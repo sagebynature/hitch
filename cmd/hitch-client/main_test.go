@@ -5,9 +5,47 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func prepareClientInstallTest(t *testing.T, harness string) {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	harnessPath := filepath.Join(dir, harness)
+	if err := os.WriteFile(harnessPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	clientPath := filepath.Join(dir, "hitch-client")
+	if err := os.WriteFile(clientPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("HITCH_CLIENT_BINARY_PATH", clientPath)
+}
+
+func TestRunInstallSubcommandDryRun(t *testing.T) {
+	prepareClientInstallTest(t, "codex")
+
+	var stdout bytes.Buffer
+	if err := run([]string{"install", "--only", "codex", "--dry-run", "--json"}, strings.NewReader(`{}`), &stdout); err != nil {
+		t.Fatal(err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("installer output should use process stdout, got injected stdout %q", stdout.String())
+	}
+}
+
+func TestRunUninstallSubcommandDryRun(t *testing.T) {
+	prepareClientInstallTest(t, "hermes")
+
+	if err := run([]string{"uninstall", "--only", "hermes", "--dry-run", "--json"}, strings.NewReader(`{}`), &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestRunDispatchesSyncResponse(t *testing.T) {
 	var got map[string]any

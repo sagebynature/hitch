@@ -1,10 +1,11 @@
-package main
+package install
 
 import (
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -81,15 +82,21 @@ func knownHarnessSpecs() []harnessSpec {
 	}
 }
 
-func install(args []string, uninstall bool) {
-	fs := flagSet("install")
+func Run(args []string, uninstall bool) error {
+	commandName := "install"
+	if uninstall {
+		commandName = "uninstall"
+	}
+	fs := flagSet(commandName)
 	only := fs.String("only", "codex,hermes,pi,omp", "comma-separated harness list")
 	dryRun := fs.Bool("dry-run", false, "show changes without writing")
 	yes := fs.Bool("yes", false, "confirm filesystem changes")
 	jsonOut := fs.Bool("json", false, "emit JSON")
 	all := fs.Bool("all", false, "select all harnesses")
 	apiURL := fs.String("url", "", "hitch API URL embedded in installed adapter commands")
-	_ = fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	detections := detectHarnesses()
 	selected := strings.Split(*only, ",")
@@ -101,28 +108,41 @@ func install(args []string, uninstall bool) {
 	}
 	if !*dryRun && !*yes {
 		if !stdinIsTerminal() {
-			fatal(fmt.Errorf("--yes is required unless --dry-run is used"))
+			return fmt.Errorf("--yes is required unless --dry-run is used")
 		}
 		if !confirmInstall(detections, selected, uninstall) {
-			writeCLI(*jsonOut, map[string]interface{}{"dry_run": *dryRun, "uninstall": uninstall, "harnesses": detections, "operations": []installOperation{}})
-			return
+			return writeCLI(*jsonOut, map[string]interface{}{"dry_run": *dryRun, "uninstall": uninstall, "harnesses": detections, "operations": []installOperation{}})
 		}
 	}
 
 	ops, err := plannedOps(selected, uninstall, *apiURL)
 	if err != nil {
-		fatal(err)
+		return err
 	}
 	if !*dryRun {
 		if err := applyOps(ops, uninstall); err != nil {
-			fatal(err)
+			return err
 		}
 	}
-	writeCLI(*jsonOut, map[string]interface{}{"dry_run": *dryRun, "uninstall": uninstall, "harnesses": detections, "operations": ops})
+	return writeCLI(*jsonOut, map[string]interface{}{"dry_run": *dryRun, "uninstall": uninstall, "harnesses": detections, "operations": ops})
 }
 
 func flagSet(name string) *flag.FlagSet {
-	return flag.NewFlagSet(name, flag.ExitOnError)
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	return fs
+}
+
+func writeCLI(jsonOut bool, v interface{}) error {
+	if jsonOut {
+		return json.NewEncoder(os.Stdout).Encode(v)
+	}
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(os.Stdout, string(b))
+	return err
 }
 
 func knownHarnessNames() []string {
@@ -298,7 +318,7 @@ func backupPath(harnessName string) string {
 }
 
 func installedBinaryPath() (string, error) {
-	if override := os.Getenv("HITCH_BINARY_PATH"); override != "" {
+	if override := os.Getenv("HITCH_CLIENT_BINARY_PATH"); override != "" {
 		return filepath.Abs(override)
 	}
 	p, err := os.Executable()
@@ -308,38 +328,8 @@ func installedBinaryPath() (string, error) {
 	return filepath.Abs(p)
 }
 
-func adapterCommandBase(hitchPath, apiURL string) string {
-	if clientPath, ok := hookClientPath(hitchPath); ok {
-		return shellQuote(clientPath) + " -url " + shellQuote(apiURL)
-	}
-	return shellQuote(hitchPath) + " adapter -url " + shellQuote(apiURL)
-}
-
-func hookClientPath(hitchPath string) (string, bool) {
-	if override := os.Getenv("HITCH_CLIENT_BINARY_PATH"); override != "" {
-		p, err := filepath.Abs(override)
-		if err == nil && executableFile(p) {
-			return p, true
-		}
-		return "", false
-	}
-	if hitchPath == "" {
-		return "", false
-	}
-	name := "hitch-client"
-	if strings.HasSuffix(filepath.Base(hitchPath), ".exe") {
-		name += ".exe"
-	}
-	p := filepath.Join(filepath.Dir(hitchPath), name)
-	if executableFile(p) {
-		return p, true
-	}
-	return "", false
-}
-
-func executableFile(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && !info.IsDir() && info.Mode()&0o111 != 0
+func adapterCommandBase(clientPath, apiURL string) string {
+	return shellQuote(clientPath) + " -url " + shellQuote(apiURL)
 }
 
 func defaultAdapterURL() string {

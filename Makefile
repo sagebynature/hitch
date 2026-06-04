@@ -46,7 +46,7 @@ doctor:
 	go run ./cmd/hitch doctor --json
 
 install-dry-run:
-	go run ./cmd/hitch install --all --dry-run --json
+	go run ./cmd/hitch-client install --all --dry-run --json
 
 clean:
 	rm -rf bin

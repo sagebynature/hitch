@@ -37,7 +37,7 @@ git --version
 codex --version
 ```
 
-If `codex --version` fails, you can still run the manual Hitch API example, but `hitch install --only codex` will report Codex as unavailable.
+If `codex --version` fails, you can still run the manual Hitch API example, but `hitch-client install --only codex` will report Codex as unavailable.
 
 ## Option A: Install Hitch from latest source
 
@@ -162,13 +162,13 @@ Expected output:
 Preview the install first:
 
 ```sh
-hitch install --only codex --dry-run --json
+hitch-client install --only codex --dry-run --json
 ```
 
 Then install:
 
 ```sh
-hitch install --only codex --yes --json
+hitch-client install --only codex --yes --json
 ```
 
 Hitch writes managed Codex command hooks to:
@@ -360,7 +360,7 @@ Because the default handler is a no-op observer, Codex behavior should not chang
 
 ## Troubleshooting
 
-### `hitch install --only codex` reports Codex unavailable
+### `hitch-client install --only codex` reports Codex unavailable
 
 Cause: `codex` is not on `PATH`.
 
@@ -373,7 +373,7 @@ codex --version
 Install Codex or update `PATH`, then rerun:
 
 ```sh
-hitch install --only codex --yes --json
+hitch-client install --only codex --yes --json
 ```
 
 ### Codex lists hooks but does not run them
@@ -425,7 +425,7 @@ Expected output:
 Run:
 
 ```sh
-hitch uninstall --only codex --yes --json
+hitch-client uninstall --only codex --yes --json
 ```
 
 This removes only Hitch-managed Codex hook commands and leaves user-owned hooks in place.

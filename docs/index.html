@@ -56,7 +56,7 @@
 <span class="prompt">$</span> hitch serve --config ~/.config/hitch/config.toml
 <span class="comment"># normalized hooks, handler dispatch, SQLite audit</span>
 
-<span class="prompt">$</span> hitch install --only codex --yes --json
+<span class="prompt">$</span> hitch-client install --only codex --yes --json
 { "installed": ["codex"], "changed": true }</code></pre>
         </aside>
       </section>
@@ -129,8 +129,8 @@
 hitch serve --config ~/.config/hitch/config.toml
 hitch status --json
 hitch doctor --json
-hitch install --only codex --dry-run --json
-hitch install --only codex --yes --json</code></pre>
+hitch-client install --only codex --dry-run --json
+hitch-client install --only codex --yes --json</code></pre>
             <div class="actions">
               <a class="button primary" href="docs/latest/#quickstart">Full quickstart</a>
               <a class="button" href="docs/latest/#handler-protocol">Handler protocol</a>

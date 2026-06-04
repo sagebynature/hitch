@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/sagebynature/hitch/internal/clientshim"
+	"github.com/sagebynature/hitch/internal/install"
 )
 
 var version = "0.1.0"
@@ -19,6 +20,18 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout io.Writer) error {
+	if len(args) > 0 {
+		switch args[0] {
+		case "install":
+			return install.Run(args[1:], false)
+		case "uninstall":
+			return install.Run(args[1:], true)
+		}
+	}
+	return runHook(args, stdin, stdout)
+}
+
+func runHook(args []string, stdin io.Reader, stdout io.Writer) error {
 	fs := flag.NewFlagSet("hitch-client", flag.ExitOnError)
 	harness := fs.String("harness", "", "source harness")
 	event := fs.String("event", "", "native event type")

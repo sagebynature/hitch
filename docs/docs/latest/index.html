@@ -61,8 +61,8 @@
 hitch serve --config ~/.config/hitch/config.toml
 hitch status --json
 hitch doctor --json
-hitch install --only codex --dry-run --json
-hitch install --only codex --yes --json</code></pre>
+hitch-client install --only codex --dry-run --json
+hitch-client install --only codex --yes --json</code></pre>
           <p>The default server listens on <code>127.0.0.1:8799</code> and stores SQLite audit records at <code>~/.local/share/hitch/events.sqlite</code>.</p>
         </section>
 
@@ -75,14 +75,14 @@ hitch install --only codex --yes --json</code></pre>
 ./bin/hitch-client --version
 ./bin/hitch serve --config config/default.config.toml</code></pre>
           <h3>Hook install commands</h3>
-          <pre class="code-block"><code>hitch install --dry-run --json
-hitch install --all --dry-run --json
-hitch install --only codex --yes --json
-hitch install --only hermes --yes --json
-hitch install --only hermes --url http://127.0.0.1:8797 --yes --json
-hitch uninstall --only codex --yes --json
-hitch uninstall --only hermes --yes --json</code></pre>
-          <p>The current installer seeds <code>~/.config/hitch/config.toml</code> when missing, installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>, and installs Hitch-managed Hermes shell hooks into <code>~/.hermes/config.yaml</code>. Managed hook commands embed the resolved <code>-url</code>, prefer <code>hitch-client</code>, and fall back to <code>hitch adapter</code> for compatibility. Pi and OMP are detected and reported, but real hook patching is not implemented for them yet.</p>
+          <pre class="code-block"><code>hitch-client install --dry-run --json
+hitch-client install --all --dry-run --json
+hitch-client install --only codex --yes --json
+hitch-client install --only hermes --yes --json
+hitch-client install --only hermes --url http://127.0.0.1:8797 --yes --json
+hitch-client uninstall --only codex --yes --json
+hitch-client uninstall --only hermes --yes --json</code></pre>
+          <p>The current installer seeds <code>~/.config/hitch/config.toml</code> when missing, installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>, and installs Hitch-managed Hermes shell hooks into <code>~/.hermes/config.yaml</code>. Managed hook commands embed the resolved <code>-url</code> and execute <code>hitch-client</code> directly. <code>hitch-client uninstall</code> also recognizes legacy managed hooks that used <code>hitch adapter</code>. Pi and OMP are detected and reported, but real hook patching is not implemented for them yet.</p>
         </section>
 
         <section id="configuration">
@@ -162,7 +162,7 @@ mode = "async"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"</code></pre>
-          <p>Run <code>python3 examples/test_payload_logger.py</code> from the repository root. The script starts Hitch on <code>127.0.0.1:8797</code>, sends events through all four harness mappers, sends one async observer event, and verifies <code>tmp/hitch-payload-logger/payloads.jsonl</code>. If port <code>8797</code> is already in use, run with <code>HITCH_PAYLOAD_LOGGER_PORT=8796 python3 examples/test_payload_logger.py</code>. If you install real Hermes hooks against this example server, use <code>hitch install --only hermes --url http://127.0.0.1:8797 --yes --json</code>. Handler config changes affect <code>hitch serve</code>; the hook shim only reads stdin, resolves the API URL, and dispatches to the local Hitch API.</p>
+          <p>Run <code>python3 examples/test_payload_logger.py</code> from the repository root. The script starts Hitch on <code>127.0.0.1:8797</code>, sends events through all four harness mappers, sends one async observer event, and verifies <code>tmp/hitch-payload-logger/payloads.jsonl</code>. If port <code>8797</code> is already in use, run with <code>HITCH_PAYLOAD_LOGGER_PORT=8796 python3 examples/test_payload_logger.py</code>. If you install real Hermes hooks against this example server, use <code>hitch-client install --only hermes --url http://127.0.0.1:8797 --yes --json</code>. Handler config changes affect <code>hitch serve</code>; the hook shim only reads stdin, resolves the API URL, and dispatches to the local Hitch API.</p>
           <p>Matching handlers run in lexicographic handler-name order. Higher-precedence decisions win; blocking decisions outrank transforms, context injection, and allow decisions. Multiple context injections concatenate, but multiple transform or replace-result decisions are rejected.</p>
           <div class="docs-index">
             <a class="doc-card" href="../../handler-development.md"><small>Guide</small><h3>Building handlers</h3><p>Detailed handler modes, config mapping, decision behavior reference, test-drive commands, inspection, replay, and troubleshooting.</p></a>

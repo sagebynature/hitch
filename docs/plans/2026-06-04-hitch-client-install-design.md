@@ -6,7 +6,7 @@ Approved on 2026-06-04.
 
 ## Problem
 
-Harness hook installation currently lives behind `hitch install` and `hitch uninstall`. That puts agent-harness config mutation on the daemon CLI even though the hook execution boundary now belongs to `hitch-client`.
+Harness hook installation currently lives behind `hitch-client install` and `hitch-client uninstall`. That puts agent-harness config mutation on the daemon CLI even though the hook execution boundary now belongs to `hitch-client`.
 
 The ownership boundary should be sharper:
 
@@ -19,7 +19,7 @@ Make a clean cutover:
 
 - Remove `install` and `uninstall` subcommands from `hitch`.
 - Add `install` and `uninstall` subcommands to `hitch-client`.
-- Do not keep a `hitch install` compatibility alias.
+- Do not keep a `hitch-client install` compatibility alias.
 - Keep legacy uninstall matching for old managed hooks that invoke `hitch adapter`, so existing installations can be removed by `hitch-client uninstall`.
 
 ## Command Surface
@@ -100,7 +100,7 @@ Keep current installer safety rules:
 
 ## Documentation Updates
 
-Update references from `hitch install` to `hitch-client install` in:
+Update references from `hitch-client install` to `hitch-client install` in:
 
 - README
 - `install.sh` post-install guidance
@@ -119,6 +119,6 @@ Required automated coverage:
 - `hitch-client install --dry-run --json` plans Codex and Hermes hook operations.
 - Planned managed hook commands use `hitch-client`, not `hitch adapter`.
 - `hitch-client uninstall` removes both new and legacy managed hooks.
-- `hitch install` and `hitch uninstall` are no longer accepted daemon subcommands.
+- `hitch-client install` and `hitch-client uninstall` are no longer accepted daemon subcommands.
 - Existing stdin hook dispatch tests for `hitch-client` still pass.
 - Full `go test ./...`, adapter tests, example drives, and binary dry runs pass.
