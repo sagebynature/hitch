@@ -155,11 +155,52 @@ func TestInstallDryRunPlansWithoutMutatingFilesystem(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(ops) != 1 || ops[0]["action"] != "install" {
+	if len(ops) != 2 || ops[0]["action"] != "seed_config" || ops[1]["action"] != "install" {
 		t.Fatalf("unexpected operations: %#v", ops)
 	}
 	if _, err := os.Stat(ops[0]["path"]); !os.IsNotExist(err) {
+		t.Fatalf("dry-run planning should not create config file: %v", err)
+	}
+	if _, err := os.Stat(ops[1]["path"]); !os.IsNotExist(err) {
 		t.Fatalf("dry-run planning should not create integration file: %v", err)
+	}
+}
+
+func TestApplyOpsSeedsUserConfigWithoutOverwritingExistingFile(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	ops, err := plannedOps([]string{"codex"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := config.ExpandHome(config.DefaultPath)
+	seeded, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(seeded) != config.DefaultConfigTOML {
+		t.Fatalf("seeded config does not match default config")
+	}
+	if _, err := config.Parse(seeded); err != nil {
+		t.Fatalf("seeded config is invalid: %v", err)
+	}
+
+	const existing = "user-owned config\n"
+	if err := os.WriteFile(cfgPath, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	current, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(current) != existing {
+		t.Fatalf("installer overwrote existing user config: %q", current)
 	}
 }
 
@@ -173,31 +214,32 @@ func TestApplyOpsInstallsIdempotentlyAndBacksUpExistingFile(t *testing.T) {
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	first, err := os.ReadFile(ops[0]["path"])
+	integrationOp := ops[1]
+	first, err := os.ReadFile(integrationOp["path"])
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(ops[0]["backup_path"]); !os.IsNotExist(err) {
+	if _, err := os.Stat(integrationOp["backup_path"]); !os.IsNotExist(err) {
 		t.Fatalf("idempotent install should not create backup: %v", err)
 	}
 
-	if err := os.WriteFile(ops[0]["path"], []byte("existing user content\n"), 0o644); err != nil {
+	if err := os.WriteFile(integrationOp["path"], []byte("existing user content\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	backup, err := os.ReadFile(ops[0]["backup_path"])
+	backup, err := os.ReadFile(integrationOp["backup_path"])
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(backup) != "existing user content\n" {
 		t.Fatalf("backup did not preserve previous content: %q", backup)
 	}
-	current, err := os.ReadFile(ops[0]["path"])
+	current, err := os.ReadFile(integrationOp["path"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +265,7 @@ func TestApplyOpsUninstallRemovesOnlyManagedIntegrationFile(t *testing.T) {
 	if err := applyOps(removeOps, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(ops[0]["path"]); !os.IsNotExist(err) {
+	if _, err := os.Stat(ops[1]["path"]); !os.IsNotExist(err) {
 		t.Fatalf("uninstall should remove managed file: %v", err)
 	}
 }

@@ -192,6 +192,9 @@ func install(args []string, uninstall bool) {
 
 func plannedOps(harnesses []string, uninstall bool) ([]map[string]string, error) {
 	ops := []map[string]string{}
+	if !uninstall {
+		ops = append(ops, map[string]string{"harness": "hitch", "action": "seed_config", "path": config.ExpandHome(config.DefaultPath)})
+	}
 	known := map[string]struct{}{"codex": {}, "hermes": {}, "pi": {}, "omp": {}}
 	for _, h := range harnesses {
 		h = strings.TrimSpace(h)
@@ -218,6 +221,15 @@ func backupPath(harnessName string) string {
 func applyOps(ops []map[string]string, uninstall bool) error {
 	for _, op := range ops {
 		p := op["path"]
+		if op["action"] == "seed_config" {
+			if uninstall {
+				continue
+			}
+			if err := seedConfig(p); err != nil {
+				return err
+			}
+			continue
+		}
 		if uninstall {
 			if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 				return err
@@ -248,6 +260,18 @@ func applyOps(ops []map[string]string, uninstall bool) error {
 		}
 	}
 	return nil
+}
+
+func seedConfig(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(config.DefaultConfigTOML), 0o644)
 }
 
 func status(args []string) {

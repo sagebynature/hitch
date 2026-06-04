@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 const baseConfig = `
 [server]
@@ -70,6 +73,19 @@ func TestParseValidConfig(t *testing.T) {
 	}
 	if got := c.Handlers["security_gate"].Mode; got != "sync" {
 		t.Fatalf("wrong mode: %s", got)
+	}
+}
+
+func TestDefaultConfigTOMLMatchesDevelopmentConfig(t *testing.T) {
+	b, err := os.ReadFile("../../config/default.config.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != DefaultConfigTOML {
+		t.Fatalf("embedded default config differs from config/default.config.toml")
+	}
+	if _, err := Parse([]byte(DefaultConfigTOML)); err != nil {
+		t.Fatalf("embedded default config is invalid: %v", err)
 	}
 }
 

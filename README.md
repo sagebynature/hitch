@@ -112,9 +112,10 @@ Hitch currently includes:
 
 - Codex and Hermes shell adapter entrypoints via `hitch adapter`.
 - Pi and OMP TypeScript adapter response application helpers.
+- Installer config seeding for `~/.config/hitch/config.toml`.
 - Installer placeholder management under `~/.config/hitch/integrations`.
 
-The current installer manages Hitch integration placeholder files. It does not yet patch real Codex, Hermes, Pi, or OMP user configuration files automatically.
+The current installer creates missing Hitch user config and manages Hitch integration placeholder files. It does not yet patch real Codex, Hermes, Pi, or OMP user configuration files automatically.
 
 Preview integration files:
 
