@@ -275,3 +275,9 @@ WHERE n.id = ?`, id).Scan(
 	}
 	return out, nil
 }
+
+func (s *Store) LatestEventIDByType(ctx context.Context, eventType protocol.EventType) (string, error) {
+	var id string
+	err := s.db.QueryRowContext(ctx, `SELECT id FROM normalized_events WHERE hitch_event_type = ? ORDER BY rowid DESC LIMIT 1`, eventType).Scan(&id)
+	return id, err
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sage-scm/hitch/internal/api"
+	"github.com/sage-scm/hitch/internal/config"
 	"github.com/sage-scm/hitch/internal/protocol"
 	"github.com/sage-scm/hitch/internal/store"
 )
@@ -387,4 +390,128 @@ enabled = true
 		t.Setenv("HANDLER_JSON", handlerJSON)
 	}
 	return dbPath, cfgPath, normalizedID
+}
+
+func TestE2ECodexAdapterDispatchesThroughPublicAPIAndPersists(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t.Setenv("HANDLER_JSON", `{"status":"ok","decision":{"behavior":"deny","reason":"policy"}}`)
+	server := httptest.NewServer(api.New(e2eConfig(t, dbPath), slog.Default(), st).Handler())
+	defer server.Close()
+
+	out := runAdapterForTest(t, []string{"-harness", "codex", "-event", "PreToolUse", "-sync", "-url", server.URL}, `{"tool":"bash","input":{"command":"rm -rf /"}}`)
+
+	var native map[string]any
+	if err := json.Unmarshal([]byte(out), &native); err != nil {
+		t.Fatalf("codex adapter stdout is not JSON: %v; output=%q", err, out)
+	}
+	if native["permissionDecision"] != "deny" || native["permissionDecisionReason"] != "policy" {
+		t.Fatalf("codex deny was not translated to native response: %#v", native)
+	}
+	inspection := onlyInspection(t, ctx, st, protocol.EventToolRequested)
+	if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
+		t.Fatalf("handler invocation was not persisted: %#v", inspection.HandlerInvocations)
+	}
+	if len(inspection.NativeResponses) != 1 {
+		t.Fatalf("native response was not persisted: %#v", inspection.NativeResponses)
+	}
+}
+
+func TestE2EHermesAdapterDispatchesBlockThroughPublicAPI(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t.Setenv("HANDLER_JSON", `{"status":"ok","decision":{"behavior":"block","reason":"blocked"}}`)
+	server := httptest.NewServer(api.New(e2eConfig(t, dbPath), slog.Default(), st).Handler())
+	defer server.Close()
+
+	out := runAdapterForTest(t, []string{"-harness", "hermes", "-event", "pre_tool_call", "-sync", "-url", server.URL}, `{"tool_name":"bash"}`)
+
+	var native map[string]any
+	if err := json.Unmarshal([]byte(out), &native); err != nil {
+		t.Fatalf("hermes adapter stdout is not JSON: %v; output=%q", err, out)
+	}
+	if native["action"] != "block" || native["message"] != "blocked" {
+		t.Fatalf("hermes block was not translated to native response: %#v", native)
+	}
+}
+
+func e2eConfig(t *testing.T, dbPath string) config.Config {
+	t.Helper()
+	cfg, err := config.Parse([]byte(`[server]
+host = "127.0.0.1"
+port = 8799
+max_request_bytes = 1048576
+
+[log]
+level = "info"
+format = "json"
+include_native_payload = false
+
+[log.stdout]
+enabled = true
+
+[log.file]
+enabled = false
+path = "` + filepath.ToSlash(filepath.Join(filepath.Dir(dbPath), "hitch.log")) + `"
+max_size_mb = 100
+max_backups = 10
+max_age_days = 14
+compress = true
+
+[log.otlp]
+enabled = false
+endpoint = "http://127.0.0.1:4318"
+protocol = "http/protobuf"
+
+[audit]
+enabled = true
+backend = "sqlite"
+
+[audit.sqlite]
+path = "` + filepath.ToSlash(dbPath) + `"
+
+[harness.codex]
+enabled = true
+[harness.hermes]
+enabled = true
+[harness.pi]
+enabled = true
+[harness.omp]
+enabled = true
+
+[handlers.policy]
+command = ["/bin/sh", "-c", "printf '%s' \"$HANDLER_JSON\""]
+events = ["tool.requested"]
+mode = "sync"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+func onlyInspection(t *testing.T, ctx context.Context, st *store.Store, eventType protocol.EventType) store.EventInspection {
+	t.Helper()
+	id, err := st.LatestEventIDByType(ctx, eventType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := st.InspectEvent(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return inspection
 }
