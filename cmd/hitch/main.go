@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -38,6 +39,9 @@ func main() {
 		case "adapter":
 			adapter(os.Args[2:])
 			return
+		case "handler":
+			handler(os.Args[2:])
+			return
 		case "install":
 			install(os.Args[2:], false)
 			return
@@ -64,7 +68,7 @@ func main() {
 		fmt.Printf("hitch %s\n", version)
 		return
 	}
-	fmt.Fprintln(os.Stderr, "usage: hitch --version | hitch serve | hitch adapter | hitch install | hitch status | hitch doctor | hitch inspect-event | hitch replay")
+	fmt.Fprintln(os.Stderr, "usage: hitch --version | hitch serve | hitch adapter | hitch handler noop-observer | hitch install | hitch status | hitch doctor | hitch inspect-event | hitch replay")
 	os.Exit(2)
 }
 
@@ -141,6 +145,25 @@ func adapter(args []string) {
 		return
 	}
 	_, _ = client.Event(req)
+}
+
+func handler(args []string) {
+	if len(args) != 1 || args[0] != "noop-observer" {
+		fatal(fmt.Errorf("usage: hitch handler noop-observer"))
+	}
+	noopObserverHandler()
+}
+
+func noopObserverHandler() {
+	payload, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fatal(err)
+	}
+	if len(bytes.TrimSpace(payload)) == 0 || !json.Valid(payload) {
+		_, _ = os.Stdout.Write([]byte(`{"status":"error","decision":{"behavior":"none"}}` + "\n"))
+		return
+	}
+	_, _ = os.Stdout.Write([]byte(`{"status":"ok","decision":{"behavior":"none"}}` + "\n"))
 }
 
 func nativeNoop(harnessName, nativeEventType string) protocol.RawJSON {

@@ -15,6 +15,19 @@ import (
 	"github.com/sagebynature/hitch/internal/config"
 )
 
+var codexLifecycleEvents = []string{
+	"SessionStart",
+	"SubagentStart",
+	"UserPromptSubmit",
+	"PreToolUse",
+	"PermissionRequest",
+	"PostToolUse",
+	"PreCompact",
+	"PostCompact",
+	"SubagentStop",
+	"Stop",
+}
+
 type harnessSpec struct {
 	Name       string
 	Title      string
@@ -340,17 +353,30 @@ func seedConfig(path string) error {
 }
 
 func codexHookInstalled(path string) bool {
-	b, err := os.ReadFile(path)
-	return err == nil && strings.Contains(string(b), "adapter -harness codex -event PreToolUse")
+	doc, _, err := readCodexHooks(path)
+	if err != nil {
+		return false
+	}
+	for _, event := range codexLifecycleEvents {
+		if !codexEventHasManagedHook(doc, event) {
+			return false
+		}
+	}
+	return true
 }
 
 func installCodexHook(path, backup, binaryPath string) error {
-	command := shellQuote(binaryPath) + " adapter -harness codex -event PreToolUse -sync"
 	doc, existed, err := readCodexHooks(path)
 	if err != nil {
 		return err
 	}
-	changed := upsertCodexHook(doc, command)
+	changed := false
+	for _, event := range codexLifecycleEvents {
+		command := codexAdapterCommand(binaryPath, event)
+		if upsertCodexHook(doc, event, command) {
+			changed = true
+		}
+	}
 	if !changed {
 		return nil
 	}
@@ -370,7 +396,12 @@ func uninstallCodexHook(path, backup string) error {
 	if !existed {
 		return nil
 	}
-	changed := removeCodexHook(doc)
+	changed := false
+	for _, event := range codexLifecycleEvents {
+		if removeCodexHook(doc, event) {
+			changed = true
+		}
+	}
 	if !changed {
 		return nil
 	}
@@ -398,9 +429,14 @@ func readCodexHooks(path string) (map[string]any, bool, error) {
 	return doc, true, nil
 }
 
-func upsertCodexHook(doc map[string]any, command string) bool {
-	groups := codexPreToolUseGroups(doc)
+func codexAdapterCommand(binaryPath, event string) string {
+	return shellQuote(binaryPath) + " adapter -harness codex -event " + event + " -sync"
+}
+
+func upsertCodexHook(doc map[string]any, event, command string) bool {
+	groups := codexEventGroups(doc, event)
 	newHook := map[string]any{"type": "command", "command": command, "timeout": float64(30), "statusMessage": "Dispatching to Hitch"}
+	needle := codexManagedHookNeedle(event)
 	for _, groupValue := range groups {
 		group, ok := groupValue.(map[string]any)
 		if !ok {
@@ -412,7 +448,7 @@ func upsertCodexHook(doc map[string]any, command string) bool {
 			if !ok {
 				continue
 			}
-			if hookCommandContains(hook, "adapter -harness codex -event PreToolUse") {
+			if hookCommandContains(hook, needle) {
 				if hook["command"] == command {
 					return false
 				}
@@ -423,14 +459,15 @@ func upsertCodexHook(doc map[string]any, command string) bool {
 		}
 	}
 	group := map[string]any{"matcher": "*", "hooks": []any{newHook}}
-	setCodexPreToolUseGroups(doc, append(groups, group))
+	setCodexEventGroups(doc, event, append(groups, group))
 	return true
 }
 
-func removeCodexHook(doc map[string]any) bool {
-	groups := codexPreToolUseGroups(doc)
+func removeCodexHook(doc map[string]any, event string) bool {
+	groups := codexEventGroups(doc, event)
 	changed := false
 	keptGroups := make([]any, 0, len(groups))
+	needle := codexManagedHookNeedle(event)
 	for _, groupValue := range groups {
 		group, ok := groupValue.(map[string]any)
 		if !ok {
@@ -441,7 +478,7 @@ func removeCodexHook(doc map[string]any) bool {
 		keptHooks := make([]any, 0, len(hooks))
 		for _, hookValue := range hooks {
 			hook, ok := hookValue.(map[string]any)
-			if ok && hookCommandContains(hook, "adapter -harness codex -event PreToolUse") {
+			if ok && hookCommandContains(hook, needle) {
 				changed = true
 				continue
 			}
@@ -455,31 +492,53 @@ func removeCodexHook(doc map[string]any) bool {
 		keptGroups = append(keptGroups, group)
 	}
 	if changed {
-		setCodexPreToolUseGroups(doc, keptGroups)
+		setCodexEventGroups(doc, event, keptGroups)
 	}
 	return changed
 }
 
-func codexPreToolUseGroups(doc map[string]any) []any {
+func codexEventHasManagedHook(doc map[string]any, event string) bool {
+	needle := codexManagedHookNeedle(event)
+	for _, groupValue := range codexEventGroups(doc, event) {
+		group, ok := groupValue.(map[string]any)
+		if !ok {
+			continue
+		}
+		hooks, _ := group["hooks"].([]any)
+		for _, hookValue := range hooks {
+			hook, ok := hookValue.(map[string]any)
+			if ok && hookCommandContains(hook, needle) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func codexManagedHookNeedle(event string) string {
+	return "adapter -harness codex -event " + event
+}
+
+func codexEventGroups(doc map[string]any, event string) []any {
 	hooks, ok := doc["hooks"].(map[string]any)
 	if !ok {
 		return nil
 	}
-	groups, _ := hooks["PreToolUse"].([]any)
+	groups, _ := hooks[event].([]any)
 	return groups
 }
 
-func setCodexPreToolUseGroups(doc map[string]any, groups []any) {
+func setCodexEventGroups(doc map[string]any, event string, groups []any) {
 	hooks, ok := doc["hooks"].(map[string]any)
 	if !ok {
 		hooks = map[string]any{}
 		doc["hooks"] = hooks
 	}
 	if len(groups) == 0 {
-		delete(hooks, "PreToolUse")
+		delete(hooks, event)
 		return
 	}
-	hooks["PreToolUse"] = groups
+	hooks[event] = groups
 }
 
 func hookCommandContains(hook map[string]any, needle string) bool {

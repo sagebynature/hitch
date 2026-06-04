@@ -19,6 +19,13 @@ import (
 	"github.com/sagebynature/hitch/internal/store"
 )
 
+func init() {
+	if os.Getenv("HITCH_TEST_NOOP_HANDLER") == "1" {
+		noopObserverHandler()
+		os.Exit(0)
+	}
+}
+
 func runAdapterForTest(t *testing.T, args []string, input string) string {
 	t.Helper()
 
@@ -45,6 +52,40 @@ func runAdapterForTest(t *testing.T, args []string, input string) string {
 	}()
 
 	adapter(args)
+	_ = outW.Close()
+	out, err := io.ReadAll(outR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+func runNoopObserverForTest(t *testing.T, input string) string {
+	t.Helper()
+
+	oldStdin := os.Stdin
+	oldStdout := os.Stdout
+	inR, inW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _ = inW.WriteString(input)
+	_ = inW.Close()
+	os.Stdin = inR
+	os.Stdout = outW
+	defer func() {
+		os.Stdin = oldStdin
+		os.Stdout = oldStdout
+		_ = inR.Close()
+		_ = outR.Close()
+	}()
+
+	noopObserverHandler()
 	_ = outW.Close()
 	out, err := io.ReadAll(outR)
 	if err != nil {
@@ -148,6 +189,21 @@ func TestAdapterFailsOpenWhenHitchIsUnreachable(t *testing.T) {
 	}
 }
 
+func TestNoopObserverHandlerConsumesEnvelopeAndReturnsNone(t *testing.T) {
+	out := runNoopObserverForTest(t, `{"hitch_version":"0.1.0","event_id":"evt","received_at":"2026-06-04T00:00:00Z","harness":"codex","native_event_type":"SessionStart","native_payload":{},"hitch_event_type":"session.started","payload":{}}`)
+
+	var result protocol.HandlerResult
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("noop observer stdout is not handler JSON: %v; stdout=%q", err, out)
+	}
+	if result.Status != protocol.StatusOK {
+		t.Fatalf("noop observer returned non-ok status: %#v", result)
+	}
+	if result.Decision == nil || result.Decision.Behavior != protocol.BehaviorNone {
+		t.Fatalf("noop observer should not alter control flow: %#v", result.Decision)
+	}
+}
+
 func addFakeCommand(t *testing.T, name string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -238,8 +294,11 @@ func TestApplyOpsInstallsCodexHookIdempotentlyAndBacksUpExistingFile(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(first), "adapter -harness codex -event PreToolUse -sync") {
-		t.Fatalf("codex hook was not installed: %s", first)
+	for _, event := range codexLifecycleEvents {
+		needle := "adapter -harness codex -event " + event + " -sync"
+		if !strings.Contains(string(first), needle) {
+			t.Fatalf("codex %s hook was not installed: %s", event, first)
+		}
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
@@ -520,6 +579,64 @@ func TestE2ECodexAdapterDispatchesThroughPublicAPIAndPersists(t *testing.T) {
 	}
 }
 
+func TestE2ECodexLifecycleHooksDispatchToNoopObserver(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	server := httptest.NewServer(api.New(e2eNoopConfig(t, dbPath), slog.Default(), st).Handler())
+	defer server.Close()
+	client := api.Client{BaseURL: server.URL}
+
+	events := []struct {
+		native string
+		hitch  protocol.EventType
+	}{
+		{"SessionStart", protocol.EventSessionStarted},
+		{"SubagentStart", protocol.EventSubagentStarted},
+		{"UserPromptSubmit", protocol.EventTurnUserPrompt},
+		{"PreToolUse", protocol.EventToolRequested},
+		{"PermissionRequest", protocol.EventToolPermissionRequest},
+		{"PostToolUse", protocol.EventToolCompleted},
+		{"PreCompact", protocol.EventSessionCompacted},
+		{"PostCompact", protocol.EventSessionCompacted},
+		{"SubagentStop", protocol.EventSubagentCompleted},
+		{"Stop", protocol.EventTurnCompleted},
+	}
+	for _, event := range events {
+		resp, err := client.Dispatch(api.NewEventRequest("codex", event.native, codexLifecyclePayload(event.native)))
+		if err != nil {
+			t.Fatalf("%s dispatch failed: %v", event.native, err)
+		}
+		if string(resp.NativeResponse) != "{}" {
+			t.Fatalf("%s noop observer should produce empty native response, got %s", event.native, string(resp.NativeResponse))
+		}
+		inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+		if err != nil {
+			t.Fatalf("%s inspection failed: %v", event.native, err)
+		}
+		if inspection.Inbound.NativeEventType != event.native || inspection.Normalized.HitchEventType != event.hitch {
+			t.Fatalf("%s was not persisted with expected mapping: %#v", event.native, inspection)
+		}
+		if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].HandlerName != "noop_observer" || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
+			t.Fatalf("%s noop observer invocation was not persisted: %#v", event.native, inspection.HandlerInvocations)
+		}
+		var decision protocol.Decision
+		if err := json.Unmarshal(inspection.HandlerInvocations[0].Decision, &decision); err != nil {
+			t.Fatalf("%s decision JSON was not persisted: %v", event.native, err)
+		}
+		if decision.Behavior != protocol.BehaviorNone {
+			t.Fatalf("%s noop observer changed control flow: %#v", event.native, decision)
+		}
+		if len(inspection.NativeResponses) != 1 {
+			t.Fatalf("%s native response was not persisted: %#v", event.native, inspection.NativeResponses)
+		}
+	}
+}
+
 func TestE2EHermesAdapterDispatchesBlockThroughPublicAPI(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
@@ -599,6 +716,101 @@ on_timeout = "fail_open"
 		t.Fatal(err)
 	}
 	return cfg
+}
+
+func e2eNoopConfig(t *testing.T, dbPath string) config.Config {
+	t.Helper()
+	command := "HITCH_TEST_NOOP_HANDLER=1 " + shellQuote(os.Args[0])
+	cfg, err := config.Parse([]byte(`[server]
+host = "127.0.0.1"
+port = 8799
+max_request_bytes = 1048576
+
+[log]
+level = "info"
+format = "json"
+include_native_payload = false
+
+[log.stdout]
+enabled = true
+
+[log.file]
+enabled = false
+path = "` + filepath.ToSlash(filepath.Join(filepath.Dir(dbPath), "hitch.log")) + `"
+max_size_mb = 100
+max_backups = 10
+max_age_days = 14
+compress = true
+
+[log.otlp]
+enabled = false
+endpoint = "http://127.0.0.1:4318"
+protocol = "http/protobuf"
+
+[audit]
+enabled = true
+backend = "sqlite"
+
+[audit.sqlite]
+path = "` + filepath.ToSlash(dbPath) + `"
+
+[harness.codex]
+enabled = true
+[harness.hermes]
+enabled = true
+[harness.pi]
+enabled = true
+[harness.omp]
+enabled = true
+
+[handlers.noop_observer]
+command = ["/bin/sh", "-c", ` + tomlString(t, command) + `]
+events = ["*"]
+mode = "sync"
+timeout_ms = 5000
+on_error = "fail_open"
+on_timeout = "fail_open"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+func tomlString(t *testing.T, s string) string {
+	t.Helper()
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func codexLifecyclePayload(event string) protocol.RawJSON {
+	switch event {
+	case "SessionStart":
+		return protocol.RawJSON(`{"session_id":"session","transcript_path":null,"cwd":"/tmp","hook_event_name":"SessionStart","model":"test","permission_mode":"default","source":"startup"}`)
+	case "SubagentStart":
+		return protocol.RawJSON(`{"session_id":"session","transcript_path":null,"cwd":"/tmp","hook_event_name":"SubagentStart","model":"test","turn_id":"turn","agent_id":"agent","agent_type":"task","permission_mode":"default"}`)
+	case "UserPromptSubmit":
+		return protocol.RawJSON(`{"session_id":"session","transcript_path":null,"cwd":"/tmp","hook_event_name":"UserPromptSubmit","model":"test","turn_id":"turn","permission_mode":"default","prompt":"hello"}`)
+	case "PreToolUse":
+		return protocol.RawJSON(`{"session_id":"session","transcript_path":null,"cwd":"/tmp","hook_event_name":"PreToolUse","model":"test","turn_id":"turn","permission_mode":"default","tool_name":"Bash","tool_use_id":"tool","tool_input":{"command":"pwd"}}`)
+	case "PermissionRequest":
+		return protocol.RawJSON(`{"session_id":"session","transcript_path":null,"cwd":"/tmp","hook_event_name":"PermissionRequest","model":"test","turn_id":"turn","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"pwd","description":"approval"}}`)
+	case "PostToolUse":
+		return protocol.RawJSON(`{"session_id":"session","transcript_path":null,"cwd":"/tmp","hook_event_name":"PostToolUse","model":"test","turn_id":"turn","permission_mode":"default","tool_name":"Bash","tool_use_id":"tool","tool_input":{"command":"pwd"},"tool_response":{"stdout":"/tmp","exit_code":0}}`)
+	case "PreCompact":
+		return protocol.RawJSON(`{"session_id":"session","transcript_path":null,"cwd":"/tmp","hook_event_name":"PreCompact","model":"test","turn_id":"turn","trigger":"manual"}`)
+	case "PostCompact":
+		return protocol.RawJSON(`{"session_id":"session","transcript_path":null,"cwd":"/tmp","hook_event_name":"PostCompact","model":"test","turn_id":"turn","trigger":"manual"}`)
+	case "SubagentStop":
+		return protocol.RawJSON(`{"session_id":"session","transcript_path":null,"cwd":"/tmp","hook_event_name":"SubagentStop","model":"test","turn_id":"turn","permission_mode":"default","agent_id":"agent","agent_type":"task","agent_transcript_path":null,"stop_hook_active":false,"last_assistant_message":null}`)
+	case "Stop":
+		return protocol.RawJSON(`{"session_id":"session","transcript_path":null,"cwd":"/tmp","hook_event_name":"Stop","model":"test","turn_id":"turn","permission_mode":"default","stop_hook_active":false,"last_assistant_message":null}`)
+	default:
+		panic("missing Codex lifecycle payload")
+	}
 }
 
 func onlyInspection(t *testing.T, ctx context.Context, st *store.Store, eventType protocol.EventType) store.EventInspection {

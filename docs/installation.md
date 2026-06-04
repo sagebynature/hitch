@@ -8,7 +8,7 @@ curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh 
 
 The source installer checks for `git` and `go`, builds `./cmd/hitch`, installs the binary to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies `hitch --version`, and then offers to run hook setup.
 
-The current `hitch install` command seeds `~/.config/hitch/config.toml` when it is missing, detects Codex, Hermes, Pi, and OMP binaries on `PATH`, and installs the supported Codex hook into `~/.codex/hooks.json`. Hermes, Pi, and OMP are detected and reported, but real hook patching is not implemented for them yet.
+The current `hitch install` command seeds `~/.config/hitch/config.toml` when it is missing, detects Codex, Hermes, Pi, and OMP binaries on `PATH`, and installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`. Hermes, Pi, and OMP are detected and reported, but real hook patching is not implemented for them yet.
 
 Dry run detected supported harnesses:
 
@@ -33,7 +33,7 @@ Installer behavior verified by tests:
 - `--dry-run` does not mutate the filesystem.
 - Missing user config is created at `~/.config/hitch/config.toml` from the embedded default config.
 - Existing user config is left unchanged.
-- Codex hook installation is idempotent.
+- Codex hook installation covers `SessionStart`, `SubagentStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStop`, and `Stop`, and is idempotent.
 - Existing Codex hook configuration is backed up before Hitch modifies it.
 - Unsupported available harnesses are reported as skipped.
 - Unknown harness names are rejected.
@@ -52,9 +52,23 @@ Uninstall selected hooks:
 hitch uninstall --only codex --yes --json
 ```
 
+The seeded config includes a sync `noop_observer` handler:
+
+```toml
+[handlers.noop_observer]
+command = ["hitch", "handler", "noop-observer"]
+events = ["*"]
+mode = "sync"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+```
+
 Shell adapter entrypoints can be used directly by harness hook configuration once installed manually:
 
 ```sh
+hitch adapter -harness codex -event SessionStart -sync
 hitch adapter -harness codex -event PreToolUse -sync
+hitch adapter -harness codex -event Stop -sync
 hitch adapter -harness hermes -event pre_tool_call -sync
 ```

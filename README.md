@@ -153,6 +153,7 @@ See `docs/configuration.md` for details.
 
 ## Documentation
 
+- `docs/walkthrough.md`
 - `docs/configuration.md`
 - `docs/installation.md`
 - `docs/handler-protocol.md`

@@ -42,3 +42,11 @@ enabled = true
 
 [harness.omp]
 enabled = true
+
+[handlers.noop_observer]
+command = ["hitch", "handler", "noop-observer"]
+events = ["*"]
+mode = "sync"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
