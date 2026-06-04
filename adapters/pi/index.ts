@@ -19,9 +19,16 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function applyMutation(target: HookEvent, mutation: HitchMutation): void {
-  if (mutation.path.length === 1 && mutation.path[0] === "input") {
-    target.input = mutation.value;
+  if (mutation.path.length === 0) return;
+
+  let cursor: unknown = target;
+  for (let i = 0; i < mutation.path.length - 1; i += 1) {
+    if (!isObject(cursor)) return;
+    cursor = cursor[mutation.path[i]];
   }
+
+  if (!isObject(cursor)) return;
+  cursor[mutation.path[mutation.path.length - 1]] = mutation.value;
 }
 
 export function applyHitchResponse(event: HookEvent, response: HitchAdapterResponse): unknown {

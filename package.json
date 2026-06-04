@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "test:adapters": "bun test adapters/**/*.test.ts"
+  },
+  "devDependencies": {}
+}
