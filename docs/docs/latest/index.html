@@ -40,6 +40,7 @@
         <a href="#installation">Installation</a>
         <a href="#configuration">Configuration</a>
         <a href="#handler-protocol">Handler protocol</a>
+        <a href="#handler-development">Handler development</a>
         <a href="#hitch-events">Hitch events</a>
         <a href="#http-api">HTTP API</a>
         <a href="#harness-contracts">Harness contracts</a>
@@ -118,7 +119,33 @@ on_timeout = "fail_open"</code></pre>
             <li>If <code>decision</code> is omitted, Hitch treats it as <code>{"behavior":"none"}</code>.</li>
             <li>Hitch sets <code>HITCH_CHILD=1</code> on child handler processes for recursion guards.</li>
           </ul>
-          <p>Verified behavior includes stdout JSON parsing, invalid stdout persistence as <code>error</code>, timeout persistence as <code>timeout</code>, separate stderr capture, decision precedence by configured handler order, ordered context injection concatenation, and rejection of multiple transforms unless transform chaining is explicitly configured.</p>
+          <p>Verified behavior includes stdout JSON parsing, invalid stdout persistence as <code>error</code>, timeout persistence as <code>timeout</code>, separate stderr capture, decision precedence by lexicographic handler-name order, ordered context injection concatenation, and rejection of multiple transforms unless transform chaining is explicitly configured.</p>
+        </section>
+
+        <section id="handler-development">
+          <h2>Handler development</h2>
+          <p>Build handlers as small commands that read the Hitch envelope from stdin and write one handler result to stdout. Send logs to stderr so stdout remains valid JSON.</p>
+          <h3>Step-by-step</h3>
+          <ol>
+            <li>Choose async observer mode for passive work, or sync control mode when the harness needs a decision.</li>
+            <li>Pick normalized event names such as <code>tool.requested</code>, <code>turn.user_prompt</code>, or <code>tool.completed</code>. Use the Hitch event mapping below to connect native harness events to normalized names.</li>
+            <li>Add a <code>[handlers.&lt;name&gt;]</code> config entry with <code>command</code>, <code>events</code>, <code>mode</code>, <code>timeout_ms</code>, and fail-open or fail-closed policy.</li>
+            <li>Read <code>hitch_event_type</code> first. Inspect <code>harness</code> and <code>native_event_type</code> only when a harness-specific field is needed.</li>
+            <li>Return a decision behavior: <code>none</code>, <code>allow</code>, <code>deny</code>, <code>block</code>, <code>continue</code>, <code>stop</code>, <code>transform</code>, <code>replace_result</code>, <code>inject_context</code>, or <code>handled</code>.</li>
+            <li>Test with <code>python3 examples/test_drive.py</code>. The example starts Hitch, sends sync dispatch requests, verifies native responses, and inspects the stored audit record.</li>
+          </ol>
+          <pre class="code-block"><code>[handlers.example_policy]
+command = ["python3", "examples/handlers/policy_handler.py"]
+events = ["turn.user_prompt", "tool.requested", "tool.completed", "turn.completed"]
+mode = "sync"
+timeout_ms = 1000
+on_error = "fail_closed"
+on_timeout = "fail_closed"</code></pre>
+          <p>Matching handlers run in lexicographic handler-name order. Higher-precedence decisions win; blocking decisions outrank transforms, context injection, and allow decisions. Multiple context injections concatenate, but multiple transform or replace-result decisions are rejected.</p>
+          <div class="docs-index">
+            <a class="doc-card" href="../../handler-development.md"><small>Guide</small><h3>Building handlers</h3><p>Detailed handler modes, config mapping, decision behavior reference, test-drive commands, inspection, replay, and troubleshooting.</p></a>
+            <a class="doc-card" href="https://github.com/sagebynature/hitch/tree/main/examples"><small>Examples</small><h3>Runnable handler test drive</h3><p>Example policy handler, config, and Python script that exercises the Hitch HTTP API end to end.</p></a>
+          </div>
         </section>
 
         <section id="hitch-events">
@@ -280,6 +307,7 @@ hitch replay --config config/default.config.toml norm_...</code></pre>
             <a class="doc-card" href="../../installation.md"><small>Guide</small><h3>Installation</h3><p>Source install, hook setup, status, doctor, and uninstall behavior.</p></a>
             <a class="doc-card" href="../../configuration.md"><small>Reference</small><h3>Configuration</h3><p>Config sections and strict validation rules.</p></a>
             <a class="doc-card" href="../../handler-protocol.md"><small>Reference</small><h3>Handler protocol</h3><p>stdin/stdout contract and result aggregation rules.</p></a>
+            <a class="doc-card" href="../../handler-development.md"><small>Guide</small><h3>Building handlers</h3><p>Step-by-step handler development, event mapping, decisions, examples, inspection, replay, and troubleshooting.</p></a>
             <a class="doc-card" href="../../events.md"><small>Reference</small><h3>Hitch events</h3><p>Normalized event taxonomy and source-event mappings for Codex, Hermes, Pi, and OMP.</p></a>
             <a class="doc-card" href="../../harness-contracts.md"><small>Reference</small><h3>Harness contracts</h3><p>Supported dispatch modes and adapter behavior.</p></a>
             <a class="doc-card" href="../../replay.md"><small>Reference</small><h3>Replay</h3><p>Event inspection and replay commands.</p></a>

@@ -1,6 +1,7 @@
 package hermes
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/sagebynature/hitch/internal/harness"
@@ -50,17 +51,25 @@ func (Mapper) Translate(nativeEventType string, aggregate protocol.AggregateDeci
 		}
 	case "transform_tool_result", "transform_terminal_output", "transform_llm_output":
 		if (d.Behavior == protocol.BehaviorReplaceResult || d.Behavior == protocol.BehaviorTransform) && len(d.UpdatedOutput) != 0 {
-			out["result"] = string(d.UpdatedOutput)
+			out["result"] = rawValue(d.UpdatedOutput)
 		}
 	case "pre_gateway_dispatch":
 		if d.Behavior == protocol.BehaviorHandled {
 			out["action"] = "skip"
 		} else if d.Behavior == protocol.BehaviorTransform {
 			out["action"] = "rewrite"
-			out["message"] = string(d.UpdatedInput)
+			out["message"] = rawValue(d.UpdatedInput)
 		} else if d.Behavior == protocol.BehaviorAllow {
 			out["action"] = "allow"
 		}
 	}
 	return protocol.Raw(out), nil
+}
+
+func rawValue(raw protocol.RawJSON) interface{} {
+	var v interface{}
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return string(raw)
+	}
+	return v
 }

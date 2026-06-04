@@ -1,0 +1,52 @@
+[server]
+host = "127.0.0.1"
+port = 8798
+max_request_bytes = 1048576
+
+[log]
+level = "warn"
+format = "json"
+include_native_payload = false
+
+[log.stdout]
+enabled = true
+
+[log.file]
+enabled = false
+path = "tmp/hitch-test-drive/hitch.log"
+max_size_mb = 10
+max_backups = 3
+max_age_days = 7
+compress = true
+
+[log.otlp]
+enabled = false
+endpoint = "http://127.0.0.1:4318"
+protocol = "http/protobuf"
+
+[audit]
+enabled = true
+backend = "sqlite"
+
+[audit.sqlite]
+path = "tmp/hitch-test-drive/events.sqlite"
+
+[harness.codex]
+enabled = true
+
+[harness.hermes]
+enabled = true
+
+[harness.pi]
+enabled = true
+
+[harness.omp]
+enabled = true
+
+[handlers.example_policy]
+command = ["python3", "examples/handlers/policy_handler.py"]
+events = ["turn.user_prompt", "tool.requested", "tool.completed", "turn.completed"]
+mode = "sync"
+timeout_ms = 1000
+on_error = "fail_closed"
+on_timeout = "fail_closed"

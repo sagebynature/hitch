@@ -104,4 +104,17 @@ func TestDispatchSync(t *testing.T) {
 	if len(resp.NativeResponse) == 0 {
 		t.Fatalf("missing native response")
 	}
+	inspectReq := httptest.NewRequest(http.MethodGet, "/v1/events/"+resp.NormalizedEventID, nil)
+	inspectW := httptest.NewRecorder()
+	s.Handler().ServeHTTP(inspectW, inspectReq)
+	if inspectW.Code != http.StatusOK {
+		t.Fatalf("inspect code %d body %s", inspectW.Code, inspectW.Body.String())
+	}
+	var inspection map[string]interface{}
+	if err := json.Unmarshal(inspectW.Body.Bytes(), &inspection); err != nil {
+		t.Fatal(err)
+	}
+	if inspection["inbound"] == nil || inspection["normalized"] == nil || inspection["native_responses"] == nil {
+		t.Fatalf("incomplete inspection: %s", inspectW.Body.String())
+	}
 }

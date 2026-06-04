@@ -142,12 +142,12 @@ func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, badRequest("missing id"))
 		return
 	}
-	env, err := s.store.GetEvent(r.Context(), id)
+	inspection, err := s.store.InspectEvent(r.Context(), id)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, env)
+	writeJSON(w, http.StatusOK, inspection)
 }
 
 func headers(r *http.Request) map[string][]string {
