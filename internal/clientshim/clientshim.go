@@ -133,11 +133,8 @@ func (c httpClient) post(ctx context.Context, path string, req eventRequest, out
 	return json.Unmarshal(body, out)
 }
 
-// DefaultURL resolves the API endpoint used by installed hook shims.
+// DefaultURL resolves the API endpoint used by hook shims.
 func DefaultURL() string {
-	if v := os.Getenv("HITCH_API_URL"); v != "" {
-		return v
-	}
 	if v := os.Getenv("HITCH_URL"); v != "" {
 		return v
 	}

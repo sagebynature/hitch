@@ -124,7 +124,7 @@ Decision:
 - Use `hitch-client` for command-hook harnesses such as Codex and Hermes.
 - Prefer direct HTTP integration only for harnesses that natively support synchronous HTTP hooks with reliable timeout and response semantics.
 - Treat external harness-specific adapters as thin, tested compatibility layers, not as places for policy logic.
-- Make installed hook commands explicit about the Hitch API URL so hooks invoke the intended server instance.
+- Resolve installed hook server URLs through an explicit waterfall: pinned `--url`, `HITCH_URL`, user config, then the local default.
 
 Rationale:
 

@@ -6,6 +6,7 @@ HITCH_REF=${HITCH_REF:-main}
 HITCH_INSTALL_DIR=${HITCH_INSTALL_DIR:-$HOME/.local/bin}
 HITCH_SOURCE_DIR=${HITCH_SOURCE_DIR:-}
 HITCH_SKIP_HOOK_INSTALL=${HITCH_SKIP_HOOK_INSTALL:-0}
+HITCH_URL=${HITCH_URL:-}
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -46,6 +47,56 @@ path_command() {
     fish) printf 'fish_add_path "%s"' "$bin_expr" ;;
     *) printf 'export PATH="%s:$PATH"' "$bin_expr" ;;
   esac
+}
+
+server_url_command() {
+  current_shell=$(basename "${SHELL:-sh}")
+  case "$current_shell" in
+    fish) printf 'set -gx HITCH_URL "%s"' "$HITCH_URL" ;;
+    *) printf 'export HITCH_URL="%s"' "$HITCH_URL" ;;
+  esac
+}
+
+maybe_update_server_url() {
+  if [ -z "$HITCH_URL" ] || [ "$HITCH_URL" = "http://127.0.0.1:8799" ]; then
+    return 0
+  fi
+
+  command_text=$(server_url_command)
+  config_file=$(shell_config_file)
+  if [ -t 0 ]; then
+    printf 'Persist HITCH_URL to %s for future harness launches? [Y/n] ' "$config_file"
+    IFS= read -r answer || answer=
+    case "$answer" in
+      n|N|no|NO) ;;
+      *)
+        mkdir -p "$(dirname "$config_file")"
+        touch "$config_file"
+        if ! grep -Fxq "$command_text" "$config_file" 2>/dev/null; then
+          printf '\n# Hitch\n%s\n' "$command_text" >> "$config_file"
+          printf 'Added HITCH_URL to %s.\n' "$config_file"
+        fi
+        ;;
+    esac
+  fi
+}
+
+configure_server_url() {
+  default_url=${HITCH_URL:-http://127.0.0.1:8799}
+  if [ -t 0 ]; then
+    printf 'Hitch server URL [%s]: ' "$default_url"
+    IFS= read -r answer || answer=
+    if [ -n "$answer" ]; then
+      HITCH_URL=$answer
+    else
+      HITCH_URL=$default_url
+    fi
+    export HITCH_URL
+    maybe_update_server_url
+  elif [ -n "$HITCH_URL" ]; then
+    export HITCH_URL
+  fi
+
 }
 
 maybe_update_path() {
@@ -108,6 +159,8 @@ main() {
   if [ "$HITCH_SKIP_HOOK_INSTALL" = 1 ]; then
     return 0
   fi
+
+  configure_server_url
 
   if [ -t 0 ]; then
     "$HITCH_INSTALL_DIR/hitch-client" install < /dev/tty

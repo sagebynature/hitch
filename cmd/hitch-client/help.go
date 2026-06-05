@@ -39,7 +39,7 @@ Hook flags:
   -harness string   source harness: codex, hermes, pi, omp
   -event string     source event type, e.g. PreToolUse
   -sync             wait for native response on stdout
-  -url string       Hitch API URL
+  -url string       Hitch API URL (overrides HITCH_URL)
   -version          print version
 
 Examples:
@@ -61,7 +61,7 @@ Options:
   -harness string   source harness: codex, hermes, pi, omp
   -event string     source event type, e.g. PreToolUse
   -sync             wait for native response on stdout
-  -url string       Hitch API URL
+  -url string       Hitch API URL (overrides HITCH_URL)
   -version          print version
 
 Examples:
@@ -87,7 +87,7 @@ Usage:
 Options:
   --only string    comma-separated harness list (default: detected supported harnesses)
   --all            select all known harnesses
-  --url string     Hitch API URL embedded in installed hook commands
+  --url string     Hitch API URL pinned into installed hook commands/extensions
   --dry-run        show changes without writing
   --yes            confirm filesystem changes
   --json           emit JSON

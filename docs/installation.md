@@ -22,7 +22,7 @@ Dry run all harnesses:
 hitch-client install --all --dry-run --json
 ```
 
-Install selected hooks. Use `--url` when Hitch is running on a non-default port or config:
+Install selected hooks. Without `--url`, installed hooks resolve the server URL at runtime from `HITCH_URL`, `~/.config/hitch/config.toml`, then `http://127.0.0.1:8799`. Use `--url` to pin a remote or non-default Hitch server directly into generated hooks/extensions:
 
 ```sh
 hitch-client install --only codex --yes --json
@@ -44,8 +44,8 @@ Installer behavior verified by tests:
 - Pi extension installation covers Pi's documented extension event callbacks and is idempotent.
 - OMP extension installation covers OMP's current extension lifecycle, tool, session, retry, and user-command events and is idempotent.
 - Installed clients know about the full source-event catalog where the harness exposes it, but the seeded server config only persists the recommended low-noise subset. Add opt-in `[harness.<name>.event_map]` rows from `docs/events.md` to capture excluded source events.
-- Generated Codex and Hermes hook commands embed the resolved Hitch API URL and use `hitch-client` when it is available.
-- Generated Pi and OMP extensions embed the resolved Hitch API URL, promote extension `ctx` metadata into Hitch envelope fields when available, and fail open if Hitch is unavailable.
+- Generated Codex and Hermes hook commands omit `-url` by default, resolve the Hitch API URL at runtime, and use `hitch-client` when it is available.
+- Generated Pi and OMP extensions resolve the Hitch API URL at runtime unless `--url` pins one, promote extension `ctx` metadata into Hitch envelope fields when available, and fail open if Hitch is unavailable.
 - Existing Codex, Hermes, Pi, and OMP hook configuration is backed up before Hitch modifies it.
 - Unknown harness names are rejected.
 - Uninstall removes only Hitch-managed Codex, Hermes, Pi, or OMP hooks and leaves user config in place.

@@ -31,7 +31,7 @@ func prepareInstallerTest(t *testing.T, harness string) string {
 func TestInstallDryRunPlansWithoutMutatingFilesystem(t *testing.T) {
 	prepareInstallerTest(t, "codex")
 
-	ops, err := plannedOps([]string{"codex"}, false, "")
+	ops, err := plannedOps([]string{"codex"}, false, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestInstallDryRunPlansWithoutMutatingFilesystem(t *testing.T) {
 func TestApplyOpsDoesNotSeedServerConfig(t *testing.T) {
 	prepareInstallerTest(t, "codex")
 
-	ops, err := plannedOps([]string{"codex"}, false, "")
+	ops, err := plannedOps([]string{"codex"}, false, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestApplyOpsDoesNotSeedServerConfig(t *testing.T) {
 func TestApplyOpsInstallsCodexHookIdempotentlyAndBacksUpExistingFile(t *testing.T) {
 	prepareInstallerTest(t, "codex")
 
-	ops, err := plannedOps([]string{"codex"}, false, "")
+	ops, err := plannedOps([]string{"codex"}, false, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,14 +114,14 @@ func TestApplyOpsInstallsCodexHookIdempotentlyAndBacksUpExistingFile(t *testing.
 func TestApplyOpsUninstallRemovesOnlyManagedCodexHook(t *testing.T) {
 	prepareInstallerTest(t, "codex")
 
-	ops, err := plannedOps([]string{"codex"}, false, "")
+	ops, err := plannedOps([]string{"codex"}, false, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	removeOps, err := plannedOps([]string{"codex"}, true, "")
+	removeOps, err := plannedOps([]string{"codex"}, true, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestApplyOpsUninstallRemovesOnlyManagedCodexHook(t *testing.T) {
 func TestApplyOpsInstallsHermesHooksIdempotentlyAndBacksUpExistingFile(t *testing.T) {
 	prepareInstallerTest(t, "hermes")
 
-	ops, err := plannedOps([]string{"hermes"}, false, "")
+	ops, err := plannedOps([]string{"hermes"}, false, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestApplyOpsInstallsHermesHooksIdempotentlyAndBacksUpExistingFile(t *testin
 func TestPlannedOpsEmbedsAdapterURLInHermesHookCommand(t *testing.T) {
 	prepareInstallerTest(t, "hermes")
 
-	ops, err := plannedOps([]string{"hermes"}, false, "http://127.0.0.1:8797")
+	ops, err := plannedOps([]string{"hermes"}, false, "http://127.0.0.1:8797", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,10 +211,30 @@ func TestPlannedOpsEmbedsAdapterURLInHermesHookCommand(t *testing.T) {
 	}
 }
 
+func TestPlannedOpsOmitsAdapterURLWhenNotPinned(t *testing.T) {
+	for _, harnessName := range []string{"codex", "hermes"} {
+		t.Run(harnessName, func(t *testing.T) {
+			prepareInstallerTest(t, harnessName)
+
+			ops, err := plannedOps([]string{harnessName}, false, "", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			command := ops[0].Reason
+			if strings.Contains(command, "-url") {
+				t.Fatalf("unpinned hook command should resolve URL at runtime, got %q", command)
+			}
+			if !strings.HasSuffix(command, "hitch-client'") {
+				t.Fatalf("hook command should be hitch-client only before harness flags, got %q", command)
+			}
+		})
+	}
+}
+
 func TestApplyOpsInstallsPiExtensionIdempotentlyAndBacksUpExistingFile(t *testing.T) {
 	prepareInstallerTest(t, "pi")
 
-	ops, err := plannedOps([]string{"pi"}, false, "http://127.0.0.1:8797")
+	ops, err := plannedOps([]string{"pi"}, false, "http://127.0.0.1:8797", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +249,7 @@ func TestApplyOpsInstallsPiExtensionIdempotentlyAndBacksUpExistingFile(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(first), `const HITCH_API_URL = "http://127.0.0.1:8797";`) || !strings.Contains(string(first), `pi.on(sourceEventType, async (event, ctx)`) || !strings.Contains(string(first), `metadata: collectMetadata(event, ctx)`) || !strings.Contains(string(first), `"tool_call"`) || !strings.Contains(string(first), `source_event_type: sourceEventType`) {
+	if !strings.Contains(string(first), `const HITCH_PINNED_API_URL = "http://127.0.0.1:8797";`) || !strings.Contains(string(first), `function hitchAPIURL()`) || !strings.Contains(string(first), `envString("HITCH_URL")`) || !strings.Contains(string(first), `pi.on(sourceEventType, async (event, ctx)`) || !strings.Contains(string(first), `metadata: collectMetadata(event, ctx)`) || !strings.Contains(string(first), `"tool_call"`) || !strings.Contains(string(first), `source_event_type: sourceEventType`) {
 		t.Fatalf("Pi extension did not embed expected adapter logic: %s", first)
 	}
 	if err := applyOps(ops, false); err != nil {
@@ -258,7 +278,7 @@ func TestApplyOpsInstallsPiExtensionIdempotentlyAndBacksUpExistingFile(t *testin
 func TestApplyOpsInstallsOMPExtensionIdempotentlyAndBacksUpExistingFile(t *testing.T) {
 	prepareInstallerTest(t, "omp")
 
-	ops, err := plannedOps([]string{"omp"}, false, "http://127.0.0.1:8797")
+	ops, err := plannedOps([]string{"omp"}, false, "http://127.0.0.1:8797", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +295,7 @@ func TestApplyOpsInstallsOMPExtensionIdempotentlyAndBacksUpExistingFile(t *testi
 	}
 	content := string(first)
 	for _, needle := range []string{
-		`const HITCH_API_URL = "http://127.0.0.1:8797";`,
+		`const HITCH_PINNED_API_URL = "http://127.0.0.1:8797";`,
 		`pi.on(sourceEventType, async (event, ctx)`,
 		`metadata: collectMetadata(event, ctx)`,
 		`"session_before_branch"`,
@@ -313,14 +333,14 @@ func TestApplyOpsInstallsOMPExtensionIdempotentlyAndBacksUpExistingFile(t *testi
 func TestApplyOpsUninstallRemovesOnlyManagedPiExtension(t *testing.T) {
 	prepareInstallerTest(t, "pi")
 
-	ops, err := plannedOps([]string{"pi"}, false, "")
+	ops, err := plannedOps([]string{"pi"}, false, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	removeOps, err := plannedOps([]string{"pi"}, true, "")
+	removeOps, err := plannedOps([]string{"pi"}, true, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +381,7 @@ func TestPlannedOpsUsesHitchClientWhenAvailable(t *testing.T) {
 			}
 			t.Setenv("HITCH_CLIENT_BINARY_PATH", clientPath)
 
-			ops, err := plannedOps([]string{harnessName}, false, "http://127.0.0.1:8797")
+			ops, err := plannedOps([]string{harnessName}, false, "http://127.0.0.1:8797", true)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -419,7 +439,7 @@ func TestUninstallMatchesLegacyAndClientManagedHooks(t *testing.T) {
 func TestApplyOpsUninstallRemovesOnlyManagedHermesHooks(t *testing.T) {
 	prepareInstallerTest(t, "hermes")
 
-	ops, err := plannedOps([]string{"hermes"}, false, "")
+	ops, err := plannedOps([]string{"hermes"}, false, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +454,7 @@ func TestApplyOpsUninstallRemovesOnlyManagedHermesHooks(t *testing.T) {
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	removeOps, err := plannedOps([]string{"hermes"}, true, "")
+	removeOps, err := plannedOps([]string{"hermes"}, true, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -472,7 +492,7 @@ func TestDetectHarnessesReportsAvailabilityAndSupport(t *testing.T) {
 func TestPlannedOpsInstallsAvailableOMPHarness(t *testing.T) {
 	prepareInstallerTest(t, "omp")
 
-	ops, err := plannedOps([]string{"omp"}, false, "")
+	ops, err := plannedOps([]string{"omp"}, false, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +507,7 @@ func TestPlannedOpsInstallsAvailableOMPHarness(t *testing.T) {
 func TestPlannedOpsRejectsUnknownHarness(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
-	if _, err := plannedOps([]string{"unknown"}, false, ""); err == nil {
+	if _, err := plannedOps([]string{"unknown"}, false, "", false); err == nil {
 		t.Fatal("expected unsupported harness error")
 	}
 }

@@ -137,20 +137,13 @@ func TestRunHonorsURL(t *testing.T) {
 }
 
 func TestDefaultURLPrefersEnvOverConfig(t *testing.T) {
-	t.Setenv("HITCH_API_URL", "http://api-url:1")
-	t.Setenv("HITCH_URL", "http://url:2")
-	if got := DefaultURL(); got != "http://api-url:1" {
-		t.Fatalf("HITCH_API_URL should win, got %s", got)
-	}
-
-	t.Setenv("HITCH_API_URL", "")
-	if got := DefaultURL(); got != "http://url:2" {
-		t.Fatalf("HITCH_URL should win when HITCH_API_URL is absent, got %s", got)
+	t.Setenv("HITCH_URL", "http://url:1")
+	if got := DefaultURL(); got != "http://url:1" {
+		t.Fatalf("HITCH_URL should win, got %s", got)
 	}
 }
 
 func TestDefaultURLUsesConfigWhenEnvAbsent(t *testing.T) {
-	t.Setenv("HITCH_API_URL", "")
 	t.Setenv("HITCH_URL", "")
 	home := t.TempDir()
 	t.Setenv("HOME", home)
