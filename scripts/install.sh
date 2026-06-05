@@ -109,7 +109,7 @@ server_url_command() {
 
 hook_setup_command() {
   if [ -n "$HITCH_URL" ]; then
-    printf '%s/hitch-client install --url %s' "$HITCH_INSTALL_DIR" "$HITCH_URL"
+    printf '%s/hitch-client install --url '\''%s'\''' "$HITCH_INSTALL_DIR" "$HITCH_URL"
   else
     printf '%s/hitch-client install' "$HITCH_INSTALL_DIR"
   fi

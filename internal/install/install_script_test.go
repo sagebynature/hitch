@@ -104,7 +104,7 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 			wantOutput: []string{
 				"Installed Hitch client to",
 				"Run hook setup with:",
-				"--url http://127.0.0.1:9876",
+				"--url 'http://127.0.0.1:9876'",
 				"hitch-client install",
 			},
 		},
