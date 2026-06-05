@@ -42,6 +42,21 @@ func TestValidateEnvelope(t *testing.T) {
 	}
 }
 
+func TestNewGranularEventTypesAreValid(t *testing.T) {
+	for _, eventType := range []EventType{
+		EventTurnAssistantCompleted,
+		EventLLMRequested,
+		EventLLMCompleted,
+		EventToolProgress,
+		EventRetryStarted,
+		EventRetryCompleted,
+	} {
+		if !IsValidEventType(eventType) {
+			t.Fatalf("event type %q should be valid", eventType)
+		}
+	}
+}
+
 func TestNormalizeHandlerResult(t *testing.T) {
 	r := HandlerResult{Status: StatusOK}
 	if err := NormalizeHandlerResult(&r); err != nil {

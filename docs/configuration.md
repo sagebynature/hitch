@@ -31,12 +31,12 @@ Handler commands receive the normalized Hitch event envelope as JSON on stdin an
 
 `handlers.<name>.working_dir` is optional. When set through a loaded config file, relative values resolve against the directory containing that config file. Hitch runs the handler command from that directory, so relative command arguments and output paths are stable regardless of where `hitch serve` was launched.
 
-Harness event maps live in config. The default config includes the supported mappings; edit or add entries in the relevant map to change source hook normalization:
+Harness event maps live in config. The default config includes the recommended low-noise mappings. Duplicate, high-volume, or product-specific source events are documented in `docs/events.md` as opt-in catalog rows; add entries in the relevant map to capture them:
 
 ```toml
-[harness.codex.event_map]
-PreToolUse = "tool.permission_requested"
-CustomHook = "turn.started"
+[harness.omp.event_map]
+before_provider_request = "llm.requested"
+tool_execution_update = "tool.progress"
 ```
 
 Keys are source hook/callback names. Values are normalized Hitch event names. Unknown source events are rejected unless configured here.

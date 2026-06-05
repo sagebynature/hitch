@@ -166,3 +166,41 @@ func TestUnsupportedSourceEventRejected(t *testing.T) {
 		t.Fatalf("unsupported source event code %d body %s", w.Code, w.Body.String())
 	}
 }
+
+func TestDefaultConfigExcludesNoisySourceEventsButAllowsOptIn(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	defaultServer := New(testConfig(), slog.Default(), st)
+	defaultReq := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"harness":"omp","source_event_type":"before_provider_request","source_payload":{"type":"before_provider_request","payload":{"model":"gpt-test"}},"hitch_client_version":"test"}`))
+	defaultW := httptest.NewRecorder()
+	defaultServer.Handler().ServeHTTP(defaultW, defaultReq)
+	if defaultW.Code != http.StatusBadRequest {
+		t.Fatalf("default config should reject excluded source event, got %d body %s", defaultW.Code, defaultW.Body.String())
+	}
+
+	cfg := testConfig()
+	cfg.Harness.OMP.EventMap["before_provider_request"] = protocol.EventLLMRequested
+	optInServer := New(cfg, slog.Default(), st)
+	optInReq := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"harness":"omp","source_event_type":"before_provider_request","source_payload":{"type":"before_provider_request","payload":{"model":"gpt-test"}},"hitch_client_version":"test"}`))
+	optInW := httptest.NewRecorder()
+	optInServer.Handler().ServeHTTP(optInW, optInReq)
+	if optInW.Code != http.StatusAccepted {
+		t.Fatalf("opt-in config should accept source event, got %d body %s", optInW.Code, optInW.Body.String())
+	}
+	var resp EventResponse
+	if err := json.Unmarshal(optInW.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.Normalized.HitchEventType != protocol.EventLLMRequested {
+		t.Fatalf("opt-in mapping did not use llm.requested: %#v", inspection.Normalized)
+	}
+}

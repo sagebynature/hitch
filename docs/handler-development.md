@@ -34,10 +34,11 @@ Common mappings:
 | Developer goal | Hitch event | Example source events |
 | --- | --- | --- |
 | Inspect or block a tool before it runs | `tool.requested` | Codex `PreToolUse`, Hermes `pre_tool_call`, Pi/OMP `tool_call` |
-| Inspect a completed tool result | `tool.completed` | Codex `PostToolUse`, Hermes `post_tool_call`, Pi/OMP `tool_result` |
+| Inspect a completed tool result | `tool.completed` | Codex `PostToolUse`, Hermes `transform_tool_result`, Pi/OMP `tool_result` |
 | Add context to a user request | `turn.user_prompt` | Codex `UserPromptSubmit`, Hermes `pre_gateway_dispatch`, Pi/OMP `input` |
-| Run at model or agent turn start | `turn.started` | Hermes `pre_llm_call`, Pi `turn_start`, OMP `turn_start` |
-| Run after model or agent turn completion | `turn.completed` | Codex `Stop`, Hermes `post_llm_call`, Pi/OMP `turn_end` |
+| Inspect or augment an LLM request | `llm.requested` | Hermes `pre_llm_call`; Pi/OMP `before_provider_request` when opted in |
+| Run at model or agent turn start | `turn.started` | Pi `turn_start`, OMP `turn_start` |
+| Run after model or agent turn completion | `turn.completed` | Codex `Stop`, Pi/OMP `turn_end` |
 | Handle compaction lifecycle | `session.compacted` | Codex `PreCompact`, Pi `session_before_compact`, OMP `auto_compaction_start` |
 
 You may also subscribe to `"*"` during development. For production handlers, prefer explicit event names.

@@ -25,26 +25,34 @@ var validHarnesses = map[Harness]struct{}{
 type EventType string
 
 const (
-	EventSessionStarted        EventType = "session.started"
-	EventSessionResumed        EventType = "session.resumed"
-	EventSessionEnded          EventType = "session.ended"
-	EventSessionCompacted      EventType = "session.compacted"
-	EventTurnStarted           EventType = "turn.started"
-	EventTurnUserPrompt        EventType = "turn.user_prompt"
-	EventTurnAssistantStarted  EventType = "turn.assistant_started"
-	EventTurnCompleted         EventType = "turn.completed"
-	EventToolRequested         EventType = "tool.requested"
-	EventToolPermissionRequest EventType = "tool.permission_requested"
-	EventToolCompleted         EventType = "tool.completed"
-	EventSubagentStarted       EventType = "subagent.started"
-	EventSubagentCompleted     EventType = "subagent.completed"
-	EventErrorReported         EventType = "error.reported"
+	EventSessionStarted         EventType = "session.started"
+	EventSessionResumed         EventType = "session.resumed"
+	EventSessionEnded           EventType = "session.ended"
+	EventSessionCompacted       EventType = "session.compacted"
+	EventTurnStarted            EventType = "turn.started"
+	EventTurnUserPrompt         EventType = "turn.user_prompt"
+	EventTurnAssistantStarted   EventType = "turn.assistant_started"
+	EventTurnAssistantCompleted EventType = "turn.assistant_completed"
+	EventTurnCompleted          EventType = "turn.completed"
+	EventLLMRequested           EventType = "llm.requested"
+	EventLLMCompleted           EventType = "llm.completed"
+	EventToolRequested          EventType = "tool.requested"
+	EventToolPermissionRequest  EventType = "tool.permission_requested"
+	EventToolCompleted          EventType = "tool.completed"
+	EventToolProgress           EventType = "tool.progress"
+	EventRetryStarted           EventType = "retry.started"
+	EventRetryCompleted         EventType = "retry.completed"
+	EventSubagentStarted        EventType = "subagent.started"
+	EventSubagentCompleted      EventType = "subagent.completed"
+	EventErrorReported          EventType = "error.reported"
 )
 
 var validEventTypes = map[EventType]struct{}{
 	EventSessionStarted: {}, EventSessionResumed: {}, EventSessionEnded: {}, EventSessionCompacted: {},
-	EventTurnStarted: {}, EventTurnUserPrompt: {}, EventTurnAssistantStarted: {}, EventTurnCompleted: {},
-	EventToolRequested: {}, EventToolPermissionRequest: {}, EventToolCompleted: {},
+	EventTurnStarted: {}, EventTurnUserPrompt: {}, EventTurnAssistantStarted: {}, EventTurnAssistantCompleted: {}, EventTurnCompleted: {},
+	EventLLMRequested: {}, EventLLMCompleted: {},
+	EventToolRequested: {}, EventToolPermissionRequest: {}, EventToolCompleted: {}, EventToolProgress: {},
+	EventRetryStarted: {}, EventRetryCompleted: {},
 	EventSubagentStarted: {}, EventSubagentCompleted: {}, EventErrorReported: {},
 }
 

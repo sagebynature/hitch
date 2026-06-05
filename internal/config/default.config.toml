@@ -51,31 +51,25 @@ enabled = true
 
 [harness.hermes.event_map]
 pre_tool_call = "tool.requested"
-post_tool_call = "tool.completed"
-pre_llm_call = "turn.user_prompt"
-post_llm_call = "turn.completed"
+pre_llm_call = "llm.requested"
 on_session_start = "session.started"
 on_session_end = "session.ended"
 subagent_stop = "subagent.completed"
 transform_tool_result = "tool.completed"
 transform_terminal_output = "tool.completed"
-transform_llm_output = "turn.completed"
+transform_llm_output = "llm.completed"
 pre_gateway_dispatch = "turn.user_prompt"
+# Full source-event catalog and opt-in mappings are documented in docs/events.md.
 
 [harness.pi]
 enabled = true
 
 [harness.pi.event_map]
 input = "turn.user_prompt"
-before_agent_start = "turn.started"
-agent_start = "turn.started"
 turn_start = "turn.started"
-context = "turn.started"
-before_provider_request = "turn.started"
 tool_call = "tool.requested"
 tool_result = "tool.completed"
 turn_end = "turn.completed"
-agent_end = "turn.completed"
 session_start = "session.started"
 session_shutdown = "session.ended"
 session_before_switch = "session.resumed"
@@ -83,28 +77,18 @@ session_before_fork = "session.resumed"
 session_before_compact = "session.compacted"
 session_compact = "session.compacted"
 user_bash = "tool.requested"
+# Full source-event catalog and opt-in mappings are documented in docs/events.md.
 
 [harness.omp]
 enabled = true
 
 [harness.omp.event_map]
 input = "turn.user_prompt"
-before_agent_start = "turn.started"
-agent_start = "turn.started"
-agent_end = "turn.completed"
 turn_start = "turn.started"
 turn_end = "turn.completed"
-before_provider_request = "turn.started"
-after_provider_response = "turn.completed"
-context = "turn.started"
-message_start = "turn.assistant_started"
-# message_update = "turn.assistant_started" // too verbose
-message_end = "turn.completed"
+message_end = "turn.assistant_completed"
 tool_call = "tool.requested"
 tool_result = "tool.completed"
-tool_execution_start = "tool.requested"
-tool_execution_update = "tool.completed"
-tool_execution_end = "tool.completed"
 session_start = "session.started"
 session_before_switch = "session.resumed"
 session_switch = "session.resumed"
@@ -118,14 +102,10 @@ session_tree = "session.resumed"
 session_shutdown = "session.ended"
 auto_compaction_start = "session.compacted"
 auto_compaction_end = "session.compacted"
-auto_retry_start = "turn.started"
-auto_retry_end = "turn.completed"
-ttsr_triggered = "turn.started"
-todo_reminder = "turn.started"
-goal_updated = "turn.started"
 credential_disabled = "error.reported"
 user_bash = "tool.requested"
 user_python = "tool.requested"
+# Full source-event catalog and opt-in mappings are documented in docs/events.md.
 
 [handlers.noop_observer]
 command = ["hitch", "handler", "noop-observer"]

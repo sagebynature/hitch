@@ -43,6 +43,7 @@ Installer behavior verified by tests:
 - Hermes hook installation covers `pre_tool_call`, `post_tool_call`, `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`, `subagent_stop`, `transform_tool_result`, `transform_terminal_output`, `transform_llm_output`, and `pre_gateway_dispatch`, and is idempotent.
 - Pi extension installation covers Pi's documented extension event callbacks and is idempotent.
 - OMP extension installation covers OMP's current extension lifecycle, tool, session, retry, and user-command events and is idempotent.
+- Installed clients know about the full source-event catalog where the harness exposes it, but the seeded server config only persists the recommended low-noise subset. Add opt-in `[harness.<name>.event_map]` rows from `docs/events.md` to capture excluded source events.
 - Generated Codex and Hermes hook commands embed the resolved Hitch API URL and use `hitch-client` when it is available.
 - Generated Pi and OMP extensions embed the resolved Hitch API URL, promote extension `ctx` metadata into Hitch envelope fields when available, and fail open if Hitch is unavailable.
 - Existing Codex, Hermes, Pi, and OMP hook configuration is backed up before Hitch modifies it.

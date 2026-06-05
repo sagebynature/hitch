@@ -140,7 +140,7 @@ on_timeout = "fail_open"</code></pre>
           <h3>Step-by-step</h3>
           <ol>
             <li>Choose async observer mode for passive work, or sync control mode when the harness needs a decision.</li>
-            <li>Pick normalized event names such as <code>tool.requested</code>, <code>turn.user_prompt</code>, or <code>tool.completed</code>. Use the Hitch event mapping below to connect source harness events to normalized names.</li>
+            <li>Pick normalized event names such as <code>tool.requested</code>, <code>llm.requested</code>, <code>turn.user_prompt</code>, or <code>tool.completed</code>. Use the Hitch event mapping below to connect source harness events to normalized names.</li>
             <li>Add a <code>[handlers.&lt;name&gt;]</code> config entry with <code>command</code>, <code>events</code>, <code>mode</code>, <code>timeout_ms</code>, and fail-open or fail-closed policy.</li>
             <li>Read <code>hitch_event_type</code> first. Inspect <code>harness</code> and <code>source_event_type</code> only when a harness-specific field is needed.</li>
             <li>Return a decision behavior: <code>none</code>, <code>allow</code>, <code>deny</code>, <code>block</code>, <code>continue</code>, <code>stop</code>, <code>transform</code>, <code>replace_result</code>, <code>inject_context</code>, or <code>handled</code>.</li>
@@ -184,7 +184,7 @@ on_timeout = "fail_open"</code></pre>
         <section id="hitch-events">
           <h2>Hitch events</h2>
           <p>Hitch normalizes Codex, Hermes, Pi, and OMP source events into one stable envelope. Current normalizers preserve the source payload unchanged in both <code>source_payload</code> and <code>payload</code> where no canonical extractor is defined, then set <code>hitch_event_type</code> from the server-side event map.</p>
-          <p>Per-harness <code>[harness.&lt;name&gt;.event_map]</code> config entries are the source of truth for source-event to Hitch-event mapping. The default config includes the supported mappings; operators can edit or add entries without changing clients.</p>
+          <p>Per-harness <code>[harness.&lt;name&gt;.event_map]</code> config entries are the source of truth for source-event to Hitch-event mapping. The default config intentionally omits duplicate or high-volume observer events; the catalog below marks those as opt-in so operators can add them when needed.</p>
           <h3>Normalized event types</h3>
           <table>
             <thead><tr><th>Hitch event</th><th>Meaning</th></tr></thead>
@@ -193,16 +193,22 @@ on_timeout = "fail_open"</code></pre>
               <tr><td><code>session.resumed</code></td><td>A switch, fork, or resume-like session transition is about to occur.</td></tr>
               <tr><td><code>session.ended</code></td><td>A session or agent lifecycle ends.</td></tr>
               <tr><td><code>session.compacted</code></td><td>Context compaction starts, completes, or is about to run.</td></tr>
-              <tr><td><code>turn.started</code></td><td>A model turn, agent turn, or provider request begins.</td></tr>
+              <tr><td><code>turn.started</code></td><td>A model or agent turn begins.</td></tr>
               <tr><td><code>turn.user_prompt</code></td><td>User input or gateway dispatch is submitted.</td></tr>
-              <tr><td><code>turn.assistant_started</code></td><td>Reserved. No current mapper emits this event.</td></tr>
-              <tr><td><code>turn.completed</code></td><td>A model turn, agent turn, or assistant output completes.</td></tr>
+              <tr><td><code>turn.assistant_started</code></td><td>Assistant output starts; retained for compatibility with earlier configs.</td></tr>
+              <tr><td><code>turn.assistant_completed</code></td><td>Assistant output is available.</td></tr>
+              <tr><td><code>turn.completed</code></td><td>A model or agent turn completes.</td></tr>
+              <tr><td><code>llm.requested</code></td><td>A provider/LLM request is about to be sent. High-volume provider payloads are opt-in for Pi/OMP defaults.</td></tr>
+              <tr><td><code>llm.completed</code></td><td>A provider/LLM response or transformed model output is available.</td></tr>
               <tr><td><code>tool.requested</code></td><td>A tool command, shell command, or tool call is requested before execution.</td></tr>
               <tr><td><code>tool.permission_requested</code></td><td>A harness-specific permission decision is requested.</td></tr>
-              <tr><td><code>tool.completed</code></td><td>A tool result, terminal output, or transformed tool result is available.</td></tr>
+              <tr><td><code>tool.completed</code></td><td>A final tool result, terminal output, or transformed tool result is available.</td></tr>
+              <tr><td><code>tool.progress</code></td><td>Incremental tool output is available before final completion.</td></tr>
+              <tr><td><code>retry.started</code></td><td>A harness retry cycle starts.</td></tr>
+              <tr><td><code>retry.completed</code></td><td>A harness retry cycle completes.</td></tr>
               <tr><td><code>subagent.started</code></td><td>A subagent starts.</td></tr>
               <tr><td><code>subagent.completed</code></td><td>A subagent completes or stops.</td></tr>
-              <tr><td><code>error.reported</code></td><td>Reserved. No current mapper emits this event.</td></tr>
+              <tr><td><code>error.reported</code></td><td>A normalized harness error or credential failure is reported.</td></tr>
             </tbody>
           </table>
 
@@ -227,17 +233,17 @@ on_timeout = "fail_open"</code></pre>
           <table>
             <thead><tr><th>Native event</th><th>Hitch event</th><th>Translated response</th></tr></thead>
             <tbody>
-              <tr><td><code>pre_tool_call</code></td><td><code>tool.requested</code></td><td><code>block</code>, <code>deny</code>, or <code>stop</code> returns <code>action:"block"</code> and <code>message</code>.</td></tr>
-              <tr><td><code>post_tool_call</code></td><td><code>tool.completed</code></td><td>No special translation.</td></tr>
-              <tr><td><code>pre_llm_call</code></td><td><code>turn.started</code></td><td><code>inject_context</code> returns <code>context</code>.</td></tr>
-              <tr><td><code>post_llm_call</code></td><td><code>turn.completed</code></td><td>No special translation.</td></tr>
-              <tr><td><code>on_session_start</code></td><td><code>session.started</code></td><td>No special translation.</td></tr>
-              <tr><td><code>on_session_end</code></td><td><code>session.ended</code></td><td>No special translation.</td></tr>
-              <tr><td><code>subagent_stop</code></td><td><code>subagent.completed</code></td><td>No special translation.</td></tr>
-              <tr><td><code>transform_tool_result</code></td><td><code>tool.completed</code></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
-              <tr><td><code>transform_terminal_output</code></td><td><code>tool.completed</code></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
-              <tr><td><code>transform_llm_output</code></td><td><code>turn.completed</code></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
-              <tr><td><code>pre_gateway_dispatch</code></td><td><code>turn.user_prompt</code></td><td><code>handled</code> returns <code>action:"skip"</code>; <code>transform</code> returns <code>action:"rewrite"</code>; <code>allow</code> returns <code>action:"allow"</code>.</td></tr>
+              <tr><td><code>pre_tool_call</code></td><td><code>tool.requested</code> <small>(default)</small></td><td><code>block</code>, <code>deny</code>, or <code>stop</code> returns <code>action:"block"</code> and <code>message</code>.</td></tr>
+              <tr><td><code>post_tool_call</code></td><td><code>tool.completed</code> <small>(opt-in)</small></td><td>Observer-only duplicate of <code>transform_tool_result</code> in observed runs; no special translation.</td></tr>
+              <tr><td><code>pre_llm_call</code></td><td><code>llm.requested</code> <small>(default)</small></td><td><code>inject_context</code> returns <code>context</code>.</td></tr>
+              <tr><td><code>post_llm_call</code></td><td><code>llm.completed</code> <small>(opt-in)</small></td><td>Observer-only and potentially large; no special translation.</td></tr>
+              <tr><td><code>on_session_start</code></td><td><code>session.started</code> <small>(default)</small></td><td>No special translation.</td></tr>
+              <tr><td><code>on_session_end</code></td><td><code>session.ended</code> <small>(default)</small></td><td>No special translation.</td></tr>
+              <tr><td><code>subagent_stop</code></td><td><code>subagent.completed</code> <small>(default)</small></td><td>No special translation.</td></tr>
+              <tr><td><code>transform_tool_result</code></td><td><code>tool.completed</code> <small>(default)</small></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
+              <tr><td><code>transform_terminal_output</code></td><td><code>tool.completed</code> <small>(default)</small></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
+              <tr><td><code>transform_llm_output</code></td><td><code>llm.completed</code> <small>(default)</small></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
+              <tr><td><code>pre_gateway_dispatch</code></td><td><code>turn.user_prompt</code> <small>(default)</small></td><td><code>handled</code> returns <code>action:"skip"</code>; <code>transform</code> returns <code>action:"rewrite"</code>; <code>allow</code> returns <code>action:"allow"</code>.</td></tr>
             </tbody>
           </table>
 
@@ -246,16 +252,21 @@ on_timeout = "fail_open"</code></pre>
           <table>
             <thead><tr><th>Native event</th><th>Hitch event</th><th>Adapter response</th></tr></thead>
             <tbody>
-              <tr><td><code>input</code></td><td><code>turn.user_prompt</code></td><td><code>transform</code> returns a transformed input action; <code>handled</code> returns handled; <code>continue</code> or <code>allow</code> returns continue.</td></tr>
-              <tr><td><code>before_agent_start</code>, <code>agent_start</code>, <code>turn_start</code>, <code>context</code>, <code>before_provider_request</code></td><td><code>turn.started</code></td><td><code>context</code> and <code>before_provider_request</code> may return transformed input; otherwise <code>noop</code>.</td></tr>
-              <tr><td><code>tool_call</code></td><td><code>tool.requested</code></td><td><code>block</code>, <code>deny</code>, or <code>stop</code> returns a block object; <code>transform</code> mutates source path <code>input</code>.</td></tr>
-              <tr><td><code>tool_result</code></td><td><code>tool.completed</code></td><td><code>replace_result</code> or <code>transform</code> returns <code>updated_output</code>.</td></tr>
-              <tr><td><code>turn_end</code>, <code>agent_end</code></td><td><code>turn.completed</code></td><td><code>noop</code>.</td></tr>
-              <tr><td><code>session_start</code></td><td><code>session.started</code></td><td><code>noop</code>.</td></tr>
-              <tr><td><code>session_shutdown</code></td><td><code>session.ended</code></td><td><code>noop</code>.</td></tr>
-              <tr><td><code>session_before_switch</code>, <code>session_before_fork</code></td><td><code>session.resumed</code></td><td><code>block</code> or <code>stop</code> returns <code>{cancel:true}</code>.</td></tr>
-              <tr><td><code>session_before_compact</code>, <code>session_compact</code></td><td><code>session.compacted</code></td><td><code>session_before_compact</code> can return <code>{cancel:true}</code>; <code>session_compact</code> is <code>noop</code>.</td></tr>
-              <tr><td><code>user_bash</code></td><td><code>tool.requested</code></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>input</code></td><td><code>turn.user_prompt</code> <small>(default)</small></td><td><code>transform</code> returns a transformed input action; <code>handled</code> returns handled; <code>continue</code> or <code>allow</code> returns continue.</td></tr>
+              <tr><td><code>before_agent_start</code></td><td><code>turn.started</code> <small>(opt-in)</small></td><td>Large prompt/system-prompt snapshot; no special default translation.</td></tr>
+              <tr><td><code>agent_start</code></td><td><code>turn.started</code> <small>(opt-in)</small></td><td>Observer-only lifecycle marker.</td></tr>
+              <tr><td><code>turn_start</code></td><td><code>turn.started</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>context</code></td><td><code>turn.started</code> <small>(opt-in)</small></td><td>Large context snapshot; <code>transform</code> returns <code>updated_input</code>.</td></tr>
+              <tr><td><code>before_provider_request</code></td><td><code>llm.requested</code> <small>(opt-in)</small></td><td>Large provider request snapshot; <code>transform</code> returns <code>updated_input</code>.</td></tr>
+              <tr><td><code>tool_call</code></td><td><code>tool.requested</code> <small>(default)</small></td><td><code>block</code>, <code>deny</code>, or <code>stop</code> returns a block object; <code>transform</code> mutates source path <code>input</code>.</td></tr>
+              <tr><td><code>tool_result</code></td><td><code>tool.completed</code> <small>(default)</small></td><td><code>replace_result</code> or <code>transform</code> returns <code>updated_output</code>.</td></tr>
+              <tr><td><code>turn_end</code></td><td><code>turn.completed</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>agent_end</code></td><td><code>turn.completed</code> <small>(opt-in)</small></td><td>Large final message snapshot.</td></tr>
+              <tr><td><code>session_start</code></td><td><code>session.started</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>session_shutdown</code></td><td><code>session.ended</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>session_before_switch</code>, <code>session_before_fork</code></td><td><code>session.resumed</code> <small>(default)</small></td><td><code>block</code> or <code>stop</code> returns <code>{cancel:true}</code>.</td></tr>
+              <tr><td><code>session_before_compact</code>, <code>session_compact</code></td><td><code>session.compacted</code> <small>(default)</small></td><td><code>session_before_compact</code> can return <code>{cancel:true}</code>; <code>session_compact</code> is <code>noop</code>.</td></tr>
+              <tr><td><code>user_bash</code></td><td><code>tool.requested</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
             </tbody>
           </table>
 
@@ -264,17 +275,31 @@ on_timeout = "fail_open"</code></pre>
           <table>
             <thead><tr><th>Native event</th><th>Hitch event</th><th>Adapter response</th></tr></thead>
             <tbody>
-              <tr><td><code>input</code></td><td><code>turn.user_prompt</code></td><td>Same translation as Pi <code>input</code>.</td></tr>
-              <tr><td><code>before_agent_start</code>, <code>agent_start</code>, <code>turn_start</code>, <code>context</code>, <code>before_provider_request</code>, <code>message_update</code>, <code>ttsr_triggered</code>, <code>todo_reminder</code>, <code>goal_updated</code></td><td><code>turn.started</code></td><td><code>context</code> and <code>before_provider_request</code> may return transformed input; otherwise <code>noop</code>.</td></tr>
-              <tr><td><code>message_start</code></td><td><code>turn.assistant_started</code></td><td><code>noop</code>.</td></tr>
-              <tr><td><code>agent_end</code>, <code>turn_end</code>, <code>after_provider_response</code>, <code>message_end</code>, <code>auto_retry_end</code></td><td><code>turn.completed</code></td><td><code>noop</code>.</td></tr>
-              <tr><td><code>tool_call</code>, <code>tool_execution_start</code>, <code>user_bash</code>, <code>user_python</code></td><td><code>tool.requested</code></td><td><code>tool_call</code> uses Pi block/transform translation; other events are observational unless <code>native_response</code> is supplied.</td></tr>
-              <tr><td><code>tool_result</code>, <code>tool_execution_update</code>, <code>tool_execution_end</code></td><td><code>tool.completed</code></td><td><code>tool_result</code> uses Pi result replacement translation; other events are observational unless <code>native_response</code> is supplied.</td></tr>
-              <tr><td><code>session_start</code></td><td><code>session.started</code></td><td><code>noop</code>.</td></tr>
-              <tr><td><code>session_before_switch</code>, <code>session_switch</code>, <code>session_before_branch</code>, <code>session_branch</code>, <code>session_before_tree</code>, <code>session_tree</code></td><td><code>session.resumed</code></td><td>Cancelable pre-events return <code>{cancel:true}</code> for <code>block</code> or <code>stop</code>.</td></tr>
-              <tr><td><code>session_before_compact</code>, <code>session.compacting</code>, <code>session_compact</code>, <code>auto_compaction_start</code>, <code>auto_compaction_end</code></td><td><code>session.compacted</code></td><td><code>session_before_compact</code> can return <code>{cancel:true}</code>; compaction customization uses <code>native_response</code>.</td></tr>
-              <tr><td><code>session_shutdown</code></td><td><code>session.ended</code></td><td><code>noop</code>.</td></tr>
-              <tr><td><code>credential_disabled</code></td><td><code>error.reported</code></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>input</code></td><td><code>turn.user_prompt</code> <small>(default)</small></td><td>Same translation as Pi <code>input</code>.</td></tr>
+              <tr><td><code>before_agent_start</code></td><td><code>turn.started</code> <small>(opt-in)</small></td><td>Large prompt/system-prompt snapshot.</td></tr>
+              <tr><td><code>agent_start</code></td><td><code>turn.started</code> <small>(opt-in)</small></td><td>Observer-only lifecycle marker.</td></tr>
+              <tr><td><code>agent_end</code></td><td><code>turn.completed</code> <small>(opt-in)</small></td><td>Large final message snapshot.</td></tr>
+              <tr><td><code>turn_start</code></td><td><code>turn.started</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>turn_end</code></td><td><code>turn.completed</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>context</code></td><td><code>turn.started</code> <small>(opt-in)</small></td><td>Large context snapshot; <code>transform</code> returns <code>updated_input</code>.</td></tr>
+              <tr><td><code>before_provider_request</code></td><td><code>llm.requested</code> <small>(opt-in)</small></td><td>Large provider request snapshot; <code>transform</code> returns <code>updated_input</code>.</td></tr>
+              <tr><td><code>after_provider_response</code></td><td><code>llm.completed</code> <small>(opt-in)</small></td><td>Provider response observer.</td></tr>
+              <tr><td><code>message_start</code>, <code>message_update</code></td><td><code>turn.assistant_started</code> <small>(opt-in)</small></td><td>Assistant-message start/update events; <code>message_update</code> is high-volume.</td></tr>
+              <tr><td><code>message_end</code></td><td><code>turn.assistant_completed</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>tool_call</code></td><td><code>tool.requested</code> <small>(default)</small></td><td>Uses Pi block/transform translation.</td></tr>
+              <tr><td><code>tool_execution_start</code></td><td><code>tool.requested</code> <small>(opt-in)</small></td><td>Observer-only execution start.</td></tr>
+              <tr><td><code>tool_result</code></td><td><code>tool.completed</code> <small>(default)</small></td><td>Uses Pi result replacement translation.</td></tr>
+              <tr><td><code>tool_execution_update</code></td><td><code>tool.progress</code> <small>(opt-in)</small></td><td>Incremental tool output.</td></tr>
+              <tr><td><code>tool_execution_end</code></td><td><code>tool.completed</code> <small>(opt-in)</small></td><td>Observer-only duplicate of <code>tool_result</code> in observed runs.</td></tr>
+              <tr><td><code>session_start</code></td><td><code>session.started</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>session_before_switch</code>, <code>session_switch</code>, <code>session_before_branch</code>, <code>session_branch</code>, <code>session_before_tree</code>, <code>session_tree</code></td><td><code>session.resumed</code> <small>(default)</small></td><td>Cancelable pre-events return <code>{cancel:true}</code> for <code>block</code> or <code>stop</code>.</td></tr>
+              <tr><td><code>session_before_compact</code>, <code>session.compacting</code>, <code>session_compact</code>, <code>auto_compaction_start</code>, <code>auto_compaction_end</code></td><td><code>session.compacted</code> <small>(default)</small></td><td><code>session_before_compact</code> can return <code>{cancel:true}</code>; compaction customization uses <code>native_response</code>.</td></tr>
+              <tr><td><code>session_shutdown</code></td><td><code>session.ended</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>auto_retry_start</code></td><td><code>retry.started</code> <small>(opt-in)</small></td><td>Retry lifecycle marker.</td></tr>
+              <tr><td><code>auto_retry_end</code></td><td><code>retry.completed</code> <small>(opt-in)</small></td><td>Retry lifecycle marker.</td></tr>
+              <tr><td><code>ttsr_triggered</code>, <code>todo_reminder</code>, <code>goal_updated</code></td><td><code>turn.started</code> <small>(opt-in)</small></td><td>Product-specific observer events.</td></tr>
+              <tr><td><code>credential_disabled</code></td><td><code>error.reported</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>user_bash</code>, <code>user_python</code></td><td><code>tool.requested</code> <small>(default)</small></td><td>Observational unless <code>native_response</code> is supplied.</td></tr>
             </tbody>
           </table>
           <p>For every harness, <code>decision.native_response</code> bypasses Hitch's translator and returns harness-native JSON unchanged. See <a href="../../events.md">the markdown event reference</a> for the complete envelope table and response details.</p>

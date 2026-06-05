@@ -137,6 +137,27 @@ func TestDefaultConfigTOMLMatchesEmbeddedConfigFile(t *testing.T) {
 	if cfg.Harness.Codex.EventMap["PreToolUse"] != "tool.requested" || cfg.Harness.Hermes.EventMap["pre_tool_call"] != "tool.requested" {
 		t.Fatalf("default config omitted source event mappings: %#v", cfg.Harness)
 	}
+	if cfg.Harness.Hermes.EventMap["pre_llm_call"] != "llm.requested" || cfg.Harness.Hermes.EventMap["transform_llm_output"] != "llm.completed" {
+		t.Fatalf("default config omitted LLM source event mappings: %#v", cfg.Harness.Hermes.EventMap)
+	}
+	for _, excluded := range []string{"post_tool_call", "post_llm_call"} {
+		if _, ok := cfg.Harness.Hermes.EventMap[excluded]; ok {
+			t.Fatalf("default Hermes map should exclude noisy source event %q", excluded)
+		}
+	}
+	for _, excluded := range []string{"context", "before_provider_request", "before_agent_start", "agent_start", "agent_end"} {
+		if _, ok := cfg.Harness.Pi.EventMap[excluded]; ok {
+			t.Fatalf("default Pi map should exclude noisy source event %q", excluded)
+		}
+	}
+	if cfg.Harness.OMP.EventMap["message_end"] != "turn.assistant_completed" {
+		t.Fatalf("default OMP map should keep message_end as assistant completion: %#v", cfg.Harness.OMP.EventMap)
+	}
+	for _, excluded := range []string{"context", "before_provider_request", "tool_execution_update", "auto_retry_start", "message_start"} {
+		if _, ok := cfg.Harness.OMP.EventMap[excluded]; ok {
+			t.Fatalf("default OMP map should exclude noisy source event %q", excluded)
+		}
+	}
 }
 
 func TestSeedDefaultCreatesValidConfigWithoutOverwritingExistingFile(t *testing.T) {
