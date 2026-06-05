@@ -101,6 +101,7 @@ main() {
 
   "$HITCH_INSTALL_DIR/hitch" --version
   "$HITCH_INSTALL_DIR/hitch-client" --version
+  "$HITCH_INSTALL_DIR/hitch" config init --json
   printf 'Installed Hitch to %s/hitch and %s/hitch-client.\n' "$HITCH_INSTALL_DIR" "$HITCH_INSTALL_DIR"
   maybe_update_path
 
@@ -109,7 +110,7 @@ main() {
   fi
 
   if [ -t 0 ]; then
-    "$HITCH_INSTALL_DIR/hitch" install < /dev/tty
+    "$HITCH_INSTALL_DIR/hitch-client" install < /dev/tty
   else
     printf 'Run hook setup with:\n\n  %s/hitch-client install\n\n' "$HITCH_INSTALL_DIR"
   fi

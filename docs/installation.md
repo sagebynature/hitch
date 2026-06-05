@@ -6,9 +6,9 @@ Install from latest source:
 curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
 ```
 
-The source installer checks for `git` and `go`, builds `./cmd/hitch` and `./cmd/hitch-client`, installs both binaries to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies `hitch --version` and `hitch-client --version`, and then offers to run hook setup.
+The source installer checks for `git` and `go`, builds `./cmd/hitch` and `./cmd/hitch-client`, installs both binaries to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies `hitch --version` and `hitch-client --version`, seeds `~/.config/hitch/config.toml` with `hitch config init`, and then offers to run hook setup.
 
-The current `hitch-client install` command seeds `~/.config/hitch/config.toml` when it is missing, detects Codex, Hermes, Pi, and OMP binaries on `PATH`, installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`, installs Hitch shell hooks for supported Hermes events into `~/.hermes/config.yaml`, and installs a managed Pi extension at `~/.pi/agent/extensions/hitch/index.ts`. Managed shell hook commands execute `hitch-client` directly. `hitch-client uninstall` also recognizes legacy managed hooks that used `hitch adapter`. OMP is detected and reported, but real hook patching is not implemented for it yet.
+The current `hitch-client install` command detects Codex, Hermes, Pi, and OMP binaries on `PATH`, installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`, installs Hitch shell hooks for supported Hermes events into `~/.hermes/config.yaml`, and installs a managed Pi extension at `~/.pi/agent/extensions/hitch/index.ts`. Managed shell hook commands execute `hitch-client` directly. `hitch-client uninstall` also recognizes legacy managed hooks that used `hitch adapter`. OMP is detected and reported, but real hook patching is not implemented for it yet.
 
 Dry run detected supported harnesses:
 
@@ -34,9 +34,9 @@ hitch-client install --only pi --url http://127.0.0.1:8797 --yes --json
 
 Installer behavior verified by tests:
 
-- `--dry-run` does not mutate the filesystem.
-- Missing user config is created at `~/.config/hitch/config.toml` from the embedded default config.
+- `hitch config init` creates missing user config at `~/.config/hitch/config.toml` from the embedded default config.
 - Existing user config is left unchanged.
+- `hitch-client install --dry-run` does not mutate hook configuration.
 - Codex hook installation covers `SessionStart`, `SubagentStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStop`, and `Stop`, and is idempotent.
 - Hermes hook installation covers `pre_tool_call`, `post_tool_call`, `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`, `subagent_stop`, `transform_tool_result`, `transform_terminal_output`, `transform_llm_output`, and `pre_gateway_dispatch`, and is idempotent.
 - Pi extension installation covers Pi's documented extension event callbacks and is idempotent.

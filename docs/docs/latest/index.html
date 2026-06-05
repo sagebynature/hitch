@@ -68,7 +68,7 @@ hitch-client install --only codex --yes --json</code></pre>
 
         <section id="installation">
           <h2>Installation</h2>
-          <p>The source installer checks for <code>git</code> and <code>go</code>, builds <code>./cmd/hitch</code> and <code>./cmd/hitch-client</code>, installs both binaries into <code>$HITCH_INSTALL_DIR</code> or <code>~/.local/bin</code>, verifies <code>hitch --version</code> and <code>hitch-client --version</code>, and offers hook setup when stdin is interactive.</p>
+          <p>The source installer checks for <code>git</code> and <code>go</code>, builds <code>./cmd/hitch</code> and <code>./cmd/hitch-client</code>, installs both binaries into <code>$HITCH_INSTALL_DIR</code> or <code>~/.local/bin</code>, verifies <code>hitch --version</code> and <code>hitch-client --version</code>, seeds <code>~/.config/hitch/config.toml</code> with <code>hitch config init</code>, and offers hook setup when stdin is interactive.</p>
           <h3>Build locally</h3>
           <pre class="code-block"><code>make build
 ./bin/hitch --version
@@ -85,12 +85,13 @@ hitch-client install --only pi --url http://127.0.0.1:8797 --yes --json
 hitch-client uninstall --only codex --yes --json
 hitch-client uninstall --only hermes --yes --json
 hitch-client uninstall --only pi --yes --json</code></pre>
-          <p>The current installer seeds <code>~/.config/hitch/config.toml</code> when missing, installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>, installs Hitch-managed Hermes shell hooks into <code>~/.hermes/config.yaml</code>, and installs a Hitch-managed Pi extension into <code>~/.pi/agent/extensions/hitch/index.ts</code>. Managed shell hook commands embed the resolved <code>-url</code> and execute <code>hitch-client</code> directly. The Pi extension embeds the resolved <code>-url</code>, dispatches Pi extension callbacks plus Pi <code>ctx</code> metadata to Hitch, applies Hitch's Pi adapter response, and fails open when Hitch is unavailable. <code>hitch-client uninstall</code> also recognizes legacy managed shell hooks that used <code>hitch adapter</code>. OMP is detected and reported, but real hook patching is not implemented for it yet.</p>
+          <p>The source installer seeds <code>~/.config/hitch/config.toml</code> when missing. <code>hitch-client install</code> installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>, installs Hitch-managed Hermes shell hooks into <code>~/.hermes/config.yaml</code>, and installs a Hitch-managed Pi extension into <code>~/.pi/agent/extensions/hitch/index.ts</code>. Managed shell hook commands embed the resolved <code>-url</code> and execute <code>hitch-client</code> directly. The Pi extension embeds the resolved <code>-url</code>, dispatches Pi extension callbacks plus Pi <code>ctx</code> metadata to Hitch, applies Hitch's Pi adapter response, and fails open when Hitch is unavailable. <code>hitch-client uninstall</code> also recognizes legacy managed shell hooks that used <code>hitch adapter</code>. OMP is detected and reported, but real hook patching is not implemented for it yet.</p>
         </section>
 
         <section id="configuration">
           <h2>Configuration</h2>
           <p>Hitch reads user configuration from <code>~/.config/hitch/config.toml</code>. Development commands default to <code>config/default.config.toml</code> unless a command receives <code>--config</code> or <code>-config</code>.</p>
+          <pre class="code-block"><code>hitch config init</code></pre>
           <table>
             <thead><tr><th>Section</th><th>Purpose</th></tr></thead>
             <tbody>

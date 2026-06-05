@@ -53,6 +53,7 @@ The installer:
 - builds `./cmd/hitch` and `./cmd/hitch-client`
 - installs the binaries to `~/.local/bin/hitch` and `~/.local/bin/hitch-client` by default
 - prints `hitch --version` and `hitch-client --version`
+- seeds `~/.config/hitch/config.toml` with `hitch config init`
 - offers to run hook setup when stdin is interactive
 
 If `~/.local/bin` is not first on `PATH`, follow the installer output and restart your shell.

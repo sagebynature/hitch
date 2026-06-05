@@ -282,9 +282,6 @@ func titleForHarness(name string) string {
 
 func plannedOps(harnesses []string, uninstall bool, apiURL string) ([]installOperation, error) {
 	ops := []installOperation{}
-	if !uninstall {
-		ops = append(ops, installOperation{Harness: "hitch", Action: "seed_config", Path: config.ExpandHome(config.DefaultPath)})
-	}
 	known := map[string]harnessSpec{}
 	for _, spec := range knownHarnessSpecs() {
 		known[spec.Name] = spec
@@ -369,13 +366,6 @@ func defaultAdapterURL() string {
 func applyOps(ops []installOperation, uninstall bool) error {
 	for _, op := range ops {
 		switch op.Action {
-		case "seed_config":
-			if uninstall {
-				continue
-			}
-			if err := seedConfig(op.Path); err != nil {
-				return err
-			}
 		case "install_codex_hook":
 			if err := installCodexHook(op.Path, op.BackupPath, op.Reason); err != nil {
 				return err
@@ -441,18 +431,6 @@ func applyPlaceholderOp(op installOperation, uninstall bool) error {
 		return err
 	}
 	return os.WriteFile(p, content, 0o644)
-}
-
-func seedConfig(path string) error {
-	if _, err := os.Stat(path); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(config.DefaultConfigTOML), 0o644)
 }
 
 func codexHookInstalled(path string) bool {

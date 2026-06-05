@@ -20,6 +20,12 @@ func printHitchHelp(w io.Writer, topics ...string) {
 			printStatusHelp(w)
 		case "doctor":
 			printDoctorHelp(w)
+		case "config":
+			if len(topics) > 1 && topics[1] == "init" {
+				printConfigInitHelp(w)
+			} else {
+				printConfigHelp(w)
+			}
 		case "inspect-event":
 			printInspectEventHelp(w)
 		case "replay":
@@ -44,6 +50,7 @@ Commands:
   handler         Run a bundled handler
   status          Print runtime/config status
   doctor          Run basic diagnostics
+  config          Manage Hitch server configuration
   inspect-event   Inspect an audited event
   replay          Replay handlers for an audited event
 
@@ -117,6 +124,37 @@ Options:
 Examples:
   hitch doctor
   hitch doctor --json
+`)
+}
+
+func printConfigHelp(w io.Writer) {
+	fmt.Fprint(w, `Manage Hitch server configuration.
+
+Usage:
+  hitch config <command> [options]
+
+Commands:
+  init   Create the default server config if it is missing
+
+Examples:
+  hitch config init
+  hitch config init --path ~/.config/hitch/config.toml --json
+`)
+}
+
+func printConfigInitHelp(w io.Writer) {
+	fmt.Fprint(w, `Create the default Hitch server config if it is missing.
+
+Usage:
+  hitch config init [options]
+
+Options:
+  --path string   config file (default "~/.config/hitch/config.toml")
+  --json          emit JSON
+
+Examples:
+  hitch config init
+  hitch config init --json
 `)
 }
 

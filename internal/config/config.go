@@ -13,6 +13,30 @@ import (
 
 const DefaultPath = "~/.config/hitch/config.toml"
 
+type SeedResult struct {
+	Path    string
+	Created bool
+}
+
+func SeedDefault(path string) (SeedResult, error) {
+	if path == "" {
+		path = DefaultPath
+	}
+	path = ExpandHome(path)
+	if _, err := os.Stat(path); err == nil {
+		return SeedResult{Path: path, Created: false}, nil
+	} else if !os.IsNotExist(err) {
+		return SeedResult{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return SeedResult{}, err
+	}
+	if err := os.WriteFile(path, []byte(DefaultConfigTOML), 0o644); err != nil {
+		return SeedResult{}, err
+	}
+	return SeedResult{Path: path, Created: true}, nil
+}
+
 type Config struct {
 	Server   ServerConfig             `toml:"server"`
 	Log      LogConfig                `toml:"log"`

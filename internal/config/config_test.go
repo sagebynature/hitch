@@ -139,6 +139,47 @@ func TestDefaultConfigTOMLMatchesDevelopmentConfig(t *testing.T) {
 	}
 }
 
+func TestSeedDefaultCreatesValidConfigWithoutOverwritingExistingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nested", "config.toml")
+
+	result, err := SeedDefault(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Created || result.Path != path {
+		t.Fatalf("unexpected seed result: %#v", result)
+	}
+	seeded, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(seeded) != DefaultConfigTOML {
+		t.Fatalf("seeded config does not match default config")
+	}
+	if _, err := Parse(seeded); err != nil {
+		t.Fatalf("seeded config is invalid: %v", err)
+	}
+
+	const existing = "user-owned config\n"
+	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err = SeedDefault(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Created {
+		t.Fatalf("existing config should not be recreated: %#v", result)
+	}
+	current, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(current) != existing {
+		t.Fatalf("seed overwrote existing user config: %q", current)
+	}
+}
+
 func TestParseRejectsUnknownKey(t *testing.T) {
 	_, err := Parse([]byte(baseConfig + "\nunknown = true\n"))
 	if err == nil {

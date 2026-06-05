@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sagebynature/hitch/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -37,18 +36,15 @@ func TestInstallDryRunPlansWithoutMutatingFilesystem(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(ops) != 2 || ops[0].Action != "seed_config" || ops[1].Action != "install_codex_hook" {
+	if len(ops) != 1 || ops[0].Action != "install_codex_hook" {
 		t.Fatalf("unexpected operations: %#v", ops)
 	}
 	if _, err := os.Stat(ops[0].Path); !os.IsNotExist(err) {
-		t.Fatalf("dry-run planning should not create config file: %v", err)
-	}
-	if _, err := os.Stat(ops[1].Path); !os.IsNotExist(err) {
 		t.Fatalf("dry-run planning should not create Codex hooks file: %v", err)
 	}
 }
 
-func TestApplyOpsSeedsUserConfigWithoutOverwritingExistingFile(t *testing.T) {
+func TestApplyOpsDoesNotSeedServerConfig(t *testing.T) {
 	prepareInstallerTest(t, "codex")
 
 	ops, err := plannedOps([]string{"codex"}, false, "")
@@ -58,31 +54,9 @@ func TestApplyOpsSeedsUserConfigWithoutOverwritingExistingFile(t *testing.T) {
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	cfgPath := config.ExpandHome(config.DefaultPath)
-	seeded, err := os.ReadFile(cfgPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(seeded) != config.DefaultConfigTOML {
-		t.Fatalf("seeded config does not match default config")
-	}
-	if _, err := config.Parse(seeded); err != nil {
-		t.Fatalf("seeded config is invalid: %v", err)
-	}
-
-	const existing = "user-owned config\n"
-	if err := os.WriteFile(cfgPath, []byte(existing), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := applyOps(ops, false); err != nil {
-		t.Fatal(err)
-	}
-	current, err := os.ReadFile(cfgPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(current) != existing {
-		t.Fatalf("installer overwrote existing user config: %q", current)
+	cfgPath := filepath.Join(os.Getenv("HOME"), ".config", "hitch", "config.toml")
+	if _, err := os.Stat(cfgPath); !os.IsNotExist(err) {
+		t.Fatalf("hook installer should not seed server config: %v", err)
 	}
 }
 
@@ -96,7 +70,7 @@ func TestApplyOpsInstallsCodexHookIdempotentlyAndBacksUpExistingFile(t *testing.
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	hookOp := ops[1]
+	hookOp := ops[0]
 	first, err := os.ReadFile(hookOp.Path)
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +128,7 @@ func TestApplyOpsUninstallRemovesOnlyManagedCodexHook(t *testing.T) {
 	if err := applyOps(removeOps, true); err != nil {
 		t.Fatal(err)
 	}
-	current, err := os.ReadFile(ops[1].Path)
+	current, err := os.ReadFile(ops[0].Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,13 +145,13 @@ func TestApplyOpsInstallsHermesHooksIdempotentlyAndBacksUpExistingFile(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ops) != 2 || ops[0].Action != "seed_config" || ops[1].Action != "install_hermes_hook" {
+	if len(ops) != 1 || ops[0].Action != "install_hermes_hook" {
 		t.Fatalf("unexpected operations: %#v", ops)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	hookOp := ops[1]
+	hookOp := ops[0]
 	first, err := os.ReadFile(hookOp.Path)
 	if err != nil {
 		t.Fatal(err)
@@ -228,7 +202,7 @@ func TestPlannedOpsEmbedsAdapterURLInHermesHookCommand(t *testing.T) {
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	current, err := os.ReadFile(ops[1].Path)
+	current, err := os.ReadFile(ops[0].Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,13 +218,13 @@ func TestApplyOpsInstallsPiExtensionIdempotentlyAndBacksUpExistingFile(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ops) != 2 || ops[0].Action != "seed_config" || ops[1].Action != "install_pi_extension" {
+	if len(ops) != 1 || ops[0].Action != "install_pi_extension" {
 		t.Fatalf("unexpected operations: %#v", ops)
 	}
 	if err := applyOps(ops, false); err != nil {
 		t.Fatal(err)
 	}
-	hookOp := ops[1]
+	hookOp := ops[0]
 	first, err := os.ReadFile(hookOp.Path)
 	if err != nil {
 		t.Fatal(err)
@@ -298,21 +272,21 @@ func TestApplyOpsUninstallRemovesOnlyManagedPiExtension(t *testing.T) {
 	if err := applyOps(removeOps, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(ops[1].Path); !os.IsNotExist(err) {
+	if _, err := os.Stat(ops[0].Path); !os.IsNotExist(err) {
 		t.Fatalf("managed Pi extension should be removed: %v", err)
 	}
 
 	userOwned := "// user extension\n"
-	if err := os.MkdirAll(filepath.Dir(ops[1].Path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(ops[0].Path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(ops[1].Path, []byte(userOwned), 0o644); err != nil {
+	if err := os.WriteFile(ops[0].Path, []byte(userOwned), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := applyOps(removeOps, true); err != nil {
 		t.Fatal(err)
 	}
-	current, err := os.ReadFile(ops[1].Path)
+	current, err := os.ReadFile(ops[0].Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +310,7 @@ func TestPlannedOpsUsesHitchClientWhenAvailable(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			command := ops[1].Reason
+			command := ops[0].Reason
 			if !strings.Contains(command, shellQuote(clientPath)+" -url 'http://127.0.0.1:8797'") {
 				t.Fatalf("hook command should prefer hitch-client, got %q", command)
 			}
@@ -394,7 +368,7 @@ func TestApplyOpsUninstallRemovesOnlyManagedHermesHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hookOp := ops[1]
+	hookOp := ops[0]
 	existing := "hooks:\n  pre_tool_call:\n    - matcher: terminal\n      command: existing\n"
 	if err := os.MkdirAll(filepath.Dir(hookOp.Path), 0o755); err != nil {
 		t.Fatal(err)
@@ -447,7 +421,7 @@ func TestPlannedOpsSkipsUnsupportedAvailableHarness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ops) != 2 || ops[1].Action != "skip" || ops[1].Status != "skipped" {
+	if len(ops) != 1 || ops[0].Action != "skip" || ops[0].Status != "skipped" {
 		t.Fatalf("unexpected unsupported harness plan: %#v", ops)
 	}
 }

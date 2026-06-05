@@ -87,7 +87,7 @@ func TestRootHelpListsCommandsWithoutAdapter(t *testing.T) {
 	var out strings.Builder
 	printHitchHelp(&out)
 	text := out.String()
-	for _, want := range []string{"hitch <command>", "serve", "handler", "inspect-event", "Use hitch-client"} {
+	for _, want := range []string{"hitch <command>", "serve", "handler", "config", "inspect-event", "Use hitch-client"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("help missing %q:\n%s", want, text)
 		}
@@ -105,6 +105,55 @@ func TestSubcommandHelp(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Fatalf("serve help missing %q:\n%s", want, text)
 		}
+	}
+}
+
+func TestConfigInitSeedsServerConfigWithoutOverwritingExistingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+
+	out := captureStdoutForTest(t, func() {
+		configInit([]string{"--path", path, "--json"})
+	})
+	var created struct {
+		Path    string `json:"path"`
+		Created bool   `json:"created"`
+	}
+	if err := json.Unmarshal([]byte(out), &created); err != nil {
+		t.Fatalf("config init output is not JSON: %v; output=%q", err, out)
+	}
+	if !created.Created || created.Path != path {
+		t.Fatalf("unexpected config init result: %#v", created)
+	}
+	seeded, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(seeded) != config.DefaultConfigTOML {
+		t.Fatalf("seeded config does not match default config")
+	}
+
+	const existing = "user-owned config\n"
+	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out = captureStdoutForTest(t, func() {
+		configInit([]string{"--path", path, "--json"})
+	})
+	var skipped struct {
+		Created bool `json:"created"`
+	}
+	if err := json.Unmarshal([]byte(out), &skipped); err != nil {
+		t.Fatalf("config init output is not JSON: %v; output=%q", err, out)
+	}
+	if skipped.Created {
+		t.Fatalf("existing config should not be recreated: %q", out)
+	}
+	current, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(current) != existing {
+		t.Fatalf("config init overwrote existing user config: %q", current)
 	}
 }
 

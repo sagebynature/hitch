@@ -39,6 +39,9 @@ func main() {
 		case "doctor":
 			doctor(os.Args[2:])
 			return
+		case "config":
+			configCmd(os.Args[2:])
+			return
 		case "inspect-event":
 			inspectEvent(os.Args[2:])
 			return
@@ -143,6 +146,36 @@ func status(args []string) {
 	_ = fs.Parse(args)
 	writeCLI(*jsonOut, map[string]interface{}{"config": config.DefaultPath, "version": version})
 }
+
+func configCmd(args []string) {
+	if len(args) == 0 || isHelp(args) {
+		printConfigHelp(os.Stdout)
+		return
+	}
+	switch args[0] {
+	case "init":
+		configInit(args[1:])
+	default:
+		fatal(fmt.Errorf("unknown config command %q", args[0]))
+	}
+}
+
+func configInit(args []string) {
+	if isHelp(args) {
+		printConfigInitHelp(os.Stdout)
+		return
+	}
+	fs := flag.NewFlagSet("config init", flag.ExitOnError)
+	path := fs.String("path", config.DefaultPath, "config file")
+	jsonOut := fs.Bool("json", false, "emit JSON")
+	_ = fs.Parse(args)
+	result, err := config.SeedDefault(*path)
+	if err != nil {
+		fatal(err)
+	}
+	writeCLI(*jsonOut, map[string]interface{}{"path": result.Path, "created": result.Created})
+}
+
 func doctor(args []string) {
 	if isHelp(args) {
 		printDoctorHelp(os.Stdout)
