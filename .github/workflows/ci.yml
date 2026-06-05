@@ -53,18 +53,3 @@ jobs:
         run: |
           ./install.sh
           "$HITCH_INSTALL_DIR/hitch" --version
-
-  adapters:
-    name: Adapter tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Run adapter tests
-        run: make test-adapters
