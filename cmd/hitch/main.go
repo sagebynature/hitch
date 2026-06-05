@@ -77,7 +77,7 @@ func serve(args []string) {
 		return
 	}
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	configPath := fs.String("config", "config/default.config.toml", "config file")
+	configPath := fs.String("config", config.DefaultPath, "config file")
 	_ = fs.Parse(args)
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -193,7 +193,7 @@ func inspectEvent(args []string) {
 		return
 	}
 	fs := flag.NewFlagSet("inspect-event", flag.ExitOnError)
-	configPath := fs.String("config", "config/default.config.toml", "config file")
+	configPath := fs.String("config", config.DefaultPath, "config file")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {
 		fatal(fmt.Errorf("inspect-event requires id"))
@@ -220,7 +220,7 @@ func replay(args []string) {
 		return
 	}
 	fs := flag.NewFlagSet("replay", flag.ExitOnError)
-	configPath := fs.String("config", "config/default.config.toml", "config file")
+	configPath := fs.String("config", config.DefaultPath, "config file")
 	dryRun := fs.Bool("dry-run", false, "do not create replay records")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -155,6 +157,103 @@ func TestConfigInitSeedsServerConfigWithoutOverwritingExistingFile(t *testing.T)
 	if string(current) != existing {
 		t.Fatalf("config init overwrote existing user config: %q", current)
 	}
+}
+
+func TestServeUsesUserConfigByDefault(t *testing.T) {
+	home := t.TempDir()
+	configDir := filepath.Join(home, ".config", "hitch")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	port := freePort(t)
+	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
+	configPath := filepath.Join(configDir, "config.toml")
+	configTOML := strings.Join([]string{
+		"[server]",
+		`host = "127.0.0.1"`,
+		"port = " + port,
+		"max_request_bytes = 1048576",
+		"",
+		"[log]",
+		`level = "error"`,
+		`format = "json"`,
+		"include_native_payload = false",
+		"",
+		"[log.stdout]",
+		"enabled = true",
+		"",
+		"[log.file]",
+		"enabled = false",
+		"",
+		"[log.otlp]",
+		"enabled = false",
+		"",
+		"[audit]",
+		"enabled = true",
+		`backend = "sqlite"`,
+		"",
+		"[audit.sqlite]",
+		`path = "` + filepath.ToSlash(dbPath) + `"`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(configPath, []byte(configTOML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	binPath := filepath.Join(t.TempDir(), "hitch")
+	build := exec.Command("go", "build", "-o", binPath, ".")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build hitch test binary: %v\n%s", err, out)
+	}
+
+	logPath := filepath.Join(t.TempDir(), "serve.log")
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logFile.Close()
+
+	cmd := exec.Command(binPath, "serve")
+	cmd.Env = append(os.Environ(), "HOME="+home)
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			_, _ = cmd.Process.Wait()
+		}
+	})
+
+	url := "http://127.0.0.1:" + port + "/v1/health"
+	client := http.Client{Timeout: 100 * time.Millisecond}
+	var lastErr error
+	for i := 0; i < 50; i++ {
+		resp, err := client.Get(url)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+			lastErr = err
+		} else {
+			lastErr = err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	logs, _ := os.ReadFile(logPath)
+	t.Fatalf("serve did not read default user config at %s: %v\n%s", configPath, lastErr, logs)
+}
+
+func freePort(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	return strings.TrimPrefix(ln.Addr().String(), "127.0.0.1:")
 }
 
 func TestNoopObserverHandlerConsumesEnvelopeAndReturnsNone(t *testing.T) {

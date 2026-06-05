@@ -75,7 +75,7 @@ Usage:
   hitch serve [options]
 
 Options:
-  --config string   config file (default "config/default.config.toml")
+  --config string   config file (default "~/.config/hitch/config.toml")
 
 Examples:
   hitch serve
@@ -165,7 +165,7 @@ Usage:
   hitch inspect-event [options] <normalized-event-id>
 
 Options:
-  --config string   config file (default "config/default.config.toml")
+  --config string   config file (default "~/.config/hitch/config.toml")
 
 Examples:
   hitch inspect-event norm_abc123
@@ -180,7 +180,7 @@ Usage:
   hitch replay [options] <normalized-event-id>
 
 Options:
-  --config string   config file (default "config/default.config.toml")
+  --config string   config file (default "~/.config/hitch/config.toml")
   --dry-run         do not create replay records
 
 Examples:

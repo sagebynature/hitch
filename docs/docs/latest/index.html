@@ -93,7 +93,7 @@ hitch-client uninstall --only omp --yes --json</code></pre>
 
         <section id="configuration">
           <h2>Configuration</h2>
-          <p>Hitch reads user configuration from <code>~/.config/hitch/config.toml</code>. Development commands default to <code>config/default.config.toml</code> unless a command receives <code>--config</code> or <code>-config</code>.</p>
+          <p>Hitch reads user configuration from <code>~/.config/hitch/config.toml</code> by default. Repository checkout examples pass <code>--config config/default.config.toml</code> explicitly when they should use the development config.</p>
           <pre class="code-block"><code>hitch config init</code></pre>
           <table>
             <thead><tr><th>Section</th><th>Purpose</th></tr></thead>
