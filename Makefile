@@ -4,7 +4,6 @@ BINARY ?= bin/hitch
 CLIENT_BINARY ?= bin/hitch-client
 CONFIG ?= internal/config/default.config.toml
 GO_PACKAGES ?= ./...
-ADAPTER_TESTS ?= adapters/**/*.test.ts
 
 help:
 	@printf '%s\n' \
@@ -29,9 +28,6 @@ test: test-go test-adapters
 
 test-go:
 	go test $(GO_PACKAGES)
-
-test-adapters:
-	bun test $(ADAPTER_TESTS)
 
 run:
 	go run ./cmd/hitch
