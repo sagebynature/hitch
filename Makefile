@@ -9,9 +9,7 @@ help:
 	@printf '%s\n' \
 		'Common targets:' \
 		'  make build           Build hitch and hitch-client into bin/' \
-		'  make test            Run Go and adapter tests' \
-		'  make test-go         Run Go tests' \
-		'  make test-adapters   Run TypeScript adapter tests with bun' \
+		'  make test            Run Go tests' \
 		'  make run             Run hitch from source' \
 		'  make serve           Run the local Hitch server' \
 		'  make status          Print CLI status as JSON' \
@@ -24,9 +22,7 @@ build:
 	go build -o $(BINARY) ./cmd/hitch
 	go build -o $(CLIENT_BINARY) ./cmd/hitch-client
 
-test: test-go test-adapters
-
-test-go:
+test:
 	go test $(GO_PACKAGES)
 
 run:
