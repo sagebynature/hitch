@@ -4,9 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hitch — one hook handler for every agent harness</title>
-    <meta name="description" content="Hitch is a local universal hook adapter for Codex, Pi, OMP, and Hermes. Write one handler protocol and reuse it across agent harnesses." />
+    <meta name="description" content="Hitch is a local universal hook adapter for Codex, Pi, OMP, Hermes, and OpenCode. Write one handler protocol and reuse it across agent harnesses." />
     <meta property="og:title" content="Hitch" />
-    <meta property="og:description" content="One portable hook handler protocol for Codex, Pi, OMP, and Hermes." />
+    <meta property="og:description" content="One portable hook handler protocol for Codex, Pi, OMP, Hermes, and OpenCode." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <script>
@@ -42,7 +42,7 @@
         <div>
           <p class="eyebrow">Universal local hook adapter</p>
           <h1 id="hero-title">One handler. Every harness.</h1>
-          <p class="lede">Hitch normalizes Codex, Pi, OMP, and Hermes hook events into one envelope, runs your local handlers, records the audit trail, and translates decisions back into each harness.</p>
+          <p class="lede">Hitch normalizes Codex, Pi, OMP, Hermes, and OpenCode hook events into one envelope, runs your local handlers, records the audit trail, and translates decisions back into each harness.</p>
           <div class="hero-actions">
             <a class="button primary" href="docs/latest/">Read the docs</a>
             <a class="button" href="https://github.com/sagebynature/hitch">View source</a>
@@ -56,8 +56,8 @@
 <span class="prompt">$</span> hitch serve --config ~/.config/hitch/config.toml
 <span class="comment"># normalized hooks, handler dispatch, SQLite audit</span>
 
-<span class="prompt">$</span> hitch-client install --only codex --yes --json
-{ "installed": ["codex"], "changed": true }</code></pre>
+<span class="prompt">$</span> hitch-client install --only opencode --yes --json
+{ "installed": ["opencode"], "changed": true }</code></pre>
         </aside>
       </section>
 
@@ -97,7 +97,7 @@
           </div>
           <div>
             <div class="flow" aria-label="Hitch event flow">
-              <div class="flow-step"><span>01</span><strong>Hook</strong><p>Codex, Pi, OMP, or Hermes emits native hook data.</p></div>
+              <div class="flow-step"><span>01</span><strong>Hook</strong><p>Codex, Pi, OMP, Hermes, or OpenCode emits native hook data.</p></div>
               <div class="flow-step"><span>02</span><strong>Adapter</strong><p>The harness adapter posts async or sync events to Hitch.</p></div>
               <div class="flow-step"><span>03</span><strong>Envelope</strong><p>Hitch maps payloads into the universal event schema.</p></div>
               <div class="flow-step"><span>04</span><strong>Handler</strong><p>Configured commands inspect, log, block, or transform.</p></div>
@@ -122,7 +122,7 @@
           <div class="section-intro">
             <p class="label">Quick start</p>
             <h2 id="quickstart-title">Install, serve, verify.</h2>
-            <p>The source installer seeds Hitch config with <code>hitch config init</code>. <code>hitch-client install</code> installs managed Codex command hooks into <code>~/.codex/hooks.json</code>, installs Hermes shell hooks into <code>~/.hermes/config.yaml</code>, installs a Pi extension into <code>~/.pi/agent/extensions/hitch/index.ts</code>, and installs an OMP extension into <code>~/.omp/agent/extensions/hitch/index.ts</code>.</p>
+            <p>The source installer seeds Hitch config with <code>hitch config init</code>. <code>hitch-client install</code> installs managed Codex command hooks into <code>~/.codex/hooks.json</code>, installs Hermes shell hooks into <code>~/.hermes/config.yaml</code>, installs a Pi extension into <code>~/.pi/agent/extensions/hitch/index.ts</code>, installs an OMP extension into <code>~/.omp/agent/extensions/hitch/index.ts</code>, and installs an OpenCode plugin into <code>~/.config/opencode/plugins/hitch.ts</code>.</p>
           </div>
           <div class="callout">
             <pre class="code-block"><code>curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
@@ -130,7 +130,7 @@ hitch serve --config ~/.config/hitch/config.toml
 hitch status --json
 hitch doctor --json
 hitch-client install --only codex --dry-run --json
-hitch-client install --only codex --yes --json</code></pre>
+hitch-client install --only opencode --yes --json</code></pre>
             <div class="actions">
               <a class="button primary" href="docs/latest/#quickstart">Full quickstart</a>
               <a class="button" href="docs/latest/#handler-protocol">Handler protocol</a>
@@ -149,9 +149,9 @@ hitch-client install --only codex --yes --json</code></pre>
           <div class="docs-index">
             <a class="doc-card" href="docs/latest/#handler-protocol"><small>Protocol</small><h3>Handler results</h3><p>Status values, decision behaviors, stdout parsing, timeout handling, and aggregation rules.</p></a>
             <a class="doc-card" href="docs/latest/#handler-development"><small>Guide</small><h3>Build handlers</h3><p>Step-by-step handler development, config mapping, decisions, and runnable examples.</p></a>
-            <a class="doc-card" href="docs/latest/#hitch-events"><small>Events</small><h3>Hitch event mapping</h3><p>Normalized event taxonomy and source-event mappings for Codex, Hermes, Pi, and OMP.</p></a>
+            <a class="doc-card" href="docs/latest/#hitch-events"><small>Events</small><h3>Hitch event mapping</h3><p>Normalized event taxonomy and source-event mappings for Codex, Hermes, Pi, OMP, and OpenCode.</p></a>
             <a class="doc-card" href="docs/latest/#http-api"><small>API</small><h3>Local HTTP API</h3><p>Health checks, event ingestion, synchronous dispatch, inspection, and replay entry points.</p></a>
-            <a class="doc-card" href="docs/latest/#harness-contracts"><small>Adapters</small><h3>Harness contracts</h3><p>Codex, Hermes, Pi, and OMP behavior at the native boundary.</p></a>
+            <a class="doc-card" href="docs/latest/#harness-contracts"><small>Adapters</small><h3>Harness contracts</h3><p>Codex, Hermes, Pi, OMP, and OpenCode behavior at the native boundary.</p></a>
             <a class="doc-card" href="docs/latest/#schemas"><small>Schemas</small><h3>JSON references</h3><p>Envelope, handler result, and dispatch result schema files for tests and integrations.</p></a>
           </div>
         </div>

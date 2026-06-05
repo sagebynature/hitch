@@ -136,6 +136,17 @@ func TestRunHonorsURL(t *testing.T) {
 	}
 }
 
+func TestNativeNoopOpenCodeReturnsNoopAdapterResponse(t *testing.T) {
+	native := NativeNoop("opencode", "tool.execute.before")
+	var got map[string]interface{}
+	if err := json.Unmarshal(native, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["adapter_action"] != "noop" {
+		t.Fatalf("unexpected noop response: %#v", got)
+	}
+}
+
 func TestDefaultURLPrefersEnvOverConfig(t *testing.T) {
 	t.Setenv("HITCH_URL", "http://url:1")
 	if got := DefaultURL(); got != "http://url:1" {

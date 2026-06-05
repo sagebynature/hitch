@@ -105,6 +105,54 @@ var ompExtensionEvents = []string{
 	"user_python",
 }
 
+var opencodeHookEvents = []string{
+	"chat.message",
+	"chat.params",
+	"chat.headers",
+	"command.execute.before",
+	"command.executed",
+	"permission.ask",
+	"permission.asked",
+	"permission.updated",
+	"permission.replied",
+	"tool.execute.before",
+	"tool.execute.after",
+	"tool.definition",
+	"shell.env",
+	"experimental.session.compacting",
+	"experimental.compaction.autocontinue",
+	"experimental.text.complete",
+	"session.created",
+	"session.updated",
+	"session.deleted",
+	"session.diff",
+	"session.error",
+	"session.idle",
+	"session.status",
+	"session.compacted",
+	"message.updated",
+	"message.removed",
+	"message.part.updated",
+	"message.part.removed",
+	"file.edited",
+	"file.watcher.updated",
+	"todo.updated",
+	"server.connected",
+	"server.instance.disposed",
+	"installation.updated",
+	"installation.update-available",
+	"lsp.client.diagnostics",
+	"lsp.updated",
+	"tui.prompt.append",
+	"tui.command.execute",
+	"tui.toast.show",
+	"pty.created",
+	"pty.updated",
+	"pty.exited",
+	"pty.deleted",
+	"vcs.branch.updated",
+}
+
 const piManagedExtensionMarker = "Managed by Hitch"
 
 type harnessSpec struct {
@@ -142,6 +190,7 @@ func knownHarnessSpecs() []harnessSpec {
 		{Name: "hermes", Title: "Hermes", Command: "hermes", ConfigPath: "~/.hermes/config.yaml", Supported: true},
 		{Name: "pi", Title: "Pi", Command: "pi", ConfigPath: "~/.pi/agent/extensions/hitch/index.ts", Supported: true},
 		{Name: "omp", Title: "OMP", Command: "omp", ConfigPath: "~/.omp/agent/extensions/hitch/index.ts", Supported: true},
+		{Name: "opencode", Title: "OpenCode", Command: "opencode", ConfigPath: "~/.config/opencode/plugins/hitch.ts", Supported: true},
 	}
 }
 
@@ -151,7 +200,7 @@ func Run(args []string, uninstall bool) error {
 		commandName = "uninstall"
 	}
 	fs := flagSet(commandName)
-	only := fs.String("only", "codex,hermes,pi,omp", "comma-separated harness list")
+	only := fs.String("only", "codex,hermes,pi,omp,opencode", "comma-separated harness list")
 	dryRun := fs.Bool("dry-run", false, "show changes without writing")
 	yes := fs.Bool("yes", false, "confirm filesystem changes")
 	jsonOut := fs.Bool("json", false, "emit JSON")
@@ -258,6 +307,8 @@ func detectHarness(spec harnessSpec) harnessDetection {
 		d.Installed = hermesHookInstalled(d.ConfigPath)
 	case "pi", "omp":
 		d.Installed = piExtensionInstalled(d.ConfigPath)
+	case "opencode":
+		d.Installed = opencodePluginInstalled(d.ConfigPath)
 	}
 	return d
 }
@@ -378,6 +429,12 @@ func plannedOps(harnesses []string, uninstall bool, apiURL string, pinURL bool) 
 				action = "uninstall_omp_extension"
 			}
 			ops = append(ops, installOperation{Harness: h, Action: action, Path: detection.ConfigPath, BackupPath: timestampedBackupPath(h, filepath.Base(detection.ConfigPath)), Status: "planned", Reason: extensionURLReason(apiURL), AdapterURL: apiURL})
+		case "opencode":
+			action := "install_opencode_plugin"
+			if uninstall {
+				action = "uninstall_opencode_plugin"
+			}
+			ops = append(ops, installOperation{Harness: h, Action: action, Path: detection.ConfigPath, BackupPath: timestampedBackupPath(h, filepath.Base(detection.ConfigPath)), Status: "planned", Reason: extensionURLReason(apiURL), AdapterURL: apiURL})
 		}
 	}
 	return ops, nil
@@ -450,6 +507,14 @@ func applyOps(ops []installOperation, uninstall bool) error {
 			}
 		case "uninstall_omp_extension":
 			if err := uninstallPiExtension(op.Path, op.BackupPath); err != nil {
+				return err
+			}
+		case "install_opencode_plugin":
+			if err := installOpenCodePlugin(op.Path, op.BackupPath, op.AdapterURL); err != nil {
+				return err
+			}
+		case "uninstall_opencode_plugin":
+			if err := uninstallOpenCodePlugin(op.Path, op.BackupPath); err != nil {
 				return err
 			}
 		case "skip":
@@ -622,6 +687,15 @@ func piExtensionInstalled(path string) bool {
 	return strings.Contains(content, piManagedExtensionMarker) && strings.Contains(content, "dispatchToHitch")
 }
 
+func opencodePluginInstalled(path string) bool {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	content := string(b)
+	return strings.Contains(content, piManagedExtensionMarker) && strings.Contains(content, "HitchPlugin") && strings.Contains(content, "dispatchToHitch")
+}
+
 func installPiExtension(path, backup, apiURL string) error {
 	content, err := piExtensionContent(apiURL)
 	if err != nil {
@@ -632,6 +706,14 @@ func installPiExtension(path, backup, apiURL string) error {
 
 func installOMPExtension(path, backup, apiURL string) error {
 	content, err := ompExtensionContent(apiURL)
+	if err != nil {
+		return err
+	}
+	return installExtensionContent(path, backup, content)
+}
+
+func installOpenCodePlugin(path, backup, apiURL string) error {
+	content, err := opencodePluginContent(apiURL)
 	if err != nil {
 		return err
 	}
@@ -673,6 +755,24 @@ func uninstallPiExtension(path, backup string) error {
 	return os.Remove(path)
 }
 
+func uninstallOpenCodePlugin(path, backup string) error {
+	existing, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	content := string(existing)
+	if !strings.Contains(content, piManagedExtensionMarker) || !strings.Contains(content, "HitchPlugin") || !strings.Contains(content, "dispatchToHitch") {
+		return nil
+	}
+	if err := backupFile(path, backup); err != nil {
+		return err
+	}
+	return os.Remove(path)
+}
+
 func piExtensionContent(apiURL string) ([]byte, error) {
 	return extensionContent("pi", "hitch-pi-extension", piExtensionEvents, apiURL)
 }
@@ -681,18 +781,18 @@ func ompExtensionContent(apiURL string) ([]byte, error) {
 	return extensionContent("omp", "hitch-omp-extension", ompExtensionEvents, apiURL)
 }
 
+func opencodePluginContent(apiURL string) ([]byte, error) {
+	return openCodePluginContent("opencode", "hitch-opencode-plugin", opencodeHookEvents, apiURL)
+}
+
 func extensionContent(harnessName, clientVersion string, sourceEvents []string, apiURL string) ([]byte, error) {
 	urlLiteral, err := jsonStringLiteral(apiURL)
 	if err != nil {
 		return nil, err
 	}
-	events := make([]string, 0, len(sourceEvents))
-	for _, event := range sourceEvents {
-		literal, err := jsonStringLiteral(event)
-		if err != nil {
-			return nil, err
-		}
-		events = append(events, literal)
+	eventsLiteral, err := jsonArrayLiteral(sourceEvents)
+	if err != nil {
+		return nil, err
 	}
 	harnessLiteral, err := jsonStringLiteral(harnessName)
 	if err != nil {
@@ -702,12 +802,21 @@ func extensionContent(harnessName, clientVersion string, sourceEvents []string, 
 	if err != nil {
 		return nil, err
 	}
-	return []byte(fmt.Sprintf(`// %s.
+
+	var b strings.Builder
+	b.Grow(2500 + len(piManagedExtensionMarker) + len(urlLiteral) + len(eventsLiteral) + len(harnessLiteral) + len(versionLiteral))
+	b.WriteString("// ")
+	b.WriteString(piManagedExtensionMarker)
+	b.WriteString(`.
 // Generated by hitch-client install. Do not edit by hand.
 
-const HITCH_PINNED_API_URL = %s;
+const HITCH_PINNED_API_URL = `)
+	b.WriteString(urlLiteral)
+	b.WriteString(`;
 const HITCH_DEFAULT_API_URL = "http://127.0.0.1:8799";
-const HITCH_EVENTS = [%s];
+const HITCH_EVENTS = `)
+	b.WriteString(eventsLiteral)
+	b.WriteString(`;
 
 function envString(name) {
   const processLike = typeof globalThis === "object" ? Object(globalThis).process : undefined;
@@ -815,10 +924,14 @@ async function dispatchToHitch(sourceEventType, event, ctx) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        harness: %s,
+        harness: `)
+	b.WriteString(harnessLiteral)
+	b.WriteString(`,
         source_event_type: sourceEventType,
         source_payload: sourcePayload,
-        hitch_client_version: %s
+        hitch_client_version: `)
+	b.WriteString(versionLiteral)
+	b.WriteString(`
       })
     });
     if (!response.ok) return undefined;
@@ -834,7 +947,234 @@ export default function(pi) {
     pi.on(sourceEventType, async (event, ctx) => dispatchToHitch(sourceEventType, event, ctx));
   }
 }
-`, piManagedExtensionMarker, urlLiteral, strings.Join(events, ", "), harnessLiteral, versionLiteral)), nil
+`)
+	return []byte(b.String()), nil
+}
+
+func openCodePluginContent(harnessName, clientVersion string, sourceEvents []string, apiURL string) ([]byte, error) {
+	urlLiteral, err := jsonStringLiteral(apiURL)
+	if err != nil {
+		return nil, err
+	}
+	eventsLiteral, err := jsonArrayLiteral(sourceEvents)
+	if err != nil {
+		return nil, err
+	}
+	harnessLiteral, err := jsonStringLiteral(harnessName)
+	if err != nil {
+		return nil, err
+	}
+	versionLiteral, err := jsonStringLiteral(clientVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	var b strings.Builder
+	b.Grow(5000 + len(piManagedExtensionMarker) + len(urlLiteral) + len(eventsLiteral) + len(harnessLiteral) + len(versionLiteral))
+	b.WriteString("// ")
+	b.WriteString(piManagedExtensionMarker)
+	b.WriteString(`.
+// Generated by hitch-client install. Do not edit by hand.
+
+const HITCH_PINNED_API_URL = `)
+	b.WriteString(urlLiteral)
+	b.WriteString(`;
+const HITCH_DEFAULT_API_URL = "http://127.0.0.1:8799";
+const HITCH_EVENTS = `)
+	b.WriteString(eventsLiteral)
+	b.WriteString(`;
+
+function envString(name) {
+  const processLike = typeof globalThis === "object" ? Object(globalThis).process : undefined;
+  const env = processLike && typeof processLike === "object" ? Object(processLike).env : undefined;
+  const value = env && typeof env === "object" ? Object(env)[name] : undefined;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.length > 0) return value;
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
+}
+
+function hitchAPIURL() {
+  return firstString(HITCH_PINNED_API_URL, envString("HITCH_URL"), HITCH_DEFAULT_API_URL);
+}
+
+function safeClone(value) {
+  if (value === undefined) return {};
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return {};
+  }
+}
+
+function modelString(model) {
+  if (typeof model === "string") return model;
+  if (!model || typeof model !== "object") return undefined;
+  const provider = firstString(model.providerID, model.providerId, model.provider, model.vendor);
+  const id = firstString(model.modelID, model.modelId, model.id, model.model, model.name);
+  if (provider && id) return provider + "/" + id;
+  return id || provider;
+}
+
+function eventSessionID(event) {
+  return firstString(event?.sessionID, event?.session_id, event?.properties?.sessionID, event?.properties?.session_id);
+}
+
+function collectMetadata(input, event, ctx) {
+  const sessionID = firstString(input?.sessionID, input?.session_id, eventSessionID(event), ctx?.project?.id);
+  return {
+    session_id: sessionID,
+    turn_id: firstString(input?.messageID, input?.message_id, event?.properties?.messageID, event?.properties?.message_id),
+    cwd: firstString(input?.cwd, input?.path?.cwd, ctx?.directory, ctx?.worktree),
+    model: modelString(input?.model) || modelString(event?.properties?.info?.model),
+    transcript_path: firstString(input?.transcriptPath, input?.transcript_path)
+  };
+}
+
+function setPath(target, path, value) {
+  if (!target || !Array.isArray(path) || path.length === 0) return;
+  let cursor = target;
+  for (const key of path.slice(0, -1)) {
+    if (!cursor[key] || typeof cursor[key] !== "object") cursor[key] = {};
+    cursor = cursor[key];
+  }
+  cursor[path[path.length - 1]] = value;
+}
+
+async function applyAdapterResponse(adapterResponse, output, input, ctx) {
+  if (!adapterResponse || adapterResponse.adapter_action === "noop") return;
+  if (adapterResponse.adapter_action === "throw") {
+    const err = new Error(adapterResponse.message || "blocked by Hitch");
+    err.hitchAdapterThrow = true;
+    throw err;
+  }
+  if (adapterResponse.adapter_action === "set") {
+    if (Array.isArray(adapterResponse.path) && adapterResponse.path.length > 0) {
+      setPath(output, adapterResponse.path, adapterResponse.value);
+    } else if (adapterResponse.value && typeof adapterResponse.value === "object") {
+      Object.assign(output, adapterResponse.value);
+    }
+    return;
+  }
+  if (adapterResponse.adapter_action === "append") {
+    const path = Array.isArray(adapterResponse.path) ? adapterResponse.path : [];
+    if (path.length === 0) return;
+    let cursor = output;
+    for (const key of path.slice(0, -1)) {
+      if (!cursor[key] || typeof cursor[key] !== "object") cursor[key] = {};
+      cursor = cursor[key];
+    }
+    const key = path[path.length - 1];
+    if (!Array.isArray(cursor[key])) cursor[key] = [];
+    cursor[key].push(adapterResponse.value);
+    return;
+  }
+  if (adapterResponse.adapter_action === "inject_context") {
+    const sessionID = firstString(input?.sessionID, input?.session_id);
+    if (!sessionID || typeof adapterResponse.value !== "string" || adapterResponse.value.length === 0) return;
+    await ctx.client.session.prompt({
+      path: { id: sessionID },
+      body: {
+        noReply: true,
+        parts: [{ type: "text", text: adapterResponse.value }]
+      }
+    });
+  }
+}
+
+async function postToHitch(endpoint, sourceEventType, input, output, ctx) {
+  const event = { input: safeClone(input), output: safeClone(output) };
+  const sourcePayload = {
+    event,
+    metadata: collectMetadata(input, event, ctx)
+  };
+  try {
+    const response = await fetch(hitchAPIURL() + endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        harness: `)
+	b.WriteString(harnessLiteral)
+	b.WriteString(`,
+        source_event_type: sourceEventType,
+        source_payload: sourcePayload,
+        hitch_client_version: `)
+	b.WriteString(versionLiteral)
+	b.WriteString(`
+      })
+    });
+    if (!response.ok || endpoint !== "/v1/dispatch-sync") return;
+    const payload = await response.json();
+    await applyAdapterResponse(payload.native_response, output, input, ctx);
+  } catch (err) {
+    if (err && err.hitchAdapterThrow) throw err;
+  }
+}
+
+async function dispatchToHitch(sourceEventType, input, output, ctx) {
+  await postToHitch("/v1/dispatch-sync", sourceEventType, input, output, ctx);
+}
+
+async function observeWithHitch(sourceEventType, event, ctx) {
+  const sourcePayload = {
+    event: safeClone(event),
+    metadata: collectMetadata(event, event, ctx)
+  };
+  try {
+    await fetch(hitchAPIURL() + "/v1/events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        harness: `)
+	b.WriteString(harnessLiteral)
+	b.WriteString(`,
+        source_event_type: sourceEventType,
+        source_payload: sourcePayload,
+        hitch_client_version: `)
+	b.WriteString(versionLiteral)
+	b.WriteString(`
+      })
+    });
+  } catch {}
+}
+
+
+export const HitchPlugin = async (ctx) => {
+  return {
+    event: async ({ event }) => {
+      if (event && HITCH_EVENTS.includes(event.type)) {
+        await observeWithHitch(event.type, event, ctx);
+      }
+    },
+    "chat.message": async (input, output) => dispatchToHitch("chat.message", input, output, ctx),
+    "chat.params": async (input, output) => dispatchToHitch("chat.params", input, output, ctx),
+    "chat.headers": async (input, output) => dispatchToHitch("chat.headers", input, output, ctx),
+    "command.execute.before": async (input, output) => dispatchToHitch("command.execute.before", input, output, ctx),
+    "permission.ask": async (input, output) => dispatchToHitch("permission.ask", input, output, ctx),
+    "tool.execute.before": async (input, output) => dispatchToHitch("tool.execute.before", input, output, ctx),
+    "tool.execute.after": async (input, output) => dispatchToHitch("tool.execute.after", input, output, ctx),
+    "tool.definition": async (input, output) => dispatchToHitch("tool.definition", input, output, ctx),
+    "shell.env": async (input, output) => dispatchToHitch("shell.env", input, output, ctx),
+    "experimental.session.compacting": async (input, output) => dispatchToHitch("experimental.session.compacting", input, output, ctx),
+    "experimental.compaction.autocontinue": async (input, output) => dispatchToHitch("experimental.compaction.autocontinue", input, output, ctx),
+    "experimental.text.complete": async (input, output) => dispatchToHitch("experimental.text.complete", input, output, ctx),
+  };
+};
+`)
+	return []byte(b.String()), nil
+}
+
+func jsonArrayLiteral(values []string) (string, error) {
+	b, err := json.Marshal(values)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func jsonStringLiteral(value string) (string, error) {

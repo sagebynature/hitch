@@ -100,6 +100,47 @@ func TestDispatchSync(t *testing.T) {
 	}
 }
 
+func TestDispatchSyncOpenCodeToolBeforeDenyTranslatesToThrow(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := testConfig()
+	cfg.Harness.OpenCode.Enabled = true
+	cfg.Harness.OpenCode.EventMap = map[string]config.EventTypes{"tool.execute.before": {protocol.EventToolRequested}}
+	cfg.Handlers = map[string]config.HandlerConfig{
+		"deny": {
+			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"deny","reason":"no"}}'`},
+			Events:    []string{string(protocol.EventToolRequested)},
+			Mode:      "sync",
+			TimeoutMS: 1000,
+			OnError:   "fail_open",
+			OnTimeout: "fail_open",
+		},
+	}
+	server := New(cfg, slog.Default(), st)
+	body := `{"harness":"opencode","source_event_type":"tool.execute.before","source_payload":{"event":{"input":{"tool":"bash","sessionID":"s1","callID":"c1"},"output":{"args":{"command":"pwd"}}},"metadata":{"session_id":"s1"}},"hitch_client_version":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	var got DispatchResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	var native map[string]interface{}
+	if err := json.Unmarshal(got.NativeResponse, &native); err != nil {
+		t.Fatal(err)
+	}
+	if native["adapter_action"] != "throw" || native["message"] != "no" {
+		t.Fatalf("unexpected native response: %#v", native)
+	}
+}
+
 func TestEventMapOverrideAndAddition(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))

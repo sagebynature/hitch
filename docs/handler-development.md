@@ -33,14 +33,14 @@ Common mappings:
 
 | Developer goal | Hitch event | Example source events |
 | --- | --- | --- |
-| Inspect or block a tool before it runs | `tool.requested` | Codex `PreToolUse`, Hermes `pre_tool_call`, Pi/OMP `tool_call` |
-| Inspect a completed tool result | `tool.completed` | Codex `PostToolUse`, Hermes `transform_tool_result`, Pi/OMP `tool_result` |
-| Add context to a user request | `turn.user_prompt` | Codex `UserPromptSubmit`, Hermes `pre_gateway_dispatch`, Pi/OMP `input` |
-| Inspect or augment an LLM request | `llm.requested` | Hermes `pre_llm_call`; Pi/OMP `before_provider_request` when opted in |
+| Inspect or block a tool before it runs | `tool.requested` | Codex `PreToolUse`, Hermes `pre_tool_call`, Pi/OMP `tool_call`, OpenCode `tool.execute.before` |
+| Inspect a completed tool result | `tool.completed` | Codex `PostToolUse`, Hermes `transform_tool_result`, Pi/OMP `tool_result`, OpenCode `tool.execute.after` |
+| Add context to a user request | `turn.user_prompt` | Codex `UserPromptSubmit`, Hermes `pre_gateway_dispatch`, Pi/OMP `input`, OpenCode `chat.message` |
+| Inspect or augment an LLM request | `llm.requested` | Hermes `pre_llm_call`; Pi/OMP `before_provider_request`; OpenCode `chat.params` or `chat.headers` when opted in |
 | Run at model or agent turn start | `turn.started` | Pi `turn_start`, OMP `turn_start` |
-| Run after model or agent turn completion | `turn.completed` | Codex `Stop`, Pi/OMP `turn_end` |
-| Query assistant output completion consistently | `turn.assistant_completed` | OMP `message_end`; secondary audit rows configured for Codex `Stop`, Hermes `transform_llm_output`, and Pi `turn_end` |
-| Handle compaction lifecycle | `session.compacted` | Codex `PreCompact`, Pi `session_before_compact`, OMP `auto_compaction_start` |
+| Run after model or agent turn completion | `turn.completed` | Codex `Stop`, Pi/OMP `turn_end`, OpenCode `session.idle` |
+| Query assistant output completion consistently | `turn.assistant_completed` | OMP `message_end`; secondary audit rows configured for Codex `Stop`, Hermes `transform_llm_output`, Pi `turn_end`, and OpenCode `session.idle` |
+| Handle compaction lifecycle | `session.compacted` | Codex `PreCompact`, Pi `session_before_compact`, OMP `auto_compaction_start`, OpenCode `experimental.session.compacting` |
 
 Secondary audit rows from multi-event source mappings are not used for sync native-response translation or live handler dispatch. If a handler must block, transform, replace, or observe a live source event, register for the primary Hitch event. Query secondary events such as `turn.assistant_completed` when you need a consistent audit signal across harnesses.
 
@@ -262,7 +262,7 @@ on_error = "fail_open"
 on_timeout = "fail_open"
 ```
 
-`examples/payload-logger.config.toml` enables Codex, Hermes, Pi, and OMP and includes both handler entries.
+`examples/payload-logger.config.toml` enables Codex, Hermes, Pi, OMP, and OpenCode and includes both handler entries.
 
 Run the all-harness local test drive:
 
@@ -270,7 +270,7 @@ Run the all-harness local test drive:
 python3 examples/test_payload_logger.py
 ```
 
-The script starts Hitch on `127.0.0.1:8797`, sends one event through each harness mapper, sends one async observer event, verifies that `tmp/hitch-payload-logger/payloads.jsonl` contains payload records for `codex`, `hermes`, `pi`, and `omp`, and stops the server. If port `8797` is already in use, run with `HITCH_PAYLOAD_LOGGER_PORT=8796 python3 examples/test_payload_logger.py`.
+The script starts Hitch on `127.0.0.1:8797`, sends one event through each harness mapper, sends one async observer event, verifies that `tmp/hitch-payload-logger/payloads.jsonl` contains payload records for `codex`, `hermes`, `pi`, `omp`, and `opencode`, and stops the server. If port `8797` is already in use, run with `HITCH_PAYLOAD_LOGGER_PORT=8796 python3 examples/test_payload_logger.py`.
 
 To test manually, start Hitch:
 

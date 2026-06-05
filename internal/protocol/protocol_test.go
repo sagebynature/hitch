@@ -57,6 +57,12 @@ func TestNewGranularEventTypesAreValid(t *testing.T) {
 	}
 }
 
+func TestOpenCodeHarnessIsValid(t *testing.T) {
+	if !IsValidHarness(HarnessOpenCode) {
+		t.Fatalf("opencode harness should be valid")
+	}
+}
+
 func TestNormalizeHandlerResult(t *testing.T) {
 	r := HandlerResult{Status: StatusOK}
 	if err := NormalizeHandlerResult(&r); err != nil {

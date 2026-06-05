@@ -507,6 +507,70 @@ func TestE2ECodexLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 	}
 }
 
+func TestE2EOpenCodeLifecycleHooksDispatchToNoopObserver(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	cfg := e2eNoopConfig(t, dbPath)
+	cfg.Harness.OpenCode.EventMap = map[string]config.EventTypes{
+		"chat.message":                    {protocol.EventTurnUserPrompt},
+		"tool.execute.before":             {protocol.EventToolRequested},
+		"tool.execute.after":              {protocol.EventToolCompleted},
+		"permission.ask":                  {protocol.EventToolPermissionRequest},
+		"session.created":                 {protocol.EventSessionStarted},
+		"session.idle":                    {protocol.EventTurnCompleted, protocol.EventTurnAssistantCompleted},
+		"experimental.session.compacting": {protocol.EventSessionCompacted},
+		"session.compacted":               {protocol.EventSessionCompacted},
+		"session.error":                   {protocol.EventErrorReported},
+	}
+
+	events := []struct {
+		native string
+		hitch  protocol.EventType
+	}{
+		{"chat.message", protocol.EventTurnUserPrompt},
+		{"tool.execute.before", protocol.EventToolRequested},
+		{"tool.execute.after", protocol.EventToolCompleted},
+		{"permission.ask", protocol.EventToolPermissionRequest},
+		{"session.created", protocol.EventSessionStarted},
+		{"session.idle", protocol.EventTurnCompleted},
+		{"experimental.session.compacting", protocol.EventSessionCompacted},
+		{"session.compacted", protocol.EventSessionCompacted},
+		{"session.error", protocol.EventErrorReported},
+	}
+
+	server := httptest.NewServer(api.New(cfg, slog.Default(), st).Handler())
+	defer server.Close()
+	client := api.Client{BaseURL: server.URL}
+
+	for _, tc := range events {
+		payload := protocol.RawJSON(`{"event":{"input":{"sessionID":"sess"},"output":{}},"metadata":{"session_id":"sess","cwd":"/tmp"}}`)
+		resp, err := client.Dispatch(api.NewEventRequest("opencode", tc.native, payload))
+		if err != nil {
+			t.Fatalf("%s dispatch failed: %v", tc.native, err)
+		}
+		inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+		if err != nil {
+			t.Fatalf("%s inspection failed: %v", tc.native, err)
+		}
+		if inspection.Inbound.SourceEventType != tc.native || inspection.Normalized.HitchEventType != tc.hitch {
+			t.Fatalf("%s was not persisted with expected mapping: %#v", tc.native, inspection)
+		}
+		if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].HandlerName != "noop_observer" || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
+			t.Fatalf("%s noop observer invocation was not persisted: %#v", tc.native, inspection.HandlerInvocations)
+		}
+	}
+	assistantCompleted := onlyInspection(t, ctx, st, protocol.EventTurnAssistantCompleted)
+	if assistantCompleted.Inbound.SourceEventType != "session.idle" {
+		t.Fatalf("session.idle did not produce secondary assistant-completed row: %#v", assistantCompleted)
+	}
+}
+
 func e2eConfig(t *testing.T, dbPath string) config.Config {
 	t.Helper()
 	cfg, err := config.Parse([]byte(`[server]

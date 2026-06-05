@@ -127,6 +127,20 @@ credential_disabled = "error.reported"
 user_bash = "tool.requested"
 user_python = "tool.requested"
 
+[harness.opencode]
+enabled = true
+
+[harness.opencode.event_map]
+"chat.message" = "turn.user_prompt"
+"tool.execute.before" = "tool.requested"
+"tool.execute.after" = "tool.completed"
+"permission.ask" = "tool.permission_requested"
+"session.created" = "session.started"
+"session.idle" = ["turn.completed", "turn.assistant_completed"]
+"session.compacted" = "session.compacted"
+"experimental.session.compacting" = "session.compacted"
+"session.error" = "error.reported"
+
 [handlers.payload_logger_sync]
 command = [
     "python3",

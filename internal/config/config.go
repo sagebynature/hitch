@@ -104,10 +104,11 @@ type HandlerConfig struct {
 }
 
 type HarnessConfig struct {
-	Codex  HarnessToggle `toml:"codex"`
-	Hermes HarnessToggle `toml:"hermes"`
-	Pi     HarnessToggle `toml:"pi"`
-	OMP    HarnessToggle `toml:"omp"`
+	Codex    HarnessToggle `toml:"codex"`
+	Hermes   HarnessToggle `toml:"hermes"`
+	Pi       HarnessToggle `toml:"pi"`
+	OMP      HarnessToggle `toml:"omp"`
+	OpenCode HarnessToggle `toml:"opencode"`
 }
 
 type HarnessToggle struct {
@@ -245,6 +246,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := validateHarnessEventMap("omp", c.Harness.OMP.EventMap); err != nil {
+		return err
+	}
+	if err := validateHarnessEventMap("opencode", c.Harness.OpenCode.EventMap); err != nil {
 		return err
 	}
 	for name, h := range c.Handlers {

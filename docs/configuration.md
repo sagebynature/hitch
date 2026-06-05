@@ -40,6 +40,12 @@ tool_execution_update = "tool.progress"
 turn_end = ["turn.completed", "turn.assistant_completed"]
 ```
 
+```toml
+[harness.opencode.event_map]
+"chat.params" = "llm.requested"
+"command.executed" = "turn.user_prompt"
+```
+
 Keys are source hook/callback names. Values are normalized Hitch event names or ordered lists of normalized Hitch event names. The first event is primary for sync dispatch/native responses; additional events are secondary audit rows. Unknown source events are rejected unless configured here.
 
 

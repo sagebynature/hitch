@@ -14,6 +14,7 @@ import (
 	"github.com/sagebynature/hitch/internal/harness/codex"
 	"github.com/sagebynature/hitch/internal/harness/hermes"
 	"github.com/sagebynature/hitch/internal/harness/omp"
+	"github.com/sagebynature/hitch/internal/harness/opencode"
 	"github.com/sagebynature/hitch/internal/harness/pi"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
@@ -160,6 +161,9 @@ func NativeNoop(harnessName, sourceEventType string) protocol.RawJSON {
 		return native
 	case protocol.HarnessOMP:
 		native, _ := omp.Mapper{}.Translate(sourceEventType, aggregate)
+		return native
+	case protocol.HarnessOpenCode:
+		native, _ := opencode.Mapper{}.Translate(sourceEventType, aggregate)
 		return native
 	default:
 		return nil

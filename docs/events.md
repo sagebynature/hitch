@@ -1,6 +1,6 @@
 # Hitch Events
 
-Hitch turns source hook payloads from Codex, Hermes, Pi, and OMP into one stable event envelope. Handlers receive the normalized envelope on stdin and return one handler result on stdout.
+Hitch turns source hook payloads from Codex, Hermes, Pi, OMP, and OpenCode into one stable event envelope. Handlers receive the normalized envelope on stdin and return one handler result on stdout.
 
 ## Normalized envelope
 
@@ -11,9 +11,9 @@ Every harness normalizer creates the same envelope shape:
 | `hitch_version` | Hitch runtime | Current protocol version. |
 | `event_id` | Hitch runtime | Unique `evt_...` identifier generated when Hitch receives the event. |
 | `received_at` | Hitch runtime | UTC timestamp generated at receipt. |
-| `harness` | Adapter selection | One of `codex`, `hermes`, `pi`, or `omp`. |
+| `harness` | Adapter selection | One of `codex`, `hermes`, `pi`, `omp`, or `opencode`. |
 | `source_event_type` | Harness source event name | The exact source hook or callback name Hitch mapped. |
-| `source_payload` | Harness source payload | The original JSON payload received by Hitch. Pi unwraps the installed extension transport envelope before normalization. |
+| `source_payload` | Harness source payload | The original JSON payload received by Hitch. Pi, OMP, and OpenCode unwrap the installed adapter transport envelope before normalization. |
 | `hitch_event_type` | Server event map | One of the normalized event names below. |
 | `session_id`, `turn_id`, `cwd`, `model`, `transcript_path` | Server normalizer | Optional. Normalizers copy these from source payloads when available; Hermes also uses `extra.task_id` as a `session_id` fallback when it is meaningful. |
 | `payload` | Server normalizer | Hitch-normalized handler payload. Current normalizers conservatively preserve the source payload after any adapter transport unwrapping. |
@@ -46,7 +46,7 @@ Keys are source hook/callback names. Values may be a single Hitch event name or 
 | `turn.assistant_started` | Assistant output starts; retained for compatibility with earlier configs. |
 | `turn.assistant_completed` | Assistant output is available. Hitch may persist this as a secondary audit row in addition to the primary source-event mapping. |
 | `turn.completed` | A model or agent turn completes. This is distinct from assistant-output completion when a harness exposes both boundaries. |
-| `llm.requested` | A provider/LLM request is about to be sent. High-volume provider payloads are opt-in for Pi/OMP defaults. |
+| `llm.requested` | A provider/LLM request is about to be sent. High-volume provider payloads are opt-in for Pi/OMP/OpenCode defaults. |
 | `llm.completed` | A provider/LLM response or transformed model output is available. |
 | `tool.requested` | A tool command, shell command, or tool call is requested before execution. |
 | `tool.permission_requested` | A harness-specific permission decision is requested. |
@@ -68,6 +68,7 @@ Most source events produce one primary normalized event from `[harness.<name>.ev
 | Hermes `pre_llm_call` | `["llm.requested", "turn.user_prompt"]` |
 | Hermes `transform_llm_output` | `["llm.completed", "turn.assistant_completed"]` |
 | Pi `turn_end` | `["turn.completed", "turn.assistant_completed"]` |
+| OpenCode `session.idle` | `["turn.completed", "turn.assistant_completed"]` |
 
 Secondary rows share the same inbound event and payload as the primary row. They are for audit/query consistency and are not dispatched to live handlers; sync handler decisions and native responses are evaluated against the first configured event only.
 
@@ -183,6 +184,48 @@ OMP reuses the Pi adapter response contract for translated native responses.
 | `user_python` | `tool.requested` | Yes | OMP payload | Observational unless `native_response` is supplied. |
 
 OMP handlers may also return `decision.native_response`. When present, Hitch returns that adapter response JSON directly.
+
+## OpenCode source events
+
+OpenCode uses a Hitch-managed TypeScript plugin installed at `~/.config/opencode/plugins/hitch.ts`. The plugin forwards typed control hooks to Hitch's sync endpoint and SDK event-stream lifecycle events to the async event endpoint. Typed control hooks can apply Hitch's native response contract; SDK event-stream events are observer-focused and ignore native responses.
+
+OpenCode adapter response shape:
+
+```json
+{
+  "adapter_action": "noop | throw | set | append | inject_context",
+  "path": ["args"],
+  "value": {},
+  "message": "blocked by policy"
+}
+```
+
+| OpenCode source event | Hitch event | Default | Normalized payload | Adapter response behavior |
+| --- | --- | --- | --- | --- |
+| `chat.message` | `turn.user_prompt` | Yes | `{input, output}` from the hook plus plugin metadata | `block`, `deny`, or `stop` throws; `inject_context` injects a no-reply context message into the session; `transform` can replace `output.parts` from `updated_input`. |
+| `tool.execute.before` | `tool.requested` | Yes | Hook input/output | `block`, `deny`, or `stop` throws; `transform` replaces `output.args` from `updated_input`. |
+| `tool.execute.after` | `tool.completed` | Yes | Hook input/output | `replace_result` or `transform` replaces `output.output` from `updated_output`. |
+| `permission.ask` | `tool.permission_requested` | Yes | Hook input/output | `allow` sets `output.status` to `allow`; `deny`, `block`, or `stop` sets `output.status` to `deny`. |
+| `session.created` | `session.started` | Yes | SDK event payload | Observer lifecycle. |
+| `session.idle` | `turn.completed`, `turn.assistant_completed` | Yes | SDK event payload | Primary `turn.completed` is ingested asynchronously; secondary `turn.assistant_completed` is audit-only. |
+| `session.compacted` | `session.compacted` | Yes | SDK event payload | Observer-only post-compaction lifecycle. |
+| `experimental.session.compacting` | `session.compacted` | Yes | Hook input/output | `inject_context` appends to `output.context`; `transform` replaces `output.prompt` from `updated_input`. |
+| `session.error` | `error.reported` | Yes | SDK event payload | Observer error lifecycle. |
+| `command.execute.before` | `turn.user_prompt` | No | Hook input/output | `block`, `deny`, or `stop` throws; `inject_context` injects a no-reply context message. |
+| `command.executed` | `turn.user_prompt` | No | SDK event payload | Observer-only command audit. |
+| `chat.params`, `chat.headers` | `llm.requested` | No | Hook input/output | `transform` can replace hook output from `updated_input` or `native_response`. |
+| `experimental.text.complete` | `llm.completed` | No | Hook input/output | `replace_result` or `transform` replaces `output.output` from `updated_output`. |
+| `shell.env` | `tool.requested` | No | Hook input/output | `transform` can replace `output.env` from `updated_input` or `native_response`. |
+| `tool.definition` | `tool.requested` | No | Hook input/output | `transform` can replace hook output from `updated_input` or `native_response`. |
+| `permission.asked`, `permission.updated` | `tool.permission_requested` | No | SDK event payload | Observer-only compatibility names; use `permission.ask` for control. |
+| `permission.replied` | `tool.permission_requested` | No | SDK event payload | Observer-only permission response audit. |
+| `message.updated`, `message.removed`, `message.part.updated`, `message.part.removed` | `turn.assistant_completed` or `turn.assistant_started` | No | SDK event payload | High-volume message telemetry; configure explicitly when needed. |
+| `file.edited` | `tool.completed` | No | SDK event payload | File mutation audit. |
+| `file.watcher.updated` | `tool.progress` | No | SDK event payload | File watcher telemetry. |
+| `todo.updated` | `turn.started` | No | SDK event payload | Task-state audit. |
+| `server.connected`, `server.instance.disposed`, `installation.updated`, `installation.update-available`, `lsp.client.diagnostics`, `lsp.updated`, `tui.prompt.append`, `tui.command.execute`, `tui.toast.show`, `pty.created`, `pty.updated`, `pty.exited`, `pty.deleted`, `vcs.branch.updated` | Operator-selected Hitch event | No | SDK event payload | Product/runtime telemetry; leave unmapped by default unless a handler needs it. |
+
+OpenCode typed-hook handlers may also return `decision.native_response`. When present, Hitch returns that adapter response JSON directly.
 
 ## Decision translation rules
 

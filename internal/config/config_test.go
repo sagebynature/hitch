@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sagebynature/hitch/internal/protocol"
 )
 
 const baseConfig = `
@@ -215,6 +217,47 @@ func TestDefaultConfigTOMLMatchesEmbeddedConfigFile(t *testing.T) {
 		if _, ok := cfg.Harness.OMP.EventMap[excluded]; ok {
 			t.Fatalf("default OMP map should exclude noisy source event %q", excluded)
 		}
+	}
+}
+
+func TestDefaultConfigIncludesOpenCodeHarness(t *testing.T) {
+	cfg, err := Parse([]byte(DefaultConfigTOML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Harness.OpenCode.Enabled {
+		t.Fatal("harness.opencode should be enabled by default")
+	}
+	cases := map[string]protocol.EventType{
+		"chat.message":                    protocol.EventTurnUserPrompt,
+		"tool.execute.before":             protocol.EventToolRequested,
+		"tool.execute.after":              protocol.EventToolCompleted,
+		"permission.ask":                  protocol.EventToolPermissionRequest,
+		"session.created":                 protocol.EventSessionStarted,
+		"session.compacted":               protocol.EventSessionCompacted,
+		"experimental.session.compacting": protocol.EventSessionCompacted,
+		"session.error":                   protocol.EventErrorReported,
+	}
+	for source, want := range cases {
+		got := cfg.Harness.OpenCode.EventMap[source]
+		if len(got) == 0 || got[0] != want {
+			t.Fatalf("opencode %s mapped to %#v, want first %s", source, got, want)
+		}
+	}
+	idle := cfg.Harness.OpenCode.EventMap["session.idle"]
+	if len(idle) != 2 || idle[0] != protocol.EventTurnCompleted || idle[1] != protocol.EventTurnAssistantCompleted {
+		t.Fatalf("session.idle mapped to %#v", idle)
+	}
+}
+
+func TestValidateRejectsInvalidOpenCodeEventMapValue(t *testing.T) {
+	cfg, err := Parse([]byte(DefaultConfigTOML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Harness.OpenCode.EventMap["chat.message"] = EventTypes{protocol.EventType("not.real")}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "harness.opencode.event_map.chat.message") {
+		t.Fatalf("expected OpenCode event-map validation error, got %v", err)
 	}
 }
 

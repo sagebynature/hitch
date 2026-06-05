@@ -36,7 +36,7 @@ Usage:
   hitch-client uninstall [options]
 
 Hook flags:
-  -harness string   source harness: codex, hermes, pi, omp
+  -harness string   source harness: codex, hermes, pi, omp, opencode
   -event string     source event type, e.g. PreToolUse
   -sync             wait for native response on stdout
   -url string       Hitch API URL (overrides HITCH_URL)
@@ -44,8 +44,8 @@ Hook flags:
 
 Examples:
   hitch-client -harness codex -event PreToolUse -sync < payload.json
-  hitch-client install --only codex,hermes --yes
-  hitch-client uninstall --only codex --yes
+  hitch-client install --only codex,hermes,opencode --yes
+  hitch-client uninstall --only opencode --yes
 
 Use hitch-client help install for installer options.
 `)
@@ -58,7 +58,7 @@ Usage:
   hitch-client [options] < payload.json
 
 Options:
-  -harness string   source harness: codex, hermes, pi, omp
+  -harness string   source harness: codex, hermes, pi, omp, opencode
   -event string     source event type, e.g. PreToolUse
   -sync             wait for native response on stdout
   -url string       Hitch API URL (overrides HITCH_URL)
@@ -73,11 +73,11 @@ Examples:
 func printInstallHelp(w io.Writer, uninstall bool) {
 	verb := "Install"
 	command := "install"
-	example := "hitch-client install --only codex,hermes --yes"
+	example := "hitch-client install --only codex,hermes,opencode --yes"
 	if uninstall {
 		verb = "Uninstall"
 		command = "uninstall"
-		example = "hitch-client uninstall --only codex --yes"
+		example = "hitch-client uninstall --only opencode --yes"
 	}
 	fmt.Fprintf(w, `%s Hitch-managed harness hooks.
 

@@ -52,7 +52,7 @@
       <article class="docs-content">
         <p class="eyebrow" id="top">Latest reference</p>
         <h1>Hitch Documentation</h1>
-        <p class="lede">Hitch is a local universal hook adapter for Codex, Pi, OMP, and Hermes. It gives open-source developers one portable handler protocol for guardrails, audit logs, policy checks, context injection, and result transformation.</p>
+        <p class="lede">Hitch is a local universal hook adapter for Codex, Pi, OMP, Hermes, and OpenCode. It gives open-source developers one portable handler protocol for guardrails, audit logs, policy checks, context injection, and result transformation.</p>
 
         <section id="quickstart">
           <h2>Quickstart</h2>
@@ -62,7 +62,7 @@ hitch serve --config ~/.config/hitch/config.toml
 hitch status --json
 hitch doctor --json
 hitch-client install --only codex --dry-run --json
-hitch-client install --only codex --yes --json</code></pre>
+hitch-client install --only opencode --yes --json</code></pre>
           <p>The default server listens on <code>127.0.0.1:8799</code> and stores SQLite audit records at <code>~/.local/share/hitch/events.sqlite</code>.</p>
         </section>
 
@@ -84,11 +84,14 @@ hitch-client install --only pi --yes --json
 hitch-client install --only pi --url http://127.0.0.1:8797 --yes --json
 hitch-client install --only omp --yes --json
 hitch-client install --only omp --url http://127.0.0.1:8797 --yes --json
+hitch-client install --only opencode --yes --json
+hitch-client install --only opencode --url http://127.0.0.1:8797 --yes --json
 hitch-client uninstall --only codex --yes --json
 hitch-client uninstall --only hermes --yes --json
 hitch-client uninstall --only pi --yes --json
-hitch-client uninstall --only omp --yes --json</code></pre>
-          <p>The source installer seeds <code>~/.config/hitch/config.toml</code> when missing, prompts for a Hitch server URL through <code>/dev/tty</code> even when installed with <code>curl ... | sh</code>, and can persist <code>HITCH_URL</code> for remote servers. <code>hitch-client install</code> installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>, installs Hitch-managed Hermes shell hooks into <code>~/.hermes/config.yaml</code>, installs a Hitch-managed Pi extension into <code>~/.pi/agent/extensions/hitch/index.ts</code>, and installs a Hitch-managed OMP extension into <code>~/.omp/agent/extensions/hitch/index.ts</code>. Managed shell hook commands omit <code>-url</code> by default, resolve the server URL at runtime, and execute <code>hitch-client</code> directly. The Pi and OMP extensions also resolve the server URL at runtime unless <code>--url</code> pins one, dispatch extension callbacks plus <code>ctx</code> metadata to Hitch, apply Hitch's adapter response, and fail open when Hitch is unavailable. <code>hitch-client uninstall</code> also recognizes legacy managed shell hooks that used <code>hitch adapter</code>.</p>
+hitch-client uninstall --only omp --yes --json
+hitch-client uninstall --only opencode --yes --json</code></pre>
+          <p>The source installer seeds <code>~/.config/hitch/config.toml</code> when missing, prompts for a Hitch server URL through <code>/dev/tty</code> even when installed with <code>curl ... | sh</code>, and can persist <code>HITCH_URL</code> for remote servers. <code>hitch-client install</code> installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>, installs Hitch-managed Hermes shell hooks into <code>~/.hermes/config.yaml</code>, installs a Hitch-managed Pi extension into <code>~/.pi/agent/extensions/hitch/index.ts</code>, installs a Hitch-managed OMP extension into <code>~/.omp/agent/extensions/hitch/index.ts</code>, and installs a Hitch-managed OpenCode plugin into <code>~/.config/opencode/plugins/hitch.ts</code>. Managed shell hook commands omit <code>-url</code> by default, resolve the server URL at runtime, and execute <code>hitch-client</code> directly.</p>
         </section>
 
         <section id="configuration">
@@ -154,9 +157,9 @@ mode = "sync"
 timeout_ms = 1000
 on_error = "fail_closed"
 on_timeout = "fail_closed"</code></pre>
-          <p><code>turn.assistant_completed</code> is the consistent assistant-output-complete audit signal. Hitch stores it directly for OMP <code>message_end</code> and as a configured secondary row for Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, and Pi <code>turn_end</code>. Secondary audit rows are not used for sync native-response translation or live handler dispatch.</p>
+          <p><code>turn.assistant_completed</code> is the consistent assistant-output-complete audit signal. Hitch stores it directly for OMP <code>message_end</code> and as a configured secondary row for Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, Pi <code>turn_end</code>, and OpenCode <code>session.idle</code>. Secondary audit rows are not used for sync native-response translation or live handler dispatch.</p>
           <h3>Payload logger for every harness</h3>
-          <p><code>examples/handlers/payload_logger.py</code> appends each event payload to a JSONL log and returns <code>behavior:"none"</code>. Configure one sync handler and one async handler with <code>events = ["*"]</code> to observe Codex, Hermes, Pi, and OMP without changing control flow.</p>
+          <p><code>examples/handlers/payload_logger.py</code> appends each event payload to a JSONL log and returns <code>behavior:"none"</code>. Configure one sync handler and one async handler with <code>events = ["*"]</code> to observe Codex, Hermes, Pi, OMP, and OpenCode without changing control flow.</p>
           <pre class="code-block"><code>[handlers.payload_logger_sync]
 command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
 working_dir = ".."
@@ -174,7 +177,7 @@ mode = "async"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"</code></pre>
-          <p>Run <code>python3 examples/test_payload_logger.py</code> from the repository root. The script starts Hitch on <code>127.0.0.1:8797</code>, sends events through all four harness mappers, sends one async observer event, and verifies <code>tmp/hitch-payload-logger/payloads.jsonl</code>. If port <code>8797</code> is already in use, run with <code>HITCH_PAYLOAD_LOGGER_PORT=8796 python3 examples/test_payload_logger.py</code>. If you install real Hermes hooks against this example server, use <code>hitch-client install --only hermes --url http://127.0.0.1:8797 --yes --json</code>. Handler config changes affect <code>hitch serve</code>; the hook shim only reads stdin, resolves the API URL, and dispatches to the local Hitch API.</p>
+          <p>Run <code>python3 examples/test_payload_logger.py</code> from the repository root. The script starts Hitch on <code>127.0.0.1:8797</code>, sends events through all five harness mappers, sends one async observer event, and verifies <code>tmp/hitch-payload-logger/payloads.jsonl</code>. If port <code>8797</code> is already in use, run with <code>HITCH_PAYLOAD_LOGGER_PORT=8796 python3 examples/test_payload_logger.py</code>. If you install real Hermes hooks against this example server, use <code>hitch-client install --only hermes --url http://127.0.0.1:8797 --yes --json</code>. Handler config changes affect <code>hitch serve</code>; the hook shim only reads stdin, resolves the API URL, and dispatches to the local Hitch API.</p>
           <p>Matching handlers run in lexicographic handler-name order. Higher-precedence decisions win; blocking decisions outrank transforms, context injection, and allow decisions. Multiple context injections concatenate, but multiple transform or replace-result decisions are rejected.</p>
           <div class="docs-index">
             <a class="doc-card" href="../../handler-development.md"><small>Guide</small><h3>Building handlers</h3><p>Detailed handler modes, config mapping, decision behavior reference, test-drive commands, inspection, replay, and troubleshooting.</p></a>
@@ -184,7 +187,7 @@ on_timeout = "fail_open"</code></pre>
 
         <section id="hitch-events">
           <h2>Hitch events</h2>
-          <p>Hitch normalizes Codex, Hermes, Pi, and OMP source events into one stable envelope. Current normalizers preserve the source payload unchanged in both <code>source_payload</code> and <code>payload</code> where no canonical extractor is defined, then set <code>hitch_event_type</code> from the server-side event map.</p>
+          <p>Hitch normalizes Codex, Hermes, Pi, OMP, and OpenCode source events into one stable envelope. Current normalizers preserve the source payload unchanged in both <code>source_payload</code> and <code>payload</code> where no canonical extractor is defined, then set <code>hitch_event_type</code> from the server-side event map.</p>
           <p>Per-harness <code>[harness.&lt;name&gt;.event_map]</code> config entries are the source of truth for source-event to Hitch-event mapping. Values may be a single Hitch event or an ordered list. The first event is primary for sync dispatch/native responses; additional events are secondary audit rows. The default config intentionally omits duplicate or high-volume observer events; the catalog below marks those as opt-in so operators can add them when needed.</p>
           <h3>Normalized event types</h3>
           <table>
@@ -199,7 +202,7 @@ on_timeout = "fail_open"</code></pre>
               <tr><td><code>turn.assistant_started</code></td><td>Assistant output starts; retained for compatibility with earlier configs.</td></tr>
               <tr><td><code>turn.assistant_completed</code></td><td>Assistant output is available. Hitch may persist this as a secondary audit row in addition to the primary source-event mapping.</td></tr>
               <tr><td><code>turn.completed</code></td><td>A model or agent turn completes. This is distinct from assistant-output completion when a harness exposes both boundaries.</td></tr>
-              <tr><td><code>llm.requested</code></td><td>A provider/LLM request is about to be sent. High-volume provider payloads are opt-in for Pi/OMP defaults.</td></tr>
+              <tr><td><code>llm.requested</code></td><td>A provider/LLM request is about to be sent. High-volume provider payloads are opt-in for Pi/OMP/OpenCode defaults.</td></tr>
               <tr><td><code>llm.completed</code></td><td>A provider/LLM response or transformed model output is available.</td></tr>
               <tr><td><code>tool.requested</code></td><td>A tool command, shell command, or tool call is requested before execution.</td></tr>
               <tr><td><code>tool.permission_requested</code></td><td>A harness-specific permission decision is requested.</td></tr>
@@ -377,7 +380,7 @@ hitch replay --config internal/config/default.config.toml norm_...</code></pre>
             <a class="doc-card" href="../../configuration.md"><small>Reference</small><h3>Configuration</h3><p>Config sections and strict validation rules.</p></a>
             <a class="doc-card" href="../../handler-protocol.md"><small>Reference</small><h3>Handler protocol</h3><p>stdin/stdout contract and result aggregation rules.</p></a>
             <a class="doc-card" href="../../handler-development.md"><small>Guide</small><h3>Building handlers</h3><p>Step-by-step handler development, event mapping, decisions, examples, inspection, replay, and troubleshooting.</p></a>
-            <a class="doc-card" href="../../events.md"><small>Reference</small><h3>Hitch events</h3><p>Normalized event taxonomy and source-event mappings for Codex, Hermes, Pi, and OMP.</p></a>
+            <a class="doc-card" href="../../events.md"><small>Reference</small><h3>Hitch events</h3><p>Normalized event taxonomy and source-event mappings for Codex, Hermes, Pi, OMP, and OpenCode.</p></a>
             <a class="doc-card" href="../../harness-contracts.md"><small>Reference</small><h3>Harness contracts</h3><p>Supported dispatch modes and adapter behavior.</p></a>
             <a class="doc-card" href="../../replay.md"><small>Reference</small><h3>Replay</h3><p>Event inspection and replay commands.</p></a>
           </div>

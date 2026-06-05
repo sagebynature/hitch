@@ -107,6 +107,21 @@ user_bash = "tool.requested"
 user_python = "tool.requested"
 # Full source-event catalog and opt-in mappings are documented in docs/events.md.
 
+[harness.opencode]
+enabled = true
+
+[harness.opencode.event_map]
+"chat.message" = "turn.user_prompt"
+"tool.execute.before" = "tool.requested"
+"tool.execute.after" = "tool.completed"
+"permission.ask" = "tool.permission_requested"
+"session.created" = "session.started"
+"session.idle" = ["turn.completed", "turn.assistant_completed"]
+"session.compacted" = "session.compacted"
+"experimental.session.compacting" = "session.compacted"
+"session.error" = "error.reported"
+# Full source-event catalog and opt-in mappings are documented in docs/events.md.
+
 [handlers.noop_observer]
 command = ["hitch", "handler", "noop-observer"]
 events = ["*"]

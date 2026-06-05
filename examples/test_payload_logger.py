@@ -6,7 +6,7 @@ From the repository root:
     python3 examples/test_payload_logger.py
 
 The script starts Hitch with examples/payload-logger.config.toml, sends events
-for Codex, Hermes, Pi, and OMP, and verifies that each payload was appended to
+for Codex, Hermes, Pi, OMP, and OpenCode, and verifies that each payload was appended to
 tmp/hitch-payload-logger/payloads.jsonl.
 """
 
@@ -145,11 +145,12 @@ def main() -> int:
         dispatch_sync("hermes", "pre_tool_call", {"tool_name": "bash", "input": {"command": "pwd"}})
         dispatch_sync("pi", "tool_call", {"name": "bash", "input": {"command": "pwd"}})
         dispatch_sync("omp", "tool_call", {"name": "bash", "input": {"command": "pwd"}})
+        dispatch_sync("opencode", "tool.execute.before", {"event": {"input": {"tool": "bash", "sessionID": "session"}, "output": {"args": {"command": "pwd"}}}, "metadata": {"session_id": "session"}})
         dispatch_async("codex", "UserPromptSubmit", {"hook_event_name": "UserPromptSubmit", "prompt": "log this payload asynchronously"})
 
-        lines = wait_for_log_count(5)
+        lines = wait_for_log_count(6)
         harnesses = {line["harness"] for line in lines}
-        expected = {"codex", "hermes", "pi", "omp"}
+        expected = {"codex", "hermes", "pi", "omp", "opencode"}
         if harnesses != expected:
             raise AssertionError(f"expected harnesses {expected}, found {harnesses}")
         if not all("payload" in line for line in lines):

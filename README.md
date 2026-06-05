@@ -2,7 +2,7 @@
 
 Write one hook event handler for all your agent harnesses.
 
-Hitch is a local universal hook adapter for Codex, Pi, OMP, and Hermes. It gives open-source developers a single, portable handler protocol instead of forcing every tool, guardrail, logger, or policy script to learn each harness's native hook format.
+Hitch is a local universal hook adapter for Codex, Pi, OMP, Hermes, and OpenCode. It gives open-source developers a single, portable handler protocol instead of forcing every tool, guardrail, logger, or policy script to learn each harness's native hook format.
 
 ## Why Hitch?
 
@@ -20,7 +20,7 @@ Use Hitch to build:
 
 ## What it provides
 
-- **Universal event envelope** for native Codex, Pi, OMP, and Hermes hook payloads.
+- **Universal event envelope** for native Codex, Pi, OMP, Hermes, and OpenCode hook payloads.
 - **External-command handler protocol**: handlers read normalized JSON from stdin and return JSON decisions on stdout.
 - **Synchronous decisions** translated back to each harness's native response format.
 - **SQLite audit trail** for inbound events, normalized events, handler invocations, and native responses.
@@ -120,10 +120,11 @@ Hitch currently includes:
 - Codex and Hermes shell hook shim entrypoints via `hitch-client`.
 - Pi TypeScript extension hook installation into `~/.pi/agent/extensions/hitch/index.ts`.
 - OMP TypeScript extension hook installation into `~/.omp/agent/extensions/hitch/index.ts`.
+- OpenCode TypeScript plugin installation into `~/.config/opencode/plugins/hitch.ts`.
 - Server config seeding via `hitch config init` for `~/.config/hitch/config.toml`.
-- Harness detection for Codex, Hermes, Pi, and OMP.
+- Harness detection for Codex, Hermes, Pi, OMP, and OpenCode.
 
-The source installer creates missing Hitch user config with `hitch config init`, prompts for a Hitch server URL through `/dev/tty` even when installed with `curl ... | sh`, and can persist `HITCH_URL` for remote servers. `hitch-client install` installs supported Codex and Hermes hooks, installs managed Pi and OMP extensions, and prefers `hitch-client` in managed shell-hook commands when it is installed beside `hitch`. Generated hooks resolve the server URL at runtime unless `--url` pins one.
+The source installer creates missing Hitch user config with `hitch config init`, prompts for a Hitch server URL through `/dev/tty` even when installed with `curl ... | sh`, and can persist `HITCH_URL` for remote servers. `hitch-client install` installs supported Codex and Hermes hooks, installs managed Pi and OMP extensions, installs a managed OpenCode plugin, and prefers `hitch-client` in managed shell-hook commands when it is installed beside `hitch`. Generated hooks resolve the server URL at runtime unless `--url` pins one.
 
 Preview hook installation:
 

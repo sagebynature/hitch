@@ -12,7 +12,7 @@ Proposed
 
 Hitch is a spin-off from Agent Pulse / sentiment-viewer. Agent Pulse proved that local agent harnesses can emit useful lifecycle information, but its event model was intentionally narrow: classify user intent, user reaction, and agent action for a desktop status panel.
 
-Hitch has a broader goal: provide a universal hook adapter for agent harnesses, initially Codex, Pi, Oh My Pi (OMP), and Hermes. Source harnesses have different hook mechanisms, event names, payload schemas, return contracts, trust models, and installation surfaces. Hitch must normalize those into a homogeneous event protocol while preserving the original native payload as JSON.
+Hitch has a broader goal: provide a universal hook adapter for agent harnesses, initially Codex, Pi, Oh My Pi (OMP), Hermes, and OpenCode. Source harnesses have different hook mechanisms, event names, payload schemas, return contracts, trust models, and installation surfaces. Hitch must normalize those into a homogeneous event protocol while preserving the original native payload as JSON.
 
 The key architectural complication is that harness hooks are not all fire-and-forget. Some are observational, while others are control points that expect a synchronous decision, transformed input, injected context, or rewritten output. Hitch therefore needs to handle both asynchronous event ingestion and synchronous native-response translation.
 
@@ -493,7 +493,7 @@ Python is good for handler authoring and prototypes, but not the best core daemo
 
 Use **Go for the Hitch daemon, `hitch-client` hook shim, persistence layer, installer/doctor CLI, native response aggregation, and operational logging**.
 
-Use **TypeScript for harness adapters where the harness integration surface is JavaScript/TypeScript-native**, especially Pi and OMP extensions. Codex and Hermes shell-hook adapters should use the shipped `hitch-client` binary.
+Use **TypeScript for harness adapters where the harness integration surface is JavaScript/TypeScript-native**, especially Pi and OMP extensions and the OpenCode plugin. Codex and Hermes shell-hook adapters should use the shipped `hitch-client` binary.
 
 Support user handlers as external commands first. This avoids committing to an in-process plugin ABI and lets handlers be written in any language.
 
@@ -561,10 +561,11 @@ Required test fixtures:
 
 - Native Codex payload -> Hitch envelope.
 - Native Hermes payload -> Hitch envelope.
-- Native Pi/OMP event -> Hitch envelope.
+- Native Pi/OMP/OpenCode event -> Hitch envelope.
 - Hitch decision -> Codex stdout JSON.
 - Hitch decision -> Hermes stdout JSON.
 - Hitch decision -> Pi/OMP return object or event mutation.
+- Hitch decision -> OpenCode plugin adapter action.
 - Conflicting handler decisions aggregate deterministically.
 - Handler timeout obeys configured fallback policy.
 - LLM-backed handler recursion guard prevents re-entry.

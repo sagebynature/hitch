@@ -16,6 +16,7 @@ import (
 	"github.com/sagebynature/hitch/internal/harness/codex"
 	"github.com/sagebynature/hitch/internal/harness/hermes"
 	"github.com/sagebynature/hitch/internal/harness/omp"
+	"github.com/sagebynature/hitch/internal/harness/opencode"
 	"github.com/sagebynature/hitch/internal/harness/pi"
 	"github.com/sagebynature/hitch/internal/protocol"
 	"github.com/sagebynature/hitch/internal/store"
@@ -65,10 +66,11 @@ func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
 }
 func buildHarnessRuntimes(cfg config.Config) map[protocol.Harness]harnessRuntime {
 	return map[protocol.Harness]harnessRuntime{
-		protocol.HarnessCodex:  {normalizer: codex.Mapper{}, eventMap: cfg.Harness.Codex.EventMap},
-		protocol.HarnessHermes: {normalizer: hermes.Mapper{}, eventMap: cfg.Harness.Hermes.EventMap},
-		protocol.HarnessPi:     {normalizer: pi.Mapper{}, eventMap: cfg.Harness.Pi.EventMap},
-		protocol.HarnessOMP:    {normalizer: omp.Mapper{}, eventMap: cfg.Harness.OMP.EventMap},
+		protocol.HarnessCodex:    {normalizer: codex.Mapper{}, eventMap: cfg.Harness.Codex.EventMap},
+		protocol.HarnessHermes:   {normalizer: hermes.Mapper{}, eventMap: cfg.Harness.Hermes.EventMap},
+		protocol.HarnessPi:       {normalizer: pi.Mapper{}, eventMap: cfg.Harness.Pi.EventMap},
+		protocol.HarnessOMP:      {normalizer: omp.Mapper{}, eventMap: cfg.Harness.OMP.EventMap},
+		protocol.HarnessOpenCode: {normalizer: opencode.Mapper{}, eventMap: cfg.Harness.OpenCode.EventMap},
 	}
 }
 
