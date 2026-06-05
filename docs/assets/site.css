@@ -208,8 +208,8 @@ h1, h2, h3 {
   line-height: .94;
   letter-spacing: -.065em;
 }
-h1 { max-width: 10ch; margin: 0; font-size: clamp(4.25rem, 12vw, 9.5rem); }
-h2 { margin: 0 0 1rem; font-size: clamp(2.8rem, 6.2vw, 5.4rem); }
+h1 { max-width: 10ch; margin: 0; font-size: clamp(3.5rem, 10vw, 6.5rem); }
+h2 { margin: 0 0 1rem; font-size: clamp(2.8rem, 6.2vw, 4.4rem); }
 h3 { margin: 0 0 .7rem; font-size: clamp(1.35rem, 1.8vw, 1.8rem); letter-spacing: -.045em; }
 .lede { max-width: 42rem; color: var(--copy); font-size: clamp(1.08rem, 1.65vw, 1.28rem); line-height: 1.52; }
 .hero-actions, .actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 2rem; }
