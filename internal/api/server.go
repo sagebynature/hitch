@@ -32,7 +32,7 @@ type Server struct {
 
 type harnessRuntime struct {
 	normalizer harness.Normalizer
-	eventMap   map[string]protocol.EventType
+	eventMap   map[string]config.EventTypes
 }
 
 type EventRequest struct {
@@ -125,11 +125,11 @@ func (s *Server) ingest(ctx context.Context, r *http.Request, sync bool) (EventR
 	if len(req.SourcePayload) == 0 || !json.Valid(req.SourcePayload) {
 		return EventResponse{}, protocol.EventEnvelope{}, badRequest("source_payload must be valid JSON")
 	}
-	hitchEventType, ok := runtime.eventMap[req.SourceEventType]
+	hitchEventTypes, ok := runtime.eventMap[req.SourceEventType]
 	if !ok {
 		return EventResponse{}, protocol.EventEnvelope{}, badRequest("unsupported %s event %q", req.Harness, req.SourceEventType)
 	}
-	env, err := runtime.normalizer.Normalize(req.SourceEventType, req.SourcePayload, hitchEventType)
+	env, err := runtime.normalizer.Normalize(req.SourceEventType, req.SourcePayload, hitchEventTypes[0])
 	if err != nil {
 		return EventResponse{}, protocol.EventEnvelope{}, badRequest("%s", err.Error())
 	}
@@ -141,10 +141,10 @@ func (s *Server) ingest(ctx context.Context, r *http.Request, sync bool) (EventR
 	if err := s.store.InsertNormalized(ctx, store.NormalizedEvent{ID: normalizedID, InboundEventID: inboundID, HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: protocol.Version}); err != nil {
 		return EventResponse{}, protocol.EventEnvelope{}, err
 	}
-	if derivedType, ok := derivedEventType(env); ok {
+	for _, eventType := range hitchEventTypes[1:] {
 		derived := env
 		derived.EventID = harness.NewID("evt")
-		derived.HitchEventType = derivedType
+		derived.HitchEventType = eventType
 		if err := s.store.InsertNormalized(ctx, store.NormalizedEvent{ID: harness.NewID("norm"), InboundEventID: inboundID, HitchEventType: derived.HitchEventType, Envelope: derived, MappingVersion: protocol.Version}); err != nil {
 			return EventResponse{}, protocol.EventEnvelope{}, err
 		}
@@ -153,27 +153,6 @@ func (s *Server) ingest(ctx context.Context, r *http.Request, sync bool) (EventR
 		go s.dispatchAsync(context.Background(), normalizedID, env)
 	}
 	return EventResponse{EventID: env.EventID, NormalizedEventID: normalizedID}, env, nil
-}
-
-func derivedEventType(env protocol.EventEnvelope) (protocol.EventType, bool) {
-	if env.HitchEventType == protocol.EventTurnAssistantCompleted {
-		return "", false
-	}
-	switch env.Harness {
-	case protocol.HarnessCodex:
-		if env.SourceEventType == "Stop" {
-			return protocol.EventTurnAssistantCompleted, true
-		}
-	case protocol.HarnessHermes:
-		if env.SourceEventType == "transform_llm_output" {
-			return protocol.EventTurnAssistantCompleted, true
-		}
-	case protocol.HarnessPi:
-		if env.SourceEventType == "turn_end" {
-			return protocol.EventTurnAssistantCompleted, true
-		}
-	}
-	return "", false
 }
 
 func (s *Server) dispatchAsync(ctx context.Context, normalizedID string, env protocol.EventEnvelope) {

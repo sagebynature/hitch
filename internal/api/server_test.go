@@ -108,9 +108,9 @@ func TestEventMapOverrideAndAddition(t *testing.T) {
 	}
 	defer st.Close()
 	cfg := testConfig()
-	cfg.Harness.Codex.EventMap = map[string]protocol.EventType{
-		"PreToolUse": protocol.EventToolPermissionRequest,
-		"CustomHook": protocol.EventTurnStarted,
+	cfg.Harness.Codex.EventMap = map[string]config.EventTypes{
+		"PreToolUse": {protocol.EventToolPermissionRequest},
+		"CustomHook": {protocol.EventTurnStarted},
 	}
 	s := New(cfg, slog.Default(), st)
 
@@ -184,7 +184,7 @@ func TestDefaultConfigExcludesNoisySourceEventsButAllowsOptIn(t *testing.T) {
 	}
 
 	cfg := testConfig()
-	cfg.Harness.OMP.EventMap["before_provider_request"] = protocol.EventLLMRequested
+	cfg.Harness.OMP.EventMap["before_provider_request"] = config.EventTypes{protocol.EventLLMRequested}
 	optInServer := New(cfg, slog.Default(), st)
 	optInReq := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"harness":"omp","source_event_type":"before_provider_request","source_payload":{"type":"before_provider_request","payload":{"model":"gpt-test"}},"hitch_client_version":"test"}`))
 	optInW := httptest.NewRecorder()
@@ -251,5 +251,51 @@ func TestIngestPersistsDerivedAssistantCompletionEvent(t *testing.T) {
 	}
 	if derived.Normalized.Envelope.SessionID != "session_1" || derived.Normalized.Envelope.TurnID != "turn_3" || derived.Normalized.Envelope.Model != "gpt-test" {
 		t.Fatalf("derived event lost metadata: %#v", derived.Normalized.Envelope)
+	}
+}
+
+func TestIngestPersistsConfiguredSecondaryEvent(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	s := New(testConfig(), slog.Default(), st)
+
+	body := `{"harness":"hermes","source_event_type":"pre_llm_call","source_payload":{"session_id":"session_1","cwd":"/tmp/hitch","extra":{"turn_id":"turn_1","model":"gpt-test","user_message":"inspect this repo"}},"hitch_client_version":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("event code %d body %s", w.Code, w.Body.String())
+	}
+	var resp EventResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	primary, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if primary.Normalized.HitchEventType != protocol.EventLLMRequested {
+		t.Fatalf("primary mapping changed: %#v", primary.Normalized)
+	}
+	promptID, err := st.LatestEventIDByType(ctx, protocol.EventTurnUserPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt, err := st.InspectEvent(ctx, promptID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prompt.Normalized.InboundEventID != primary.Normalized.InboundEventID {
+		t.Fatalf("secondary event not tied to same inbound event: primary=%#v secondary=%#v", primary.Normalized, prompt.Normalized)
+	}
+	if prompt.Normalized.Envelope.HitchEventType != protocol.EventTurnUserPrompt {
+		t.Fatalf("secondary event has wrong type: %#v", prompt.Normalized.Envelope)
+	}
+	if prompt.Normalized.Envelope.TurnID != "turn_1" || prompt.Normalized.Envelope.Model != "gpt-test" {
+		t.Fatalf("secondary event lost metadata: %#v", prompt.Normalized.Envelope)
 	}
 }

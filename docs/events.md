@@ -24,14 +24,14 @@ Unsupported source event types are rejected unless configured in the harness eve
 ## Configurable source event mapping
 
 `internal/config/default.config.toml` carries the supported source-event mappings for each harness. Edit or extend the relevant table in user config to change how a source hook maps to a Hitch event:
-
 ```toml
 [harness.codex.event_map]
 PreToolUse = "tool.permission_requested"
+Stop = ["turn.completed", "turn.assistant_completed"]
 CustomHook = "turn.started"
 ```
 
-Keys are source hook/callback names. Values must be valid Hitch event names from the taxonomy below. Unknown source events are rejected unless they appear in the configured event map. The tables below include the full known source-event catalog; `Default = No` means Hitch deliberately excludes the event from the seeded server map to avoid duplicate or high-volume audit records, but operators can opt in by adding that row to their own `[harness.<name>.event_map]`.
+Keys are source hook/callback names. Values may be a single Hitch event name or an ordered list of Hitch event names from the taxonomy below. The first event is the primary mapping used for sync dispatch and native-response translation; additional events are persisted as secondary audit/query rows tied to the same inbound event. Unknown source events are rejected unless they appear in the configured event map. The tables below include the full known source-event catalog; `Default = No` means Hitch deliberately excludes the event from the seeded server map to avoid duplicate or high-volume audit records, but operators can opt in by adding that row to their own `[harness.<name>.event_map]`.
 
 ## Hitch event taxonomy
 
@@ -44,7 +44,7 @@ Keys are source hook/callback names. Values must be valid Hitch event names from
 | `turn.started` | A model or agent turn begins. |
 | `turn.user_prompt` | User input or gateway dispatch is submitted. |
 | `turn.assistant_started` | Assistant output starts; retained for compatibility with earlier configs. |
-| `turn.assistant_completed` | Assistant output is available. Hitch may persist this as a derived audit row in addition to the primary source-event mapping. |
+| `turn.assistant_completed` | Assistant output is available. Hitch may persist this as a secondary audit row in addition to the primary source-event mapping. |
 | `turn.completed` | A model or agent turn completes. This is distinct from assistant-output completion when a harness exposes both boundaries. |
 | `llm.requested` | A provider/LLM request is about to be sent. High-volume provider payloads are opt-in for Pi/OMP defaults. |
 | `llm.completed` | A provider/LLM response or transformed model output is available. |
@@ -58,17 +58,18 @@ Keys are source hook/callback names. Values must be valid Hitch event names from
 | `subagent.completed` | A subagent completes or stops. |
 | `error.reported` | A normalized harness error or credential failure is reported. |
 
-## Derived normalized events
+## Secondary normalized events
 
-Most source events produce one primary normalized event from `[harness.<name>.event_map]`. A small set also produces a secondary normalized audit row so queries can interpret assistant-output completion consistently across harnesses without changing the primary lifecycle mapping:
+Most source events produce one primary normalized event from `[harness.<name>.event_map]`. When a source event maps to an ordered list, Hitch also persists secondary normalized audit rows so queries can interpret the same source event through multiple cross-harness lifecycle meanings:
 
-| Source event | Primary Hitch event | Derived Hitch event |
-| --- | --- | --- |
-| Codex `Stop` | `turn.completed` | `turn.assistant_completed` |
-| Hermes `transform_llm_output` | `llm.completed` | `turn.assistant_completed` |
-| Pi `turn_end` | `turn.completed` | `turn.assistant_completed` |
+| Source event | Configured Hitch events |
+| --- | --- |
+| Codex `Stop` | `["turn.completed", "turn.assistant_completed"]` |
+| Hermes `pre_llm_call` | `["llm.requested", "turn.user_prompt"]` |
+| Hermes `transform_llm_output` | `["llm.completed", "turn.assistant_completed"]` |
+| Pi `turn_end` | `["turn.completed", "turn.assistant_completed"]` |
 
-Derived rows share the same inbound event and payload as the primary row. They are for audit/query consistency and are not dispatched to live handlers; sync handler decisions and native responses are evaluated against the primary event only.
+Secondary rows share the same inbound event and payload as the primary row. They are for audit/query consistency and are not dispatched to live handlers; sync handler decisions and native responses are evaluated against the first configured event only.
 
 ## Codex source events
 
@@ -83,7 +84,7 @@ Derived rows share the same inbound event and payload as the primary row. They a
 | `PreCompact` | `session.compacted` | Original Codex payload | `stop` or `block` returns `decision: "stop"` with `reason`. |
 | `PostCompact` | `session.compacted` | Original Codex payload | `stop` or `block` returns `decision: "stop"` with `reason`. |
 | `SubagentStop` | `subagent.completed` | Original Codex payload | `continue` returns `continue: true` with `reason`. |
-| `Stop` | `turn.completed` | Original Codex payload | `stop` or `block` returns `decision: "stop"` with `reason`. |
+| `Stop` | `turn.completed`, `turn.assistant_completed` | Original Codex payload | Primary `turn.completed` handles `stop` or `block` as `decision: "stop"` with `reason`; secondary `turn.assistant_completed` is audit-only. |
 
 Codex handlers may also return `decision.native_response`. When present, Hitch returns that JSON directly instead of translating the normalized behavior.
 
@@ -93,14 +94,14 @@ Codex handlers may also return `decision.native_response`. When present, Hitch r
 | --- | --- | --- | --- | --- |
 | `pre_tool_call` | `tool.requested` | Yes | Original Hermes payload | `block`, `deny`, or `stop` returns `action: "block"` and `message`. |
 | `post_tool_call` | `tool.completed` | No | Original Hermes payload | Observer-only duplicate of `transform_tool_result` in observed runs; configure explicitly when that distinct callback is needed. Hitch returns `{}` unless `native_response` is supplied. |
-| `pre_llm_call` | `llm.requested` | Yes | Original Hermes payload | `inject_context` returns `context`. |
+| `pre_llm_call` | `llm.requested`, `turn.user_prompt` | Yes | Original Hermes payload | Primary `llm.requested` handles `inject_context` as `context`; secondary `turn.user_prompt` is audit-only. |
 | `post_llm_call` | `llm.completed` | No | Original Hermes payload | Observer-only and potentially large; configure explicitly when raw post-call telemetry is needed. Hitch returns `{}` unless `native_response` is supplied. |
 | `on_session_start` | `session.started` | Yes | Original Hermes payload | No special translation; Hitch returns `{}` unless `native_response` is supplied. |
 | `on_session_end` | `session.ended` | Yes | Original Hermes payload | No special translation; Hitch returns `{}` unless `native_response` is supplied. |
 | `subagent_stop` | `subagent.completed` | Yes | Original Hermes payload | No special translation; Hitch returns `{}` unless `native_response` is supplied. |
 | `transform_tool_result` | `tool.completed` | Yes | Original Hermes payload | `replace_result` or `transform` returns `result` from `updated_output`. |
 | `transform_terminal_output` | `tool.completed` | Yes | Original Hermes payload | `replace_result` or `transform` returns `result` from `updated_output`. |
-| `transform_llm_output` | `llm.completed` | Yes | Original Hermes payload | `replace_result` or `transform` returns `result` from `updated_output`. |
+| `transform_llm_output` | `llm.completed`, `turn.assistant_completed` | Yes | Original Hermes payload | Primary `llm.completed` handles `replace_result` or `transform` by returning `result` from `updated_output`; secondary `turn.assistant_completed` is audit-only. |
 | `pre_gateway_dispatch` | `turn.user_prompt` | Yes | Original Hermes payload | `handled` returns `action: "skip"`; `transform` returns `action: "rewrite"` and `message` from `updated_input`; `allow` returns `action: "allow"`. |
 
 Hermes handlers may also return `decision.native_response`. When present, Hitch returns that JSON directly.
@@ -133,7 +134,7 @@ Pi uses a TypeScript adapter response contract:
 | `before_provider_request` | `llm.requested` | No | Original Pi payload | Large provider request snapshot; configure explicitly for provider-request policy or rewrite handlers. `transform` returns `updated_input` as `return_value`. |
 | `tool_call` | `tool.requested` | Yes | Original Pi payload | `block`, `deny`, or `stop` returns `{block:true, reason}`; `transform` mutates the source event at path `input` to `updated_input`. |
 | `tool_result` | `tool.completed` | Yes | Original Pi payload | `replace_result` or `transform` returns `updated_output` as `return_value`. |
-| `turn_end` | `turn.completed` | Yes | Original Pi payload | No special translation; `adapter_action:"noop"`. |
+| `turn_end` | `turn.completed`, `turn.assistant_completed` | Yes | Original Pi payload | Primary `turn.completed` has no special translation; secondary `turn.assistant_completed` is audit-only. |
 | `agent_end` | `turn.completed` | No | Original Pi payload | Large final message snapshot; configure explicitly when full agent-end transcript capture is needed. |
 | `session_start` | `session.started` | Yes | Original Pi payload | No special translation; `adapter_action:"noop"`. |
 | `session_shutdown` | `session.ended` | Yes | Original Pi payload | No special translation; `adapter_action:"noop"`. |

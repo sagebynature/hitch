@@ -44,20 +44,20 @@ PostToolUse = "tool.completed"
 PreCompact = "session.compacted"
 PostCompact = "session.compacted"
 SubagentStop = "subagent.completed"
-Stop = "turn.completed"
+Stop = ["turn.completed", "turn.assistant_completed"]
 
 [harness.hermes]
 enabled = true
 
 [harness.hermes.event_map]
 pre_tool_call = "tool.requested"
-pre_llm_call = "llm.requested"
+pre_llm_call = ["llm.requested", "turn.user_prompt"]
 on_session_start = "session.started"
 on_session_end = "session.ended"
 subagent_stop = "subagent.completed"
 transform_tool_result = "tool.completed"
 transform_terminal_output = "tool.completed"
-transform_llm_output = "llm.completed"
+transform_llm_output = ["llm.completed", "turn.assistant_completed"]
 pre_gateway_dispatch = "turn.user_prompt"
 # Full source-event catalog and opt-in mappings are documented in docs/events.md.
 
@@ -69,7 +69,7 @@ input = "turn.user_prompt"
 turn_start = "turn.started"
 tool_call = "tool.requested"
 tool_result = "tool.completed"
-turn_end = "turn.completed"
+turn_end = ["turn.completed", "turn.assistant_completed"]
 session_start = "session.started"
 session_shutdown = "session.ended"
 session_before_switch = "session.resumed"

@@ -111,8 +111,31 @@ type HarnessConfig struct {
 }
 
 type HarnessToggle struct {
-	Enabled  bool                          `toml:"enabled"`
-	EventMap map[string]protocol.EventType `toml:"event_map"`
+	Enabled  bool                  `toml:"enabled"`
+	EventMap map[string]EventTypes `toml:"event_map"`
+}
+
+type EventTypes []protocol.EventType
+
+func (e *EventTypes) UnmarshalTOML(v interface{}) error {
+	switch value := v.(type) {
+	case string:
+		*e = EventTypes{protocol.EventType(value)}
+		return nil
+	case []interface{}:
+		out := make(EventTypes, 0, len(value))
+		for _, item := range value {
+			s, ok := item.(string)
+			if !ok {
+				return fmt.Errorf("event map values must be strings, got %T", item)
+			}
+			out = append(out, protocol.EventType(s))
+		}
+		*e = out
+		return nil
+	default:
+		return fmt.Errorf("event map value must be a string or list of strings, got %T", v)
+	}
 }
 
 func Load(path string) (Config, error) {
@@ -257,13 +280,23 @@ func (c Config) Validate() error {
 	return nil
 }
 
-func validateHarnessEventMap(harnessName string, eventMap map[string]protocol.EventType) error {
-	for sourceEvent, hitchEvent := range eventMap {
+func validateHarnessEventMap(harnessName string, eventMap map[string]EventTypes) error {
+	for sourceEvent, hitchEvents := range eventMap {
 		if sourceEvent == "" {
 			return fmt.Errorf("harness.%s.event_map source event cannot be empty", harnessName)
 		}
-		if !protocol.IsValidEventType(hitchEvent) {
-			return fmt.Errorf("harness.%s.event_map.%s references unknown event %q", harnessName, sourceEvent, hitchEvent)
+		if len(hitchEvents) == 0 {
+			return fmt.Errorf("harness.%s.event_map.%s must map to at least one event", harnessName, sourceEvent)
+		}
+		seen := map[protocol.EventType]struct{}{}
+		for _, hitchEvent := range hitchEvents {
+			if !protocol.IsValidEventType(hitchEvent) {
+				return fmt.Errorf("harness.%s.event_map.%s references unknown event %q", harnessName, sourceEvent, hitchEvent)
+			}
+			if _, ok := seen[hitchEvent]; ok {
+				return fmt.Errorf("harness.%s.event_map.%s repeats event %q", harnessName, sourceEvent, hitchEvent)
+			}
+			seen[hitchEvent] = struct{}{}
 		}
 	}
 	return nil

@@ -87,8 +87,25 @@ PreToolUse = "tool.permission_requested"
 	if err != nil {
 		t.Fatalf("valid event map rejected: %v", err)
 	}
-	if cfg.Harness.Codex.EventMap["CustomHook"] != "turn.started" {
-		t.Fatalf("event map did not parse: %#v", cfg.Harness.Codex.EventMap)
+	if got := cfg.Harness.Codex.EventMap["CustomHook"]; len(got) != 1 || got[0] != "turn.started" {
+		t.Fatalf("event map scalar did not parse: %#v", cfg.Harness.Codex.EventMap)
+	}
+	if got := cfg.Harness.Codex.EventMap["PreToolUse"]; len(got) != 1 || got[0] != "tool.permission_requested" {
+		t.Fatalf("event map scalar did not parse: %#v", cfg.Harness.Codex.EventMap)
+	}
+}
+
+func TestParseHarnessEventMapList(t *testing.T) {
+	cfg, err := Parse([]byte(baseConfig + `
+[harness.codex.event_map]
+Stop = ["turn.completed", "turn.assistant_completed"]
+`))
+	if err != nil {
+		t.Fatalf("valid event map list rejected: %v", err)
+	}
+	got := cfg.Harness.Codex.EventMap["Stop"]
+	if len(got) != 2 || got[0] != "turn.completed" || got[1] != "turn.assistant_completed" {
+		t.Fatalf("event map list did not parse in order: %#v", got)
 	}
 }
 
@@ -102,6 +119,35 @@ BadHook = "not.real"
 	}
 }
 
+func TestParseRejectsInvalidHarnessEventMapList(t *testing.T) {
+	_, err := Parse([]byte(baseConfig + `
+[harness.codex.event_map]
+Stop = ["turn.completed", "not.real"]
+`))
+	if err == nil {
+		t.Fatal("invalid harness event map list accepted")
+	}
+}
+
+func TestParseRejectsEmptyHarnessEventMapList(t *testing.T) {
+	_, err := Parse([]byte(baseConfig + `
+[harness.codex.event_map]
+Stop = []
+`))
+	if err == nil {
+		t.Fatal("empty harness event map list accepted")
+	}
+}
+
+func TestParseRejectsDuplicateHarnessEventMapList(t *testing.T) {
+	_, err := Parse([]byte(baseConfig + `
+[harness.codex.event_map]
+Stop = ["turn.completed", "turn.completed"]
+`))
+	if err == nil {
+		t.Fatal("duplicate harness event map list accepted")
+	}
+}
 func TestLoadResolvesHandlerWorkingDirRelativeToConfig(t *testing.T) {
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, "config")
@@ -134,11 +180,23 @@ func TestDefaultConfigTOMLMatchesEmbeddedConfigFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("embedded default config is invalid: %v", err)
 	}
-	if cfg.Harness.Codex.EventMap["PreToolUse"] != "tool.requested" || cfg.Harness.Hermes.EventMap["pre_tool_call"] != "tool.requested" {
+	if got := cfg.Harness.Codex.EventMap["PreToolUse"]; len(got) != 1 || got[0] != "tool.requested" {
 		t.Fatalf("default config omitted source event mappings: %#v", cfg.Harness)
 	}
-	if cfg.Harness.Hermes.EventMap["pre_llm_call"] != "llm.requested" || cfg.Harness.Hermes.EventMap["transform_llm_output"] != "llm.completed" {
-		t.Fatalf("default config omitted LLM source event mappings: %#v", cfg.Harness.Hermes.EventMap)
+	if got := cfg.Harness.Hermes.EventMap["pre_tool_call"]; len(got) != 1 || got[0] != "tool.requested" {
+		t.Fatalf("default config omitted source event mappings: %#v", cfg.Harness)
+	}
+	if got := cfg.Harness.Codex.EventMap["Stop"]; len(got) != 2 || got[0] != "turn.completed" || got[1] != "turn.assistant_completed" {
+		t.Fatalf("default config should map Codex Stop to primary and assistant completion events: %#v", got)
+	}
+	if got := cfg.Harness.Hermes.EventMap["pre_llm_call"]; len(got) != 2 || got[0] != "llm.requested" || got[1] != "turn.user_prompt" {
+		t.Fatalf("default config should map Hermes pre_llm_call to LLM and prompt events: %#v", got)
+	}
+	if got := cfg.Harness.Hermes.EventMap["transform_llm_output"]; len(got) != 2 || got[0] != "llm.completed" || got[1] != "turn.assistant_completed" {
+		t.Fatalf("default config should map Hermes transform_llm_output to LLM and assistant completion events: %#v", got)
+	}
+	if got := cfg.Harness.Pi.EventMap["turn_end"]; len(got) != 2 || got[0] != "turn.completed" || got[1] != "turn.assistant_completed" {
+		t.Fatalf("default config should map Pi turn_end to primary and assistant completion events: %#v", got)
 	}
 	for _, excluded := range []string{"post_tool_call", "post_llm_call"} {
 		if _, ok := cfg.Harness.Hermes.EventMap[excluded]; ok {
@@ -150,7 +208,7 @@ func TestDefaultConfigTOMLMatchesEmbeddedConfigFile(t *testing.T) {
 			t.Fatalf("default Pi map should exclude noisy source event %q", excluded)
 		}
 	}
-	if cfg.Harness.OMP.EventMap["message_end"] != "turn.assistant_completed" {
+	if got := cfg.Harness.OMP.EventMap["message_end"]; len(got) != 1 || got[0] != "turn.assistant_completed" {
 		t.Fatalf("default OMP map should keep message_end as assistant completion: %#v", cfg.Harness.OMP.EventMap)
 	}
 	for _, excluded := range []string{"context", "before_provider_request", "tool_execution_update", "auto_retry_start", "message_start"} {

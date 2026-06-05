@@ -44,7 +44,7 @@ PostToolUse = "tool.completed"
 PreCompact = "session.compacted"
 PostCompact = "session.compacted"
 SubagentStop = "subagent.completed"
-Stop = "turn.completed"
+Stop = ["turn.completed", "turn.assistant_completed"]
 
 [harness.hermes]
 enabled = true
@@ -52,14 +52,14 @@ enabled = true
 [harness.hermes.event_map]
 pre_tool_call = "tool.requested"
 post_tool_call = "tool.completed"
-pre_llm_call = "llm.requested"
+pre_llm_call = ["llm.requested", "turn.user_prompt"]
 post_llm_call = "llm.completed"
 on_session_start = "session.started"
 on_session_end = "session.ended"
 subagent_stop = "subagent.completed"
 transform_tool_result = "tool.completed"
 transform_terminal_output = "tool.completed"
-transform_llm_output = "llm.completed"
+transform_llm_output = ["llm.completed", "turn.assistant_completed"]
 pre_gateway_dispatch = "turn.user_prompt"
 
 [harness.pi]
@@ -74,7 +74,7 @@ context = "turn.started"
 before_provider_request = "llm.requested"
 tool_call = "tool.requested"
 tool_result = "tool.completed"
-turn_end = "turn.completed"
+turn_end = ["turn.completed", "turn.assistant_completed"]
 agent_end = "turn.completed"
 session_start = "session.started"
 session_shutdown = "session.ended"

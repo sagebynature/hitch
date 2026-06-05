@@ -154,7 +154,7 @@ mode = "sync"
 timeout_ms = 1000
 on_error = "fail_closed"
 on_timeout = "fail_closed"</code></pre>
-          <p><code>turn.assistant_completed</code> is the consistent assistant-output-complete audit signal. Hitch derives it from Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, and Pi <code>turn_end</code>, while OMP emits it directly from <code>message_end</code>. Derived audit rows are not used for sync native-response translation or live handler dispatch.</p>
+          <p><code>turn.assistant_completed</code> is the consistent assistant-output-complete audit signal. Hitch stores it directly for OMP <code>message_end</code> and as a configured secondary row for Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, and Pi <code>turn_end</code>. Secondary audit rows are not used for sync native-response translation or live handler dispatch.</p>
           <h3>Payload logger for every harness</h3>
           <p><code>examples/handlers/payload_logger.py</code> appends each event payload to a JSONL log and returns <code>behavior:"none"</code>. Configure one sync handler and one async handler with <code>events = ["*"]</code> to observe Codex, Hermes, Pi, and OMP without changing control flow.</p>
           <pre class="code-block"><code>[handlers.payload_logger_sync]
@@ -185,7 +185,7 @@ on_timeout = "fail_open"</code></pre>
         <section id="hitch-events">
           <h2>Hitch events</h2>
           <p>Hitch normalizes Codex, Hermes, Pi, and OMP source events into one stable envelope. Current normalizers preserve the source payload unchanged in both <code>source_payload</code> and <code>payload</code> where no canonical extractor is defined, then set <code>hitch_event_type</code> from the server-side event map.</p>
-          <p>Per-harness <code>[harness.&lt;name&gt;.event_map]</code> config entries are the source of truth for source-event to Hitch-event mapping. The default config intentionally omits duplicate or high-volume observer events; the catalog below marks those as opt-in so operators can add them when needed.</p>
+          <p>Per-harness <code>[harness.&lt;name&gt;.event_map]</code> config entries are the source of truth for source-event to Hitch-event mapping. Values may be a single Hitch event or an ordered list. The first event is primary for sync dispatch/native responses; additional events are secondary audit rows. The default config intentionally omits duplicate or high-volume observer events; the catalog below marks those as opt-in so operators can add them when needed.</p>
           <h3>Normalized event types</h3>
           <table>
             <thead><tr><th>Hitch event</th><th>Meaning</th></tr></thead>
@@ -197,7 +197,7 @@ on_timeout = "fail_open"</code></pre>
               <tr><td><code>turn.started</code></td><td>A model or agent turn begins.</td></tr>
               <tr><td><code>turn.user_prompt</code></td><td>User input or gateway dispatch is submitted.</td></tr>
               <tr><td><code>turn.assistant_started</code></td><td>Assistant output starts; retained for compatibility with earlier configs.</td></tr>
-              <tr><td><code>turn.assistant_completed</code></td><td>Assistant output is available. Hitch may persist this as a derived audit row in addition to the primary source-event mapping.</td></tr>
+              <tr><td><code>turn.assistant_completed</code></td><td>Assistant output is available. Hitch may persist this as a secondary audit row in addition to the primary source-event mapping.</td></tr>
               <tr><td><code>turn.completed</code></td><td>A model or agent turn completes. This is distinct from assistant-output completion when a harness exposes both boundaries.</td></tr>
               <tr><td><code>llm.requested</code></td><td>A provider/LLM request is about to be sent. High-volume provider payloads are opt-in for Pi/OMP defaults.</td></tr>
               <tr><td><code>llm.completed</code></td><td>A provider/LLM response or transformed model output is available.</td></tr>
@@ -213,8 +213,8 @@ on_timeout = "fail_open"</code></pre>
             </tbody>
           </table>
 
-          <h3>Derived normalized events</h3>
-          <p>Most source events produce one primary normalized event from <code>[harness.&lt;name&gt;.event_map]</code>. Hitch also persists secondary audit rows for assistant-output completion from Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, and Pi <code>turn_end</code>. Derived rows share the same inbound event and payload as the primary row and are for audit/query consistency; they are not dispatched to live handlers or used for sync native-response translation.</p>
+          <h3>Secondary normalized events</h3>
+          <p>Most source events produce one primary normalized event from <code>[harness.&lt;name&gt;.event_map]</code>. When a source event maps to an ordered list, Hitch also persists secondary audit rows for the remaining configured events. Defaults use this for Codex <code>Stop</code>, Hermes <code>pre_llm_call</code>, Hermes <code>transform_llm_output</code>, and Pi <code>turn_end</code>. Secondary rows share the same inbound event and payload as the primary row and are for audit/query consistency; they are not dispatched to live handlers or used for sync native-response translation.</p>
 
           <h3>Codex event mapping</h3>
           <table>
@@ -229,7 +229,7 @@ on_timeout = "fail_open"</code></pre>
               <tr><td><code>PreCompact</code></td><td><code>session.compacted</code></td><td><code>stop</code> or <code>block</code> returns <code>decision:"stop"</code>.</td></tr>
               <tr><td><code>PostCompact</code></td><td><code>session.compacted</code></td><td><code>stop</code> or <code>block</code> returns <code>decision:"stop"</code>.</td></tr>
               <tr><td><code>SubagentStop</code></td><td><code>subagent.completed</code></td><td><code>continue</code> returns <code>continue:true</code>.</td></tr>
-              <tr><td><code>Stop</code></td><td><code>turn.completed</code></td><td><code>stop</code> or <code>block</code> returns <code>decision:"stop"</code>.</td></tr>
+              <tr><td><code>Stop</code></td><td><code>turn.completed</code>, <code>turn.assistant_completed</code></td><td>Primary <code>turn.completed</code> handles <code>stop</code> or <code>block</code> as <code>decision:"stop"</code>; secondary <code>turn.assistant_completed</code> is audit-only.</td></tr>
             </tbody>
           </table>
 
@@ -239,14 +239,14 @@ on_timeout = "fail_open"</code></pre>
             <tbody>
               <tr><td><code>pre_tool_call</code></td><td><code>tool.requested</code> <small>(default)</small></td><td><code>block</code>, <code>deny</code>, or <code>stop</code> returns <code>action:"block"</code> and <code>message</code>.</td></tr>
               <tr><td><code>post_tool_call</code></td><td><code>tool.completed</code> <small>(opt-in)</small></td><td>Observer-only duplicate of <code>transform_tool_result</code> in observed runs; no special translation.</td></tr>
-              <tr><td><code>pre_llm_call</code></td><td><code>llm.requested</code> <small>(default)</small></td><td><code>inject_context</code> returns <code>context</code>.</td></tr>
+              <tr><td><code>pre_llm_call</code></td><td><code>llm.requested</code>, <code>turn.user_prompt</code> <small>(default)</small></td><td>Primary <code>llm.requested</code> handles <code>inject_context</code> as <code>context</code>; secondary <code>turn.user_prompt</code> is audit-only.</td></tr>
               <tr><td><code>post_llm_call</code></td><td><code>llm.completed</code> <small>(opt-in)</small></td><td>Observer-only and potentially large; no special translation.</td></tr>
               <tr><td><code>on_session_start</code></td><td><code>session.started</code> <small>(default)</small></td><td>No special translation.</td></tr>
               <tr><td><code>on_session_end</code></td><td><code>session.ended</code> <small>(default)</small></td><td>No special translation.</td></tr>
               <tr><td><code>subagent_stop</code></td><td><code>subagent.completed</code> <small>(default)</small></td><td>No special translation.</td></tr>
               <tr><td><code>transform_tool_result</code></td><td><code>tool.completed</code> <small>(default)</small></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
               <tr><td><code>transform_terminal_output</code></td><td><code>tool.completed</code> <small>(default)</small></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
-              <tr><td><code>transform_llm_output</code></td><td><code>llm.completed</code> <small>(default)</small></td><td><code>replace_result</code> or <code>transform</code> returns <code>result</code> from <code>updated_output</code>.</td></tr>
+              <tr><td><code>transform_llm_output</code></td><td><code>llm.completed</code>, <code>turn.assistant_completed</code> <small>(default)</small></td><td>Primary <code>llm.completed</code> handles <code>replace_result</code> or <code>transform</code>; secondary <code>turn.assistant_completed</code> is audit-only.</td></tr>
               <tr><td><code>pre_gateway_dispatch</code></td><td><code>turn.user_prompt</code> <small>(default)</small></td><td><code>handled</code> returns <code>action:"skip"</code>; <code>transform</code> returns <code>action:"rewrite"</code>; <code>allow</code> returns <code>action:"allow"</code>.</td></tr>
             </tbody>
           </table>
@@ -264,7 +264,7 @@ on_timeout = "fail_open"</code></pre>
               <tr><td><code>before_provider_request</code></td><td><code>llm.requested</code> <small>(opt-in)</small></td><td>Large provider request snapshot; <code>transform</code> returns <code>updated_input</code>.</td></tr>
               <tr><td><code>tool_call</code></td><td><code>tool.requested</code> <small>(default)</small></td><td><code>block</code>, <code>deny</code>, or <code>stop</code> returns a block object; <code>transform</code> mutates source path <code>input</code>.</td></tr>
               <tr><td><code>tool_result</code></td><td><code>tool.completed</code> <small>(default)</small></td><td><code>replace_result</code> or <code>transform</code> returns <code>updated_output</code>.</td></tr>
-              <tr><td><code>turn_end</code></td><td><code>turn.completed</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>turn_end</code></td><td><code>turn.completed</code>, <code>turn.assistant_completed</code> <small>(default)</small></td><td>Primary <code>turn.completed</code> is <code>noop</code>; secondary <code>turn.assistant_completed</code> is audit-only.</td></tr>
               <tr><td><code>agent_end</code></td><td><code>turn.completed</code> <small>(opt-in)</small></td><td>Large final message snapshot.</td></tr>
               <tr><td><code>session_start</code></td><td><code>session.started</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
               <tr><td><code>session_shutdown</code></td><td><code>session.ended</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>

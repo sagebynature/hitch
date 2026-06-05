@@ -39,10 +39,10 @@ Common mappings:
 | Inspect or augment an LLM request | `llm.requested` | Hermes `pre_llm_call`; Pi/OMP `before_provider_request` when opted in |
 | Run at model or agent turn start | `turn.started` | Pi `turn_start`, OMP `turn_start` |
 | Run after model or agent turn completion | `turn.completed` | Codex `Stop`, Pi/OMP `turn_end` |
-| Query assistant output completion consistently | `turn.assistant_completed` | OMP `message_end`; audit rows derived from Codex `Stop`, Hermes `transform_llm_output`, and Pi `turn_end` |
+| Query assistant output completion consistently | `turn.assistant_completed` | OMP `message_end`; secondary audit rows configured for Codex `Stop`, Hermes `transform_llm_output`, and Pi `turn_end` |
 | Handle compaction lifecycle | `session.compacted` | Codex `PreCompact`, Pi `session_before_compact`, OMP `auto_compaction_start` |
 
-Derived audit rows are not used for sync native-response translation or live handler dispatch. If a handler must block, transform, replace, or observe a live source event, register for the primary Hitch event. Query `turn.assistant_completed` when you need a consistent assistant-output-complete audit signal across harnesses.
+Secondary audit rows from multi-event source mappings are not used for sync native-response translation or live handler dispatch. If a handler must block, transform, replace, or observe a live source event, register for the primary Hitch event. Query secondary events such as `turn.assistant_completed` when you need a consistent audit signal across harnesses.
 
 You may also subscribe to `"*"` during development. For production handlers, prefer explicit event names.
 

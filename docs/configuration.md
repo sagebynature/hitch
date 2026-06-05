@@ -37,9 +37,10 @@ Harness event maps live in config. The default config includes the recommended l
 [harness.omp.event_map]
 before_provider_request = "llm.requested"
 tool_execution_update = "tool.progress"
+turn_end = ["turn.completed", "turn.assistant_completed"]
 ```
 
-Keys are source hook/callback names. Values are normalized Hitch event names. Unknown source events are rejected unless configured here.
+Keys are source hook/callback names. Values are normalized Hitch event names or ordered lists of normalized Hitch event names. The first event is primary for sync dispatch/native responses; additional events are secondary audit rows. Unknown source events are rejected unless configured here.
 
 
 Paths beginning with `~/` are expanded where config allows path values.
