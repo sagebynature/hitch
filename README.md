@@ -1,30 +1,44 @@
 # Hitch
 
-Write one hook event handler for all your agent harnesses.
+Control every agent lifecycle from one event layer.
 
-Hitch is a local universal hook adapter for Codex, Pi, OMP, Hermes, and OpenCode. It gives open-source developers a single, portable handler protocol instead of forcing every tool, guardrail, logger, or policy script to learn each harness's native hook format.
+Hitch turns Codex, Hermes, Pi, OMP, and OpenCode hooks into one portable event protocol. Write a hook once, run it across harnesses, preserve the native payload, and route lifecycle events to local or remote handlers.
 
 ## Why Hitch?
 
-Agent harnesses are moving fast, and each one ships its own hook payloads, event names, and response shapes. That fragmentation makes useful developer tools harder to share.
+AI coding agents are moving fast. Each harness has its own lifecycle events, payload shapes, hook configuration, response rules, and execution model. That fragmentation makes useful guardrails, loggers, policy checks, context injectors, and workflow automations harder to build and harder to share.
 
-Hitch normalizes those harness-specific hooks into one event envelope, runs your configured handlers, records what happened, and translates synchronous decisions back into the native response format the harness expects.
+Hitch normalizes those harness-specific hooks into one event envelope while retaining the original source payload. It then routes the normalized event to your configured handlers, records what happened, and translates synchronous decisions back into the native response format each harness expects.
 
-Use Hitch to build:
+Use Hitch when you want to:
 
-- shared guardrails for tool calls and command execution
-- audit logs for local agent activity
-- policy checks that work across multiple harnesses
-- context injection and result transformation handlers
-- reusable open-source hook packages that are not locked to one agent CLI
+- write one policy, logger, or workflow hook and reuse it across multiple agent harnesses
+- move between agent tools without rebuilding your automation for every hook format
+- preserve native harness payloads while relying on stable normalized lifecycle fields
+- expose local agent lifecycle events over a REST API for inspection, replay, or remote dispatch
+- deploy Hitch as a service so teams can centralize hook routing, execution, audit, and governance
+
+## For solo developers
+
+Stop rewriting hooks for every agent CLI.
+
+A single Hitch handler can watch tool calls, block risky commands, inject context, transform results, or append audit logs across supported harnesses. Handlers read one JSON envelope on stdin and return one JSON result on stdout, so you can write them in shell, Python, Node, Go, or any language that can run as a command.
+
+## For teams
+
+Let developers choose their harness. Keep lifecycle control centralized.
+
+Your team may use Codex, Hermes, Pi, OMP, OpenCode, or a new harness next month. Hitch lets those tools emit lifecycle events into one REST API, locally or remotely, so platform, security, and developer-experience teams can manage routing and handler execution from one place without forcing every developer onto the same agent CLI.
 
 ## What it provides
 
-- **Universal event envelope** for native Codex, Pi, OMP, Hermes, and OpenCode hook payloads.
+- **Universal lifecycle event envelope** for native Codex, Hermes, Pi, OMP, and OpenCode hook payloads.
+- **Original payload preservation** through `source_payload`, so handlers can inspect harness-specific detail when needed.
 - **External-command handler protocol**: handlers read normalized JSON from stdin and return JSON decisions on stdout.
 - **Synchronous decisions** translated back to each harness's native response format.
+- **Local-first, remote-ready REST API** for event ingestion, synchronous dispatch, health checks, event inspection, and replay.
+- **Central hook routing and execution** through server-side handler config.
 - **SQLite audit trail** for inbound events, normalized events, handler invocations, and native responses.
-- **Local HTTP API** for event ingestion, synchronous dispatch, health checks, event inspection, and replay.
 - **hitch-client hook shim** for shell-based harness integrations.
 
 Verified API endpoints:
@@ -99,7 +113,7 @@ See `docs/handler-protocol.md` for the full handler result contract.
 ## Common commands
 
 ```sh
-make test              # Run Go and adapter tests
+make test              # Run Go tests
 make build             # Build bin/hitch
 make serve             # Run the local Hitch server
 make install-dry-run   # Preview hook installation
@@ -109,7 +123,6 @@ Run tests directly:
 
 ```sh
 go test ./...
-bun test adapters/**/*.test.ts
 ```
 
 ## Harness integration status

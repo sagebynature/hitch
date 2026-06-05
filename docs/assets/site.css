@@ -212,6 +212,21 @@ h1 { max-width: 10ch; margin: 0; font-size: clamp(3.5rem, 10vw, 6.5rem); }
 h2 { margin: 0 0 1rem; font-size: clamp(2.8rem, 6.2vw, 4.4rem); }
 h3 { margin: 0 0 .7rem; font-size: clamp(1.35rem, 1.8vw, 1.8rem); letter-spacing: -.045em; }
 .lede { max-width: 42rem; color: var(--copy); font-size: clamp(1.08rem, 1.65vw, 1.28rem); line-height: 1.52; }
+.proof-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+  max-width: 42rem;
+  margin-top: 1.4rem;
+}
+.proof-grid span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .48rem .65rem;
+  background: rgb(255 255 255 / 0.035);
+  color: var(--copy);
+  font: 500 .7rem/1.25 var(--mono);
+}
 .hero-actions, .actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 2rem; }
 .button {
   display: inline-flex;
@@ -404,7 +419,7 @@ h3 { margin: 0 0 .7rem; font-size: clamp(1.35rem, 1.8vw, 1.8rem); letter-spacing
   .nav-links { width: 100%; margin-left: 0; overflow-x: auto; padding-bottom: .25rem; }
   .hero, .section-grid, .docs-shell { grid-template-columns: 1fr; }
   .hero { min-height: auto; }
-  .card-grid, .docs-index, .split { grid-template-columns: 1fr; }
+  .card-grid, .docs-index, .split, .proof-grid { grid-template-columns: 1fr; }
   .flow { grid-template-columns: 1fr; }
   .docs-sidebar { position: static; height: auto; }
 }

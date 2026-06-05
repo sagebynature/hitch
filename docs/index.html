@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hitch — one hook handler for every agent harness</title>
-    <meta name="description" content="Hitch is a local universal hook adapter for Codex, Pi, OMP, Hermes, and OpenCode. Write one handler protocol and reuse it across agent harnesses." />
+    <title>Hitch — one event layer for every agent harness</title>
+    <meta name="description" content="Hitch is the universal event layer for Codex, Hermes, Pi, OMP, and OpenCode. Normalize lifecycle events, preserve native payloads, and route hooks locally or remotely." />
     <meta property="og:title" content="Hitch" />
-    <meta property="og:description" content="One portable hook handler protocol for Codex, Pi, OMP, Hermes, and OpenCode." />
+    <meta property="og:description" content="Write hooks once, run them across harnesses, and route lifecycle events through one local-first, remote-ready REST API." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <script>
@@ -40,24 +40,31 @@
     <main id="content">
       <section class="hero" aria-labelledby="hero-title">
         <div>
-          <p class="eyebrow">Universal local hook adapter</p>
-          <h1 id="hero-title">One handler. Every harness.</h1>
-          <p class="lede">Hitch normalizes Codex, Pi, OMP, Hermes, and OpenCode hook events into one envelope, runs your local handlers, records the audit trail, and translates decisions back into each harness.</p>
+          <p class="eyebrow">Universal agent event layer</p>
+          <h1 id="hero-title">Control every agent lifecycle.</h1>
+          <p class="lede">Hitch turns Codex, Hermes, Pi, OMP, and OpenCode hooks into one portable event protocol. Write a hook once, preserve the native payload, and route lifecycle events to local or remote handlers.</p>
+          <div class="proof-grid" aria-label="Hitch product capabilities">
+            <span>Normalized lifecycle events</span>
+            <span>Original payload preserved</span>
+            <span>Local + remote REST dispatch</span>
+            <span>Central routing, audit, and replay</span>
+          </div>
           <div class="hero-actions">
             <a class="button primary" href="docs/latest/">Read the docs</a>
-            <a class="button" href="https://github.com/sagebynature/hitch">View source</a>
+            <a class="button" href="https://github.com/sagebynature/hitch">Install Hitch</a>
           </div>
         </div>
-        <aside class="terminal-card" aria-label="Install Hitch from source">
-          <div class="terminal-top"><span>local install</span><span>127.0.0.1:8799</span></div>
-          <pre class="terminal-body"><code><span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
-<span class="ok">✓</span> hitch 0.1.0
-
-<span class="prompt">$</span> hitch serve
-<span class="comment"># normalized hooks, handler dispatch, SQLite audit</span>
+        <aside class="terminal-card" aria-label="Hitch event layer example">
+          <div class="terminal-top"><span>event layer</span><span>REST :8799</span></div>
+          <pre class="terminal-body"><code><span class="prompt">$</span> hitch serve
+<span class="comment"># central routing, execution, audit, replay</span>
 
 <span class="prompt">$</span> hitch-client install --all
-{ "installed": ["opencode"], "changed": true }</code></pre>
+{ "installed": ["codex", "hermes", "opencode"], "changed": true }
+
+<span class="prompt">$</span> curl -X POST http://127.0.0.1:8799/v1/events
+{ "hitch_event_type": "tool.requested",
+  "source_payload": { "...": "native hook JSON" } }</code></pre>
         </aside>
       </section>
 
@@ -65,23 +72,23 @@
         <div class="section-grid">
           <div class="section-intro">
             <p class="label">Why Hitch?</p>
-            <h2 id="why-title">Agent hooks should be portable.</h2>
-            <p>Every harness has its own event names, payloads, and response rules. Hitch gives tool authors a stable local contract instead of forcing guardrails, loggers, and policy scripts to chase every native hook format.</p>
+            <h2 id="why-title">Agent lifecycle control should be portable.</h2>
+            <p>Every harness has its own event names, payloads, response rules, and lifecycle boundaries. Hitch gives developers and teams one stable contract instead of forcing every guardrail, logger, and workflow hook to chase native formats.</p>
           </div>
           <div class="card-grid">
             <article class="card">
               <h3>Normalize once</h3>
-              <p>Source hook JSON becomes a Hitch event envelope with harness identity, source event type, normalized event type, and payload.</p>
+              <p>Source hook JSON becomes a Hitch event envelope with harness identity, source event type, normalized event type, and preserved native payload.</p>
               <div class="pill-row"><span class="pill"><code>tool.requested</code></span><span class="pill"><code>session.started</code></span></div>
             </article>
             <article class="card">
-              <h3>Dispatch locally</h3>
-              <p>Handlers are ordinary executables. They read one JSON object on stdin and return a handler result on stdout.</p>
+              <h3>Route anywhere</h3>
+              <p>Handlers are ordinary executables, and events arrive through a local-first REST API that also works for remote service deployments.</p>
               <div class="pill-row"><span class="pill">shell</span><span class="pill">python</span><span class="pill">node</span><span class="pill">go</span></div>
             </article>
             <article class="card">
-              <h3>Translate safely</h3>
-              <p>Synchronous decisions are aggregated deterministically, persisted, then translated back to the native response shape the harness expects.</p>
+              <h3>Control centrally</h3>
+              <p>Handler routing, synchronous decisions, audit records, and replay live behind one server config instead of five harness-specific integrations.</p>
               <div class="pill-row"><span class="pill"><code>allow</code></span><span class="pill"><code>deny</code></span><span class="pill"><code>inject_context</code></span></div>
             </article>
           </div>
@@ -92,25 +99,25 @@
         <div class="section-grid">
           <div class="section-intro">
             <p class="label">The contract</p>
-            <h2 id="flow-title">A small control plane for local agent events.</h2>
-            <p>Hitch stays boring on purpose: JSON in, external commands out, SQLite records underneath, and harness-native responses at the edge.</p>
+            <h2 id="flow-title">One control plane for local and remote agent events.</h2>
+            <p>Hitch stays boring on purpose: native JSON in, normalized events over REST, external commands out, audit records underneath, and harness-native responses at the edge.</p>
           </div>
           <div>
             <div class="flow" aria-label="Hitch event flow">
-              <div class="flow-step"><span>01</span><strong>Hook</strong><p>Codex, Pi, OMP, Hermes, or OpenCode emits native hook data.</p></div>
-              <div class="flow-step"><span>02</span><strong>Adapter</strong><p>The harness adapter posts async or sync events to Hitch.</p></div>
-              <div class="flow-step"><span>03</span><strong>Envelope</strong><p>Hitch maps payloads into the universal event schema.</p></div>
-              <div class="flow-step"><span>04</span><strong>Handler</strong><p>Configured commands inspect, log, block, or transform.</p></div>
-              <div class="flow-step"><span>05</span><strong>Response</strong><p>Decisions become native harness output and audit records.</p></div>
+              <div class="flow-step"><span>01</span><strong>Harness</strong><p>Codex, Hermes, Pi, OMP, or OpenCode emits native lifecycle data.</p></div>
+              <div class="flow-step"><span>02</span><strong>REST API</strong><p>The hook shim posts async or sync events to a local or remote Hitch server.</p></div>
+              <div class="flow-step"><span>03</span><strong>Envelope</strong><p>Hitch maps the event into a stable schema while retaining the original payload.</p></div>
+              <div class="flow-step"><span>04</span><strong>Routing</strong><p>Server config sends matching events to policy, audit, context, or workflow handlers.</p></div>
+              <div class="flow-step"><span>05</span><strong>Control</strong><p>Decisions become native harness responses, audit records, and replayable history.</p></div>
             </div>
             <div class="split" style="margin-top: 1rem">
               <article class="callout accent">
-                <h3>For tool builders</h3>
-                <p>Ship a reusable policy pack or observer without binding it to one agent CLI.</p>
+                <h3>For solo developers</h3>
+                <p>Ship one guardrail, observer, context injector, or workflow hook without binding it to one agent CLI.</p>
               </article>
               <article class="callout">
                 <h3>For teams</h3>
-                <p>Keep local guardrails, audit logs, and replay workflows consistent as harnesses change.</p>
+                <p>Let developers choose their harness while platform teams centralize lifecycle routing, execution, audit, and replay.</p>
               </article>
             </div>
           </div>
@@ -121,8 +128,8 @@
         <div class="section-grid">
           <div class="section-intro">
             <p class="label">Quick start</p>
-            <h2 id="quickstart-title">Install, serve, verify.</h2>
-            <p>The source installer seeds Hitch config with <code>hitch config init</code> and adds missing managed default sections to existing valid config. <code>hitch-client install</code> installs managed Codex command hooks into <code>~/.codex/hooks.json</code>, installs Hermes shell hooks into <code>~/.hermes/config.yaml</code>, installs a Pi extension into <code>~/.pi/agent/extensions/hitch/index.ts</code>, installs an OMP extension into <code>~/.omp/agent/extensions/hitch/index.ts</code>, and installs an OpenCode plugin into <code>~/.config/opencode/plugins/hitch.ts</code>.</p>
+            <h2 id="quickstart-title">Local-first. Remote-ready.</h2>
+            <p>Run Hitch as a local daemon for your own agents, or point hook shims at a shared Hitch service for team-wide lifecycle routing. The same handler protocol works in both modes.</p><p>The source installer seeds Hitch config with <code>hitch config init</code> and adds missing managed default sections to existing valid config. <code>hitch-client install</code> installs managed hooks and extensions for supported harnesses.</p>
           </div>
           <div class="callout">
             <pre class="code-block"><code>curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
@@ -159,7 +166,7 @@ hitch-client install --only opencode --yes --json</code></pre>
     </main>
 
     <footer class="footer">
-      <span>Hitch is a local universal hook adapter.</span>
+      <span>Hitch is the universal event layer for agent harnesses.</span>
       <span> · </span>
       <a href="docs/latest/">Docs</a>
       <span> · </span>
