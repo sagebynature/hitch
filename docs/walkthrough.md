@@ -259,7 +259,6 @@ curl -sS -X POST http://127.0.0.1:8799/v1/dispatch-sync \
   -H 'content-type: application/json' \
   -d '{
     "harness": "codex",
-    "harness_version": "",
     "source_event_type": "PreToolUse",
     "source_payload": {
       "session_id": "demo-session",

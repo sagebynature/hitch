@@ -17,6 +17,22 @@ func TestNormalizePreToolUse(t *testing.T) {
 	}
 }
 
+func TestNormalizeCopiesSourceMetadata(t *testing.T) {
+	env, err := (Mapper{}).Normalize("PreToolUse", protocol.Raw(map[string]interface{}{
+		"session_id":      "session_1",
+		"turn_id":         "turn_1",
+		"cwd":             "/tmp/hitch",
+		"model":           "gpt-test",
+		"transcript_path": "/tmp/transcript.jsonl",
+	}), protocol.EventToolRequested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.SessionID != "session_1" || env.TurnID != "turn_1" || env.CWD != "/tmp/hitch" || env.Model != "gpt-test" || env.TranscriptPath != "/tmp/transcript.jsonl" {
+		t.Fatalf("metadata not copied: %#v", env)
+	}
+}
+
 func TestTranslatePermissionDeny(t *testing.T) {
 	out, err := (Mapper{}).Translate("PermissionRequest", protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorDeny, Reason: "no"}})
 	if err != nil {

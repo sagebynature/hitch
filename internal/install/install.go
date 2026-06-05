@@ -736,7 +736,6 @@ async function dispatchToHitch(sourceEventType, event, ctx) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         harness: "pi",
-        harness_version: "",
         source_event_type: sourceEventType,
         source_payload: sourcePayload,
         hitch_client_version: "hitch-pi-extension"

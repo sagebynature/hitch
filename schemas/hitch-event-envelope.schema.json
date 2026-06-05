@@ -9,7 +9,6 @@
     "event_id": { "type": "string", "minLength": 1 },
     "received_at": { "type": "string", "format": "date-time" },
     "harness": { "enum": ["codex", "hermes", "pi", "omp"] },
-    "harness_version": { "type": "string" },
     "source_event_type": { "type": "string", "minLength": 1 },
     "source_payload": true,
     "hitch_event_type": {

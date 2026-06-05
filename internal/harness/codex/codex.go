@@ -11,6 +11,7 @@ type Mapper struct{}
 
 func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
 	env := harness.NewEnvelope(protocol.HarnessCodex, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
+	harness.ApplySourceMetadata(&env, sourcePayload)
 	return env, protocol.ValidateEnvelope(env)
 }
 

@@ -39,7 +39,7 @@ func TestHealthAndEvent(t *testing.T) {
 		t.Fatalf("health code %d", w.Code)
 	}
 
-	body := `{"harness":"codex","harness_version":"","source_event_type":"PreToolUse","source_payload":{"tool":"bash"},"hitch_client_version":"test"}`
+	body := `{"harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash","session_id":"session_1","turn_id":"turn_1","cwd":"/tmp/hitch","model":"gpt-test","transcript_path":"/tmp/transcript.jsonl"},"hitch_client_version":"test"}`
 	req = httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
@@ -53,6 +53,13 @@ func TestHealthAndEvent(t *testing.T) {
 	if resp.NormalizedEventID == "" {
 		t.Fatalf("missing id: %#v", resp)
 	}
+	inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.Normalized.Envelope.SessionID != "session_1" || inspection.Normalized.Envelope.TurnID != "turn_1" || inspection.Normalized.Envelope.CWD != "/tmp/hitch" || inspection.Normalized.Envelope.Model != "gpt-test" || inspection.Normalized.Envelope.TranscriptPath != "/tmp/transcript.jsonl" {
+		t.Fatalf("metadata not persisted: %#v", inspection.Normalized.Envelope)
+	}
 }
 
 func TestDispatchSync(t *testing.T) {
@@ -64,7 +71,7 @@ func TestDispatchSync(t *testing.T) {
 	defer st.Close()
 	cfg := testConfig()
 	s := New(cfg, slog.Default(), st)
-	body := []byte(`{"harness":"hermes","harness_version":"","source_event_type":"pre_tool_call","source_payload":{"tool_name":"bash"},"hitch_client_version":"test"}`)
+	body := []byte(`{"harness":"hermes","source_event_type":"pre_tool_call","source_payload":{"tool_name":"bash"},"hitch_client_version":"test"}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
@@ -107,7 +114,7 @@ func TestEventMapOverrideAndAddition(t *testing.T) {
 	}
 	s := New(cfg, slog.Default(), st)
 
-	overrideReq := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", strings.NewReader(`{"harness":"codex","harness_version":"","source_event_type":"PreToolUse","source_payload":{"tool":"bash"},"hitch_client_version":"test"}`))
+	overrideReq := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", strings.NewReader(`{"harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash"},"hitch_client_version":"test"}`))
 	overrideW := httptest.NewRecorder()
 	s.Handler().ServeHTTP(overrideW, overrideReq)
 	if overrideW.Code != http.StatusOK {
@@ -125,7 +132,7 @@ func TestEventMapOverrideAndAddition(t *testing.T) {
 		t.Fatalf("override mapping ignored: %#v", inspection.Normalized)
 	}
 
-	addedReq := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"harness":"codex","harness_version":"","source_event_type":"CustomHook","source_payload":{},"hitch_client_version":"test"}`))
+	addedReq := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"harness":"codex","source_event_type":"CustomHook","source_payload":{},"hitch_client_version":"test"}`))
 	addedW := httptest.NewRecorder()
 	s.Handler().ServeHTTP(addedW, addedReq)
 	if addedW.Code != http.StatusAccepted {
@@ -152,7 +159,7 @@ func TestUnsupportedSourceEventRejected(t *testing.T) {
 	}
 	defer st.Close()
 	s := New(testConfig(), slog.Default(), st)
-	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"harness":"codex","harness_version":"","source_event_type":"CustomHook","source_payload":{},"hitch_client_version":"test"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"harness":"codex","source_event_type":"CustomHook","source_payload":{},"hitch_client_version":"test"}`))
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {

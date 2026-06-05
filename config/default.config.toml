@@ -52,7 +52,7 @@ enabled = true
 [harness.hermes.event_map]
 pre_tool_call = "tool.requested"
 post_tool_call = "tool.completed"
-pre_llm_call = "turn.started"
+pre_llm_call = "turn.user_prompt"
 post_llm_call = "turn.completed"
 on_session_start = "session.started"
 on_session_end = "session.ended"

@@ -233,7 +233,7 @@ func seedReplayFixture(t *testing.T, ctx context.Context, handlerJSON string) (s
 	if err := st.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: "handler_original", NormalizedEventID: normalizedID, HandlerName: "original", Mode: "sync", StartedAt: now, CompletedAt: now, Status: protocol.StatusOK, Output: protocol.Raw(map[string]interface{}{"status": "ok"}), Decision: protocol.Raw(map[string]interface{}{"behavior": "none"})}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.InsertNativeResponse(ctx, store.NativeResponse{ID: "native_original", NormalizedEventID: normalizedID, Harness: env.Harness, SourceEventType: env.SourceEventType, Response: protocol.Raw(map[string]interface{}{}), EmittedAt: now}); err != nil {
+	if err := st.InsertNativeResponse(ctx, store.NativeResponse{ID: "native_original", NormalizedEventID: normalizedID, Response: protocol.Raw(map[string]interface{}{}), EmittedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 

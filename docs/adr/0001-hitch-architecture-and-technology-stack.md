@@ -141,7 +141,6 @@ type HitchEventEnvelope = {
   received_at: string
 
   harness: "codex" | "pi" | "omp" | "hermes"
-  harness_version?: string
   source_event_type: string
   source_payload: unknown
 
@@ -273,15 +272,26 @@ inbound_events
   received_at
   harness
   source_event_type
-  source_payload_json
-  request_headers_json
+  source_payload
+  request_headers
   hitch_client_version
 
 normalized_events
   id
-  inbound_event_id
+  hitch_version
+  event_id
+  received_at
+  harness
+  source_event_type
+  source_payload
   hitch_event_type
-  normalized_payload_json
+  session_id
+  turn_id
+  cwd
+  model
+  transcript_path
+  payload
+  inbound_event_id
   mapping_version
 
 handler_invocations
@@ -301,8 +311,6 @@ handler_invocations
 native_responses
   id
   normalized_event_id
-  harness
-  source_event_type
   response_json
   emitted_at
 ```

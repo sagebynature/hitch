@@ -20,7 +20,6 @@ import (
 
 type eventRequest struct {
 	Harness            string           `json:"harness"`
-	HarnessVersion     string           `json:"harness_version"`
 	SourceEventType    string           `json:"source_event_type"`
 	SourcePayload      protocol.RawJSON `json:"source_payload"`
 	HitchClientVersion string           `json:"hitch_client_version"`

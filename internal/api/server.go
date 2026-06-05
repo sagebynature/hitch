@@ -37,7 +37,6 @@ type harnessRuntime struct {
 
 type EventRequest struct {
 	Harness            string           `json:"harness"`
-	HarnessVersion     string           `json:"harness_version"`
 	SourceEventType    string           `json:"source_event_type"`
 	SourcePayload      protocol.RawJSON `json:"source_payload"`
 	HitchClientVersion string           `json:"hitch_client_version"`
@@ -106,7 +105,7 @@ func (s *Server) handleDispatchSync(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	_ = s.store.InsertNativeResponse(r.Context(), store.NativeResponse{ID: harness.NewID("nresp"), NormalizedEventID: resp.NormalizedEventID, Harness: env.Harness, SourceEventType: env.SourceEventType, Response: native, EmittedAt: time.Now().UTC()})
+	_ = s.store.InsertNativeResponse(r.Context(), store.NativeResponse{ID: harness.NewID("nresp"), NormalizedEventID: resp.NormalizedEventID, Response: native, EmittedAt: time.Now().UTC()})
 	writeJSON(w, http.StatusOK, DispatchResponse{EventResponse: resp, Aggregate: result.Aggregate, NativeResponse: native})
 }
 
@@ -134,7 +133,6 @@ func (s *Server) ingest(ctx context.Context, r *http.Request, sync bool) (EventR
 	if err != nil {
 		return EventResponse{}, protocol.EventEnvelope{}, badRequest("%s", err.Error())
 	}
-	env.HarnessVersion = req.HarnessVersion
 	inboundID := harness.NewID("in")
 	normalizedID := harness.NewID("norm")
 	if err := s.store.InsertInbound(ctx, store.InboundEvent{ID: inboundID, ReceivedAt: env.ReceivedAt, Harness: env.Harness, SourceEventType: env.SourceEventType, SourcePayload: env.SourcePayload, RequestHeaders: protocol.Raw(headers(r)), HitchClientVersion: req.HitchClientVersion}); err != nil {

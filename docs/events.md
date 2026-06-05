@@ -12,11 +12,10 @@ Every harness normalizer creates the same envelope shape:
 | `event_id` | Hitch runtime | Unique `evt_...` identifier generated when Hitch receives the event. |
 | `received_at` | Hitch runtime | UTC timestamp generated at receipt. |
 | `harness` | Adapter selection | One of `codex`, `hermes`, `pi`, or `omp`. |
-| `harness_version` | Hitch client request | Source harness version when the client can provide it. |
 | `source_event_type` | Harness source event name | The exact source hook or callback name Hitch mapped. |
 | `source_payload` | Harness source payload | The original JSON payload received by Hitch. Pi unwraps the installed extension transport envelope before normalization. |
 | `hitch_event_type` | Server event map | One of the normalized event names below. |
-| `session_id`, `turn_id`, `cwd`, `model`, `transcript_path` | Server normalizer | Optional. The Pi installed extension supplies these from Pi `ctx` and event fields when available. |
+| `session_id`, `turn_id`, `cwd`, `model`, `transcript_path` | Server normalizer | Optional. Normalizers copy these from source payloads when available; Hermes also uses `extra.task_id` as a `session_id` fallback when it is meaningful. |
 | `payload` | Server normalizer | Hitch-normalized handler payload. Current normalizers conservatively preserve the source payload after any adapter transport unwrapping. |
 
 Unsupported source event types are rejected unless configured in the harness event map. Hitch does not silently coerce unknown source events into a generic type.

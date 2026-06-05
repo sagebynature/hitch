@@ -87,7 +87,6 @@ type EventEnvelope struct {
 	EventID         string    `json:"event_id"`
 	ReceivedAt      time.Time `json:"received_at"`
 	Harness         Harness   `json:"harness"`
-	HarnessVersion  string    `json:"harness_version,omitempty"`
 	SourceEventType string    `json:"source_event_type"`
 	SourcePayload   RawJSON   `json:"source_payload"`
 	HitchEventType  EventType `json:"hitch_event_type"`
