@@ -7,6 +7,7 @@ HITCH_INSTALL_DIR=${HITCH_INSTALL_DIR:-$HOME/.local/bin}
 HITCH_SOURCE_DIR=${HITCH_SOURCE_DIR:-}
 HITCH_SKIP_HOOK_INSTALL=${HITCH_SKIP_HOOK_INSTALL:-0}
 HITCH_URL=${HITCH_URL:-}
+HITCH_INSTALL_MODE=${HITCH_INSTALL_MODE:-}
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -16,8 +17,9 @@ require_command() {
 }
 
 path_is_first() {
-  cmd_path=$(command -v hitch 2>/dev/null || true)
-  [ "$cmd_path" = "$HITCH_INSTALL_DIR/hitch" ]
+  cmd_name=$1
+  cmd_path=$(command -v "$cmd_name" 2>/dev/null || true)
+  [ "$cmd_path" = "$HITCH_INSTALL_DIR/$cmd_name" ]
 }
 
 tty_available() {
@@ -30,6 +32,38 @@ prompt_tty() {
   printf '%s' "$1" > /dev/tty || return 1
   IFS= read -r answer < /dev/tty || answer=
   return 0
+}
+
+normalize_install_mode() {
+  case "$1" in
+    "") printf 'all' ;;
+    all|server|client) printf '%s' "$1" ;;
+    *) return 1 ;;
+  esac
+}
+
+select_install_mode() {
+  if [ -n "$HITCH_INSTALL_MODE" ]; then
+    if selected_mode=$(normalize_install_mode "$HITCH_INSTALL_MODE"); then
+      HITCH_INSTALL_MODE=$selected_mode
+      return 0
+    fi
+    printf 'Invalid HITCH_INSTALL_MODE: %s (expected all, server, or client).\n' "$HITCH_INSTALL_MODE" >&2
+    exit 1
+  fi
+
+  if tty_available; then
+    while :; do
+      prompt_tty "Install Hitch mode [all/server/client] (all): " || break
+      if selected_mode=$(normalize_install_mode "$answer"); then
+        HITCH_INSTALL_MODE=$selected_mode
+        return 0
+      fi
+      printf 'Please enter all, server, or client.\n' > /dev/tty
+    done
+  fi
+
+  HITCH_INSTALL_MODE=all
 }
 
 
@@ -109,13 +143,15 @@ configure_server_url() {
 }
 
 maybe_update_path() {
-  if path_is_first; then
+  path_binary=$1
+  installed_names=$2
+  if path_is_first "$path_binary"; then
     return 0
   fi
 
   command_text=$(path_command)
   config_file=$(shell_config_file)
-  printf '\nHitch was installed at %s/hitch, but that directory is not first on PATH.\n' "$HITCH_INSTALL_DIR"
+  printf '\nInstalled %s into %s, but that directory is not first on PATH.\n' "$installed_names" "$HITCH_INSTALL_DIR"
   if tty_available && prompt_tty "Add it to $config_file now? [Y/n] "; then
     case "$answer" in
       n|N|no|NO) ;;
@@ -133,6 +169,39 @@ maybe_update_path() {
 }
 
 main() {
+  select_install_mode
+  install_hitch=0
+  install_client=0
+  init_config=0
+  configure_url=0
+  setup_hooks=0
+  path_binary=hitch
+  installed_names='Hitch'
+  case "$HITCH_INSTALL_MODE" in
+    all)
+      install_hitch=1
+      install_client=1
+      init_config=1
+      configure_url=1
+      setup_hooks=1
+      path_binary=hitch
+      installed_names='Hitch server and client'
+      ;;
+    server)
+      install_hitch=1
+      init_config=1
+      path_binary=hitch
+      installed_names='Hitch server'
+      ;;
+    client)
+      install_client=1
+      configure_url=1
+      setup_hooks=1
+      path_binary=hitch-client
+      installed_names='Hitch client'
+      ;;
+  esac
+
   require_command go
   if [ -z "$HITCH_SOURCE_DIR" ]; then
     require_command git
@@ -149,25 +218,42 @@ main() {
   fi
 
   printf 'Building Hitch from %s...\n' "$src_dir"
-  (cd "$src_dir" && go build -o "$tmp_dir/hitch" ./cmd/hitch)
-  (cd "$src_dir" && go build -o "$tmp_dir/hitch-client" ./cmd/hitch-client)
+  if [ "$install_hitch" = 1 ]; then
+    (cd "$src_dir" && go build -o "$tmp_dir/hitch" ./cmd/hitch)
+  fi
+  if [ "$install_client" = 1 ]; then
+    (cd "$src_dir" && go build -o "$tmp_dir/hitch-client" ./cmd/hitch-client)
+  fi
 
   mkdir -p "$HITCH_INSTALL_DIR"
-  cp "$tmp_dir/hitch" "$HITCH_INSTALL_DIR/hitch"
-  cp "$tmp_dir/hitch-client" "$HITCH_INSTALL_DIR/hitch-client"
-  chmod 755 "$HITCH_INSTALL_DIR/hitch" "$HITCH_INSTALL_DIR/hitch-client"
+  if [ "$install_hitch" = 1 ]; then
+    cp "$tmp_dir/hitch" "$HITCH_INSTALL_DIR/hitch"
+    chmod 755 "$HITCH_INSTALL_DIR/hitch"
+    "$HITCH_INSTALL_DIR/hitch" --version
+  fi
+  if [ "$install_client" = 1 ]; then
+    cp "$tmp_dir/hitch-client" "$HITCH_INSTALL_DIR/hitch-client"
+    chmod 755 "$HITCH_INSTALL_DIR/hitch-client"
+    "$HITCH_INSTALL_DIR/hitch-client" --version
+  fi
+  if [ "$init_config" = 1 ]; then
+    "$HITCH_INSTALL_DIR/hitch" config init --json
+  fi
 
-  "$HITCH_INSTALL_DIR/hitch" --version
-  "$HITCH_INSTALL_DIR/hitch-client" --version
-  "$HITCH_INSTALL_DIR/hitch" config init --json
-  printf 'Installed Hitch to %s/hitch and %s/hitch-client.\n' "$HITCH_INSTALL_DIR" "$HITCH_INSTALL_DIR"
-  maybe_update_path
+  case "$HITCH_INSTALL_MODE" in
+    all) printf 'Installed Hitch to %s/hitch and %s/hitch-client.\n' "$HITCH_INSTALL_DIR" "$HITCH_INSTALL_DIR" ;;
+    server) printf 'Installed Hitch server to %s/hitch.\n' "$HITCH_INSTALL_DIR" ;;
+    client) printf 'Installed Hitch client to %s/hitch-client.\n' "$HITCH_INSTALL_DIR" ;;
+  esac
+  maybe_update_path "$path_binary" "$installed_names"
 
-  if [ "$HITCH_SKIP_HOOK_INSTALL" = 1 ]; then
+  if [ "$setup_hooks" != 1 ] || [ "$HITCH_SKIP_HOOK_INSTALL" = 1 ]; then
     return 0
   fi
 
-  configure_server_url
+  if [ "$configure_url" = 1 ]; then
+    configure_server_url
+  fi
 
   if tty_available; then
     "$HITCH_INSTALL_DIR/hitch-client" install < /dev/tty
