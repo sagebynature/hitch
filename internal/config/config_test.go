@@ -122,13 +122,13 @@ func TestLoadResolvesHandlerWorkingDirRelativeToConfig(t *testing.T) {
 	}
 }
 
-func TestDefaultConfigTOMLMatchesDevelopmentConfig(t *testing.T) {
-	b, err := os.ReadFile("../../config/default.config.toml")
+func TestDefaultConfigTOMLMatchesEmbeddedConfigFile(t *testing.T) {
+	b, err := os.ReadFile("default.config.toml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(b) != DefaultConfigTOML {
-		t.Fatalf("embedded default config differs from config/default.config.toml")
+		t.Fatalf("embedded default config differs from internal/config/default.config.toml")
 	}
 	cfg, err := Parse([]byte(DefaultConfigTOML))
 	if err != nil {

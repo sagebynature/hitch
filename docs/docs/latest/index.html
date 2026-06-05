@@ -73,7 +73,7 @@ hitch-client install --only codex --yes --json</code></pre>
           <pre class="code-block"><code>make build
 ./bin/hitch --version
 ./bin/hitch-client --version
-./bin/hitch serve --config config/default.config.toml</code></pre>
+./bin/hitch serve --config internal/config/default.config.toml</code></pre>
           <h3>Hook install commands</h3>
           <pre class="code-block"><code>hitch-client install --dry-run --json
 hitch-client install --all --dry-run --json
@@ -93,7 +93,7 @@ hitch-client uninstall --only omp --yes --json</code></pre>
 
         <section id="configuration">
           <h2>Configuration</h2>
-          <p>Hitch reads user configuration from <code>~/.config/hitch/config.toml</code> by default. Repository checkout examples pass <code>--config config/default.config.toml</code> explicitly when they should use the development config.</p>
+          <p>Hitch reads user configuration from <code>~/.config/hitch/config.toml</code> by default. Repository checkout examples pass <code>--config internal/config/default.config.toml</code> explicitly when they should use the development config.</p>
           <pre class="code-block"><code>hitch config init</code></pre>
           <table>
             <thead><tr><th>Section</th><th>Purpose</th></tr></thead>
@@ -323,9 +323,9 @@ on_timeout = "fail_open"</code></pre>
         <section id="replay">
           <h2>Replay and inspect</h2>
           <p>Use <code>inspect-event</code> to inspect the persisted audit view for a normalized event. Use <code>replay</code> to re-run configured sync handlers against stored normalized events.</p>
-          <pre class="code-block"><code>hitch inspect-event --config config/default.config.toml norm_...
-hitch replay --config config/default.config.toml --dry-run norm_...
-hitch replay --config config/default.config.toml norm_...</code></pre>
+          <pre class="code-block"><code>hitch inspect-event --config internal/config/default.config.toml norm_...
+hitch replay --config internal/config/default.config.toml --dry-run norm_...
+hitch replay --config internal/config/default.config.toml norm_...</code></pre>
           <p>Dry-run replay returns the stored event envelope without writing records. Replay without <code>--dry-run</code> persists new handler invocation records linked by <code>replay_source_id</code> to the source normalized event id.</p>
         </section>
 

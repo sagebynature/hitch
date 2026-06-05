@@ -2,7 +2,7 @@
 
 BINARY ?= bin/hitch
 CLIENT_BINARY ?= bin/hitch-client
-CONFIG ?= config/default.config.toml
+CONFIG ?= internal/config/default.config.toml
 GO_PACKAGES ?= ./...
 ADAPTER_TESTS ?= adapters/**/*.test.ts
 

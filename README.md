@@ -51,7 +51,7 @@ make build
 Run Hitch locally:
 
 ```sh
-./bin/hitch serve --config config/default.config.toml
+./bin/hitch serve --config internal/config/default.config.toml
 ```
 
 In another shell, check the installation:
@@ -140,7 +140,7 @@ Run the hook client directly from a harness hook configuration:
 
 ## Configuration
 
-Hitch reads user configuration from `~/.config/hitch/config.toml` by default. Repository checkout examples pass `--config config/default.config.toml` explicitly when they should use the development config.
+Hitch reads user configuration from `~/.config/hitch/config.toml` by default. Repository checkout examples pass `--config internal/config/default.config.toml` explicitly when they should use the development config.
 
 Create the default user config without overwriting an existing file:
 

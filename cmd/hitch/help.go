@@ -60,7 +60,7 @@ Global:
   hitch help <command>
 
 Examples:
-  hitch serve --config config/default.config.toml
+  hitch serve --config internal/config/default.config.toml
   hitch status --json
   hitch inspect-event norm_...
 

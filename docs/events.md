@@ -23,7 +23,7 @@ Unsupported source event types are rejected unless configured in the harness eve
 
 ## Configurable source event mapping
 
-`config/default.config.toml` carries the supported source-event mappings for each harness. Edit or extend the relevant table in user config to change how a source hook maps to a Hitch event:
+`internal/config/default.config.toml` carries the supported source-event mappings for each harness. Edit or extend the relevant table in user config to change how a source hook maps to a Hitch event:
 
 ```toml
 [harness.codex.event_map]

@@ -106,7 +106,7 @@ hitch serve --config ~/.config/hitch/config.toml
 If you are running from a repository checkout, use the development config:
 
 ```sh
-hitch serve --config config/default.config.toml
+hitch serve --config internal/config/default.config.toml
 ```
 
 Use that same config path later with `hitch inspect-event`.
@@ -313,7 +313,7 @@ hitch inspect-event --config ~/.config/hitch/config.toml norm_...
 For a repository checkout:
 
 ```sh
-hitch inspect-event --config config/default.config.toml norm_...
+hitch inspect-event --config internal/config/default.config.toml norm_...
 ```
 
 Expected inspection includes:
