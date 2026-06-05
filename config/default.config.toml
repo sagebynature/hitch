@@ -13,7 +13,7 @@ enabled = true
 
 [log.file]
 enabled = false
-path = "~/.local/state/hitch/hitch.log"
+path = "~/.config/hitch/hitch.log"
 max_size_mb = 100
 max_backups = 10
 max_age_days = 14
@@ -29,7 +29,7 @@ enabled = true
 backend = "sqlite"
 
 [audit.sqlite]
-path = "~/.local/share/hitch/events.sqlite"
+path = "~/.config/hitch/events.sqlite"
 
 [harness.codex]
 enabled = true
