@@ -20,6 +20,16 @@ path_is_first() {
   [ "$cmd_path" = "$HITCH_INSTALL_DIR/hitch" ]
 }
 
+tty_available() {
+  [ -r /dev/tty ] && [ -w /dev/tty ]
+}
+
+prompt_tty() {
+  printf '%s' "$1" > /dev/tty
+  IFS= read -r answer < /dev/tty || answer=
+}
+
+
 shell_config_file() {
   current_shell=$(basename "${SHELL:-sh}")
   case "$current_shell" in
@@ -64,9 +74,8 @@ maybe_update_server_url() {
 
   command_text=$(server_url_command)
   config_file=$(shell_config_file)
-  if [ -t 0 ]; then
-    printf 'Persist HITCH_URL to %s for future harness launches? [Y/n] ' "$config_file"
-    IFS= read -r answer || answer=
+  if tty_available; then
+    prompt_tty "Persist HITCH_URL to $config_file for future harness launches? [Y/n] "
     case "$answer" in
       n|N|no|NO) ;;
       *)
@@ -83,9 +92,8 @@ maybe_update_server_url() {
 
 configure_server_url() {
   default_url=${HITCH_URL:-http://127.0.0.1:8799}
-  if [ -t 0 ]; then
-    printf 'Hitch server URL [%s]: ' "$default_url"
-    IFS= read -r answer || answer=
+  if tty_available; then
+    prompt_tty "Hitch server URL [$default_url]: "
     if [ -n "$answer" ]; then
       HITCH_URL=$answer
     else
@@ -107,9 +115,8 @@ maybe_update_path() {
   command_text=$(path_command)
   config_file=$(shell_config_file)
   printf '\nHitch was installed at %s/hitch, but that directory is not first on PATH.\n' "$HITCH_INSTALL_DIR"
-  if [ -t 0 ]; then
-    printf 'Add it to %s now? [Y/n] ' "$config_file"
-    IFS= read -r answer || answer=
+  if tty_available; then
+    prompt_tty "Add it to $config_file now? [Y/n] "
     case "$answer" in
       n|N|no|NO) ;;
       *)
@@ -162,7 +169,7 @@ main() {
 
   configure_server_url
 
-  if [ -t 0 ]; then
+  if tty_available; then
     "$HITCH_INSTALL_DIR/hitch-client" install < /dev/tty
   else
     printf 'Run hook setup with:\n\n  %s/hitch-client install\n\n' "$HITCH_INSTALL_DIR"

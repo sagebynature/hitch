@@ -6,7 +6,7 @@ Install from latest source:
 curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
 ```
 
-The source installer checks for `git` and `go`, builds `./cmd/hitch` and `./cmd/hitch-client`, installs both binaries to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies `hitch --version` and `hitch-client --version`, seeds `~/.config/hitch/config.toml` with `hitch config init`, and then offers to run hook setup.
+The source installer checks for `git` and `go`, builds `./cmd/hitch` and `./cmd/hitch-client`, installs both binaries to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies `hitch --version` and `hitch-client --version`, seeds `~/.config/hitch/config.toml` with `hitch config init`, prompts for a Hitch server URL through `/dev/tty` even when installed with `curl ... | sh`, and then offers to run hook setup.
 
 The current `hitch-client install` command detects Codex, Hermes, Pi, and OMP binaries on `PATH`, installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`, installs Hitch shell hooks for supported Hermes events into `~/.hermes/config.yaml`, installs a managed Pi extension at `~/.pi/agent/extensions/hitch/index.ts`, and installs a managed OMP extension at `~/.omp/agent/extensions/hitch/index.ts`. Managed shell hook commands execute `hitch-client` directly. `hitch-client uninstall` also recognizes legacy managed hooks that used `hitch adapter`.
 
