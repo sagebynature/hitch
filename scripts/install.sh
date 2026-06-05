@@ -107,9 +107,16 @@ server_url_command() {
   esac
 }
 
+shell_quote() {
+  printf "'"
+  printf '%s' "$1" | sed "s/'/'\\\\''/g"
+  printf "'"
+}
+
 hook_setup_command() {
   if [ -n "$HITCH_URL" ]; then
-    printf '%s/hitch-client install --url '\''%s'\''' "$HITCH_INSTALL_DIR" "$HITCH_URL"
+    quoted_url=$(shell_quote "$HITCH_URL")
+    printf '%s/hitch-client install --url %s' "$HITCH_INSTALL_DIR" "$quoted_url"
   else
     printf '%s/hitch-client install' "$HITCH_INSTALL_DIR"
   fi

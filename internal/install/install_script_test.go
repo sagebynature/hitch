@@ -83,7 +83,7 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 			name: "client installs only client binary and prints manual hook setup without tty",
 			env: map[string]string{
 				"HITCH_INSTALL_MODE": "client",
-				"HITCH_URL":          "http://127.0.0.1:9876",
+				"HITCH_URL":          "http://127.0.0.1:9876/a'b?x=1&y=2#frag",
 			},
 			wantFiles: []string{"hitch-client"},
 			denyFiles: []string{"hitch"},
@@ -104,7 +104,7 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 			wantOutput: []string{
 				"Installed Hitch client to",
 				"Run hook setup with:",
-				"--url 'http://127.0.0.1:9876'",
+				"--url 'http://127.0.0.1:9876/a'\\''b?x=1&y=2#frag'",
 				"hitch-client install",
 			},
 		},
