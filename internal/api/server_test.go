@@ -17,34 +17,7 @@ import (
 )
 
 func testConfig() config.Config {
-	c, err := config.Parse([]byte(`
-[server]
-host = "127.0.0.1"
-port = 8799
-max_request_bytes = 1048576
-[log]
-level = "info"
-format = "json"
-[log.stdout]
-enabled = true
-[log.file]
-enabled = false
-path = "x"
-max_size_mb = 1
-[audit]
-enabled = true
-backend = "sqlite"
-[audit.sqlite]
-path = "x"
-[harness.codex]
-enabled = true
-[harness.hermes]
-enabled = true
-[harness.pi]
-enabled = true
-[harness.omp]
-enabled = true
-`))
+	c, err := config.Parse([]byte(config.DefaultConfigTOML))
 	if err != nil {
 		panic(err)
 	}

@@ -9,27 +9,6 @@ import (
 
 type Mapper struct{}
 
-var defaultEventMap = map[string]protocol.EventType{
-	"SessionStart":      protocol.EventSessionStarted,
-	"SubagentStart":     protocol.EventSubagentStarted,
-	"UserPromptSubmit":  protocol.EventTurnUserPrompt,
-	"PreToolUse":        protocol.EventToolRequested,
-	"PermissionRequest": protocol.EventToolPermissionRequest,
-	"PostToolUse":       protocol.EventToolCompleted,
-	"PreCompact":        protocol.EventSessionCompacted,
-	"PostCompact":       protocol.EventSessionCompacted,
-	"SubagentStop":      protocol.EventSubagentCompleted,
-	"Stop":              protocol.EventTurnCompleted,
-}
-
-func DefaultEventMap() map[string]protocol.EventType {
-	out := make(map[string]protocol.EventType, len(defaultEventMap))
-	for k, v := range defaultEventMap {
-		out[k] = v
-	}
-	return out
-}
-
 func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
 	env := harness.NewEnvelope(protocol.HarnessCodex, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
 	return env, protocol.ValidateEnvelope(env)

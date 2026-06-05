@@ -97,6 +97,9 @@ func runHandler(parent context.Context, name string, cfg config.HandlerConfig, e
 		return inv
 	}
 	cmd := exec.CommandContext(ctx, cfg.Command[0], cfg.Command[1:]...)
+	if cfg.WorkingDir != "" {
+		cmd.Dir = cfg.WorkingDir
+	}
 	cmd.Stdin = bytes.NewReader(stdin)
 	cmd.Env = append(cmd.Environ(), "HITCH_CHILD=1")
 	var stdout, stderr bytes.Buffer

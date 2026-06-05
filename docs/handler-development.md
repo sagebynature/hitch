@@ -49,6 +49,7 @@ Add a `[handlers.<name>]` table to your Hitch config.
 ```toml
 [handlers.block_dangerous_shell]
 command = ["python3", "examples/handlers/policy_handler.py"]
+working_dir = "."
 events = ["tool.requested"]
 mode = "sync"
 timeout_ms = 1000
@@ -61,6 +62,7 @@ Fields:
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `command` | Yes | Command and arguments passed to `exec`. Hitch writes the envelope to stdin. |
+| `working_dir` | No | Directory Hitch runs the command from. Relative values in loaded config files resolve from the config file directory. |
 | `events` | Yes | Normalized Hitch events to match. Use `"*"` to match all events. |
 | `mode` | Yes | `"sync"` or `"async"`. Must match the dispatch path. |
 | `timeout_ms` | Yes | Per-handler timeout. Hitch records `timeout` if exceeded. |

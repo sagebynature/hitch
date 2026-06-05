@@ -45,7 +45,6 @@ hitch-client -harness codex -event PreToolUse -sync
 
 ```sh
 hitch serve
-hitch adapter
 hitch handler noop-observer
 hitch status
 hitch doctor
@@ -53,7 +52,7 @@ hitch inspect-event
 hitch replay
 ```
 
-`hitch adapter` remains only as a compatibility hook shim for old managed hook commands and manual debugging. It is not the installer entrypoint.
+Superseded follow-up: `hitch adapter` has been removed from the daemon CLI. Use `hitch-client` for hook dispatch.
 
 ## Architecture
 
@@ -110,7 +109,7 @@ Update references from `hitch-client install` to `hitch-client install` in:
 - generated/latest docs HTML
 - Makefile dry-run target
 
-Where relevant, keep explicit notes that `hitch adapter` remains a compatibility/debug shim, not the installer entrypoint.
+Where relevant, keep explicit notes that `hitch-client` is the hook dispatch CLI.
 
 ## Tests
 
@@ -121,4 +120,4 @@ Required automated coverage:
 - `hitch-client uninstall` removes both new and legacy managed hooks.
 - `hitch-client install` and `hitch-client uninstall` are no longer accepted daemon subcommands.
 - Existing stdin hook dispatch tests for `hitch-client` still pass.
-- Full `go test ./...`, adapter tests, example drives, and binary dry runs pass.
+- Full `go test ./...`, hook client tests, example drives, and binary dry runs pass.

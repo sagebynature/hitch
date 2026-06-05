@@ -34,34 +34,6 @@ type Mutation struct {
 	Value interface{} `json:"value"`
 }
 
-var defaultEventMap = map[string]protocol.EventType{
-	"input":                   protocol.EventTurnUserPrompt,
-	"before_agent_start":      protocol.EventTurnStarted,
-	"agent_start":             protocol.EventTurnStarted,
-	"turn_start":              protocol.EventTurnStarted,
-	"context":                 protocol.EventTurnStarted,
-	"before_provider_request": protocol.EventTurnStarted,
-	"tool_call":               protocol.EventToolRequested,
-	"tool_result":             protocol.EventToolCompleted,
-	"turn_end":                protocol.EventTurnCompleted,
-	"agent_end":               protocol.EventTurnCompleted,
-	"session_start":           protocol.EventSessionStarted,
-	"session_shutdown":        protocol.EventSessionEnded,
-	"session_before_switch":   protocol.EventSessionResumed,
-	"session_before_fork":     protocol.EventSessionResumed,
-	"session_before_compact":  protocol.EventSessionCompacted,
-	"session_compact":         protocol.EventSessionCompacted,
-	"user_bash":               protocol.EventToolRequested,
-}
-
-func DefaultEventMap() map[string]protocol.EventType {
-	out := make(map[string]protocol.EventType, len(defaultEventMap))
-	for k, v := range defaultEventMap {
-		out[k] = v
-	}
-	return out
-}
-
 func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
 	eventPayload, meta := unwrapSourcePayload(sourcePayload)
 	env := harness.NewEnvelope(protocol.HarnessPi, sourceEventType, eventPayload, hitchEventType, eventPayload)

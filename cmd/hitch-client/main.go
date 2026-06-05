@@ -23,15 +23,33 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	if len(args) > 0 {
 		switch args[0] {
 		case "install":
+			if isHelp(args[1:]) {
+				printInstallHelp(stdout, false)
+				return nil
+			}
 			return install.Run(args[1:], false)
 		case "uninstall":
+			if isHelp(args[1:]) {
+				printInstallHelp(stdout, true)
+				return nil
+			}
 			return install.Run(args[1:], true)
+		case "help":
+			printClientHelp(stdout, args[1:]...)
+			return nil
+		case "-h", "--help":
+			printClientHelp(stdout)
+			return nil
 		}
 	}
 	return runHook(args, stdin, stdout)
 }
 
 func runHook(args []string, stdin io.Reader, stdout io.Writer) error {
+	if isHelp(args) {
+		printDispatchHelp(stdout)
+		return nil
+	}
 	fs := flag.NewFlagSet("hitch-client", flag.ExitOnError)
 	harness := fs.String("harness", "", "source harness")
 	event := fs.String("event", "", "source event type")

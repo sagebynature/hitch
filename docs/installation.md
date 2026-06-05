@@ -73,12 +73,11 @@ on_error = "fail_open"
 on_timeout = "fail_open"
 ```
 
-Shell hook shim entrypoints can be used directly by harness hook configuration once installed manually. `hitch-client` is the preferred shim; `hitch adapter` remains a compatibility alias for existing hooks:
+Shell hook shim entrypoints can be used directly by harness hook configuration once installed manually. Use `hitch-client` for hook dispatch:
 
 ```sh
 hitch-client -harness codex -event SessionStart -sync
 hitch-client -harness codex -event PreToolUse -sync
 hitch-client -harness codex -event Stop -sync
 hitch-client -harness hermes -event pre_tool_call -sync
-hitch adapter -harness hermes -event pre_tool_call -sync
 ```

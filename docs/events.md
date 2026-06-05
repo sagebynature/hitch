@@ -24,7 +24,7 @@ Unsupported source event types are rejected unless configured in the harness eve
 
 ## Configurable source event mapping
 
-Each harness has built-in source-event mappings. User config can override or add mappings per harness:
+`config/default.config.toml` carries the supported source-event mappings for each harness. Edit or extend the relevant table in user config to change how a source hook maps to a Hitch event:
 
 ```toml
 [harness.codex.event_map]
@@ -32,7 +32,8 @@ PreToolUse = "tool.permission_requested"
 CustomHook = "turn.started"
 ```
 
-Configured entries merge over defaults. Values must be valid Hitch event names from the taxonomy below.
+Keys are source hook/callback names. Values must be valid Hitch event names from the taxonomy below. Unknown source events are rejected unless they appear in the configured event map.
+
 ## Hitch event taxonomy
 
 | Hitch event | Meaning |

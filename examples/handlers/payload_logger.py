@@ -62,7 +62,7 @@ def main() -> int:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(compact_record(envelope), separators=(",", ":"), sort_keys=True))
+            f.write(json.dumps(envelope, separators=(",", ":"), sort_keys=True))
             f.write("\n")
     except OSError as exc:
         emit_error(f"could not write payload log {path}: {exc}")

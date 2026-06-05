@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,6 +47,23 @@ func TestDispatchInvalidJSONIsError(t *testing.T) {
 	got := r.Dispatch(context.Background(), testEnv(), "sync", 5*time.Second)
 	if got.Invocations[0].Status != protocol.StatusError {
 		t.Fatalf("expected error: %#v", got.Invocations[0])
+	}
+}
+
+func TestDispatchRunsHandlerInWorkingDir(t *testing.T) {
+	dir := t.TempDir()
+	h := script(t, `pwd > cwd.txt`)
+	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, WorkingDir: dir, Events: []string{"*"}, Mode: "sync", TimeoutMS: 1000}})
+	got := r.Dispatch(context.Background(), testEnv(), "sync", 5*time.Second)
+	if got.Invocations[0].Status != protocol.StatusOK {
+		t.Fatalf("expected ok invocation: %#v", got.Invocations[0])
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "cwd.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(b)) != dir {
+		t.Fatalf("handler ran in %q, want %q", strings.TrimSpace(string(b)), dir)
 	}
 }
 

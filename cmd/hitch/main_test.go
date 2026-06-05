@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -25,40 +24,6 @@ func init() {
 		noopObserverHandler()
 		os.Exit(0)
 	}
-}
-
-func runAdapterForTest(t *testing.T, args []string, input string) string {
-	t.Helper()
-
-	oldStdin := os.Stdin
-	oldStdout := os.Stdout
-	inR, inW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	outR, outW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, _ = inW.WriteString(input)
-	_ = inW.Close()
-	os.Stdin = inR
-	os.Stdout = outW
-	defer func() {
-		os.Stdin = oldStdin
-		os.Stdout = oldStdout
-		_ = inR.Close()
-		_ = outR.Close()
-	}()
-
-	adapter(args)
-	_ = outW.Close()
-	out, err := io.ReadAll(outR)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(out)
 }
 
 func runNoopObserverForTest(t *testing.T, input string) string {
@@ -118,75 +83,28 @@ func captureStdoutForTest(t *testing.T, fn func()) string {
 	return string(out)
 }
 
-func TestAdapterDispatchSyncPreservesSourcePayloadAndPrintsNativeResponse(t *testing.T) {
-
-	var got map[string]any
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/dispatch-sync" {
-			t.Fatalf("unexpected path %s", r.URL.Path)
+func TestRootHelpListsCommandsWithoutAdapter(t *testing.T) {
+	var out strings.Builder
+	printHitchHelp(&out)
+	text := out.String()
+	for _, want := range []string{"hitch <command>", "serve", "handler", "inspect-event", "Use hitch-client"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("help missing %q:\n%s", want, text)
 		}
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Fatal(err)
-		}
-		w.Header().Set("content-type", "application/json")
-		_, _ = w.Write([]byte(`{"event_id":"evt","normalized_event_id":"norm","aggregate":{"decision":{"behavior":"deny","reason":"policy"}},"native_response":{"permissionDecision":"deny","reason":"policy"}}`))
-	}))
-	defer server.Close()
-
-	out := runAdapterForTest(t, []string{"-harness", "codex", "-event", "PreToolUse", "-sync", "-url", server.URL}, `{"tool":"bash","input":{"command":"pwd"}}`)
-
-	var native map[string]any
-	if err := json.Unmarshal([]byte(out), &native); err != nil {
-		t.Fatalf("adapter stdout is not JSON: %v; stdout=%q", err, out)
 	}
-	if native["permissionDecision"] != "deny" || native["reason"] != "policy" {
-		t.Fatalf("unexpected native response: %#v", native)
-	}
-	if got["harness"] != "codex" || got["source_event_type"] != "PreToolUse" || got["hitch_client_version"] == "" {
-		t.Fatalf("unexpected request metadata: %#v", got)
-	}
-	payload, ok := got["source_payload"].(map[string]any)
-	if !ok {
-		t.Fatalf("source_payload was not an object: %#v", got["source_payload"])
-	}
-	if payload["tool"] != "bash" {
-		t.Fatalf("source payload was not preserved: %#v", payload)
+	if strings.Contains(text, "adapter") {
+		t.Fatalf("hitch help should not mention removed adapter command:\n%s", text)
 	}
 }
 
-func TestAdapterAsyncPostsEventAndPrintsNothing(t *testing.T) {
-
-	called := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		if r.URL.Path != "/v1/events" {
-			t.Fatalf("unexpected path %s", r.URL.Path)
+func TestSubcommandHelp(t *testing.T) {
+	var out strings.Builder
+	printHitchHelp(&out, "serve")
+	text := out.String()
+	for _, want := range []string{"Run the local Hitch API server", "--config", "hitch serve"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("serve help missing %q:\n%s", want, text)
 		}
-		w.Header().Set("content-type", "application/json")
-		_, _ = w.Write([]byte(`{"event_id":"evt","normalized_event_id":"norm"}`))
-	}))
-	defer server.Close()
-
-	out := runAdapterForTest(t, []string{"-harness", "hermes", "-event", "post_tool_call", "-url", server.URL}, `{"name":"Read"}`)
-
-	if out != "" {
-		t.Fatalf("async adapter wrote stdout: %q", out)
-	}
-	if !called {
-		t.Fatal("adapter did not post event")
-	}
-}
-
-func TestAdapterFailsOpenWhenHitchIsUnreachable(t *testing.T) {
-
-	out := runAdapterForTest(t, []string{"-harness", "hermes", "-event", "pre_tool_call", "-sync", "-url", "http://127.0.0.1:1"}, `{"name":"Bash"}`)
-
-	var native map[string]any
-	if err := json.Unmarshal([]byte(out), &native); err != nil {
-		t.Fatalf("unreachable Hitch should emit native no-op JSON, got %q: %v", out, err)
-	}
-	if len(native) != 0 {
-		t.Fatalf("unreachable Hitch should emit no-op response, got %#v", native)
 	}
 }
 
@@ -211,8 +129,19 @@ func TestHitchInstallSubcommandIsRejected(t *testing.T) {
 	if err == nil {
 		t.Fatalf("hitch install unexpectedly succeeded: %s", out)
 	}
-	if !strings.Contains(string(out), "usage: hitch") {
+	if !strings.Contains(string(out), "Usage:") {
 		t.Fatalf("hitch install did not print daemon usage: %s", out)
+	}
+}
+
+func TestHitchAdapterSubcommandIsRejected(t *testing.T) {
+	cmd := exec.Command("go", "run", ".", "adapter", "--help")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("hitch adapter unexpectedly succeeded: %s", out)
+	}
+	if strings.Contains(string(out), "Dispatch one source event") {
+		t.Fatalf("hitch adapter exposed dispatch help after removal: %s", out)
 	}
 }
 
@@ -372,36 +301,6 @@ enabled = true
 	return dbPath, cfgPath, normalizedID
 }
 
-func TestE2ECodexAdapterDispatchesThroughPublicAPIAndPersists(t *testing.T) {
-	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
-	st, err := store.Open(ctx, dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer st.Close()
-	t.Setenv("HANDLER_JSON", `{"status":"ok","decision":{"behavior":"deny","reason":"policy"}}`)
-	server := httptest.NewServer(api.New(e2eConfig(t, dbPath), slog.Default(), st).Handler())
-	defer server.Close()
-
-	out := runAdapterForTest(t, []string{"-harness", "codex", "-event", "PreToolUse", "-sync", "-url", server.URL}, `{"tool":"bash","input":{"command":"rm -rf /"}}`)
-
-	var native map[string]any
-	if err := json.Unmarshal([]byte(out), &native); err != nil {
-		t.Fatalf("codex adapter stdout is not JSON: %v; output=%q", err, out)
-	}
-	if native["permissionDecision"] != "deny" || native["permissionDecisionReason"] != "policy" {
-		t.Fatalf("codex deny was not translated to native response: %#v", native)
-	}
-	inspection := onlyInspection(t, ctx, st, protocol.EventToolRequested)
-	if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
-		t.Fatalf("handler invocation was not persisted: %#v", inspection.HandlerInvocations)
-	}
-	if len(inspection.NativeResponses) != 1 {
-		t.Fatalf("native response was not persisted: %#v", inspection.NativeResponses)
-	}
-}
-
 func TestE2ECodexLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
@@ -457,29 +356,6 @@ func TestE2ECodexLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 		if len(inspection.NativeResponses) != 1 {
 			t.Fatalf("%s native response was not persisted: %#v", event.native, inspection.NativeResponses)
 		}
-	}
-}
-
-func TestE2EHermesAdapterDispatchesBlockThroughPublicAPI(t *testing.T) {
-	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
-	st, err := store.Open(ctx, dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer st.Close()
-	t.Setenv("HANDLER_JSON", `{"status":"ok","decision":{"behavior":"block","reason":"blocked"}}`)
-	server := httptest.NewServer(api.New(e2eConfig(t, dbPath), slog.Default(), st).Handler())
-	defer server.Close()
-
-	out := runAdapterForTest(t, []string{"-harness", "hermes", "-event", "pre_tool_call", "-sync", "-url", server.URL}, `{"tool_name":"bash"}`)
-
-	var native map[string]any
-	if err := json.Unmarshal([]byte(out), &native); err != nil {
-		t.Fatalf("hermes adapter stdout is not JSON: %v; output=%q", err, out)
-	}
-	if native["action"] != "block" || native["message"] != "blocked" {
-		t.Fatalf("hermes block was not translated to native response: %#v", native)
 	}
 }
 
@@ -548,69 +424,23 @@ func shellQuote(s string) string {
 func e2eNoopConfig(t *testing.T, dbPath string) config.Config {
 	t.Helper()
 	command := "HITCH_TEST_NOOP_HANDLER=1 " + shellQuote(os.Args[0])
-	cfg, err := config.Parse([]byte(`[server]
-host = "127.0.0.1"
-port = 8799
-max_request_bytes = 1048576
-
-[log]
-level = "info"
-format = "json"
-include_native_payload = false
-
-[log.stdout]
-enabled = true
-
-[log.file]
-enabled = false
-path = "` + filepath.ToSlash(filepath.Join(filepath.Dir(dbPath), "hitch.log")) + `"
-max_size_mb = 100
-max_backups = 10
-max_age_days = 14
-compress = true
-
-[log.otlp]
-enabled = false
-endpoint = "http://127.0.0.1:4318"
-protocol = "http/protobuf"
-
-[audit]
-enabled = true
-backend = "sqlite"
-
-[audit.sqlite]
-path = "` + filepath.ToSlash(dbPath) + `"
-
-[harness.codex]
-enabled = true
-[harness.hermes]
-enabled = true
-[harness.pi]
-enabled = true
-[harness.omp]
-enabled = true
-
-[handlers.noop_observer]
-command = ["/bin/sh", "-c", ` + tomlString(t, command) + `]
-events = ["*"]
-mode = "sync"
-timeout_ms = 5000
-on_error = "fail_open"
-on_timeout = "fail_open"
-`))
+	cfg, err := config.Parse([]byte(config.DefaultConfigTOML))
 	if err != nil {
 		t.Fatal(err)
+	}
+	cfg.Audit.SQLite.Path = dbPath
+	cfg.Log.File.Path = filepath.ToSlash(filepath.Join(filepath.Dir(dbPath), "hitch.log"))
+	cfg.Handlers = map[string]config.HandlerConfig{
+		"noop_observer": {
+			Command:   []string{"/bin/sh", "-c", command},
+			Events:    []string{"*"},
+			Mode:      "sync",
+			TimeoutMS: 5000,
+			OnError:   "fail_open",
+			OnTimeout: "fail_open",
+		},
 	}
 	return cfg
-}
-
-func tomlString(t *testing.T, s string) string {
-	t.Helper()
-	b, err := json.Marshal(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
 }
 
 func codexLifecyclePayload(event string) protocol.RawJSON {

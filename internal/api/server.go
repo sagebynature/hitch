@@ -66,22 +66,11 @@ func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
 }
 func buildHarnessRuntimes(cfg config.Config) map[protocol.Harness]harnessRuntime {
 	return map[protocol.Harness]harnessRuntime{
-		protocol.HarnessCodex:  {normalizer: codex.Mapper{}, eventMap: mergeEventMap(codex.DefaultEventMap(), cfg.Harness.Codex.EventMap)},
-		protocol.HarnessHermes: {normalizer: hermes.Mapper{}, eventMap: mergeEventMap(hermes.DefaultEventMap(), cfg.Harness.Hermes.EventMap)},
-		protocol.HarnessPi:     {normalizer: pi.Mapper{}, eventMap: mergeEventMap(pi.DefaultEventMap(), cfg.Harness.Pi.EventMap)},
-		protocol.HarnessOMP:    {normalizer: omp.Mapper{}, eventMap: mergeEventMap(omp.DefaultEventMap(), cfg.Harness.OMP.EventMap)},
+		protocol.HarnessCodex:  {normalizer: codex.Mapper{}, eventMap: cfg.Harness.Codex.EventMap},
+		protocol.HarnessHermes: {normalizer: hermes.Mapper{}, eventMap: cfg.Harness.Hermes.EventMap},
+		protocol.HarnessPi:     {normalizer: pi.Mapper{}, eventMap: cfg.Harness.Pi.EventMap},
+		protocol.HarnessOMP:    {normalizer: omp.Mapper{}, eventMap: cfg.Harness.OMP.EventMap},
 	}
-}
-
-func mergeEventMap(defaults, overrides map[string]protocol.EventType) map[string]protocol.EventType {
-	out := make(map[string]protocol.EventType, len(defaults)+len(overrides))
-	for k, v := range defaults {
-		out[k] = v
-	}
-	for k, v := range overrides {
-		out[k] = v
-	}
-	return out
 }
 
 func (s *Server) Handler() http.Handler {

@@ -58,7 +58,9 @@ def assert_port_is_free() -> None:
 
 def write_runtime_config() -> None:
     text = SOURCE_CONFIG.read_text()
-    text = text.replace("port = 8797", f"port = {PORT}", 1)
+    text = text.replace('port = 8799', f'port = {PORT}', 1)
+    text = text.replace('path = "~/.config/hitch/events.sqlite"', f'path = "{DB}"', 1)
+    text = text.replace('working_dir = ".."', f'working_dir = {json.dumps(str(ROOT))}')
     CONFIG.write_text(text)
 
 

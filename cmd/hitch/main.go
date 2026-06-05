@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/sagebynature/hitch/internal/api"
-	"github.com/sagebynature/hitch/internal/clientshim"
 	"github.com/sagebynature/hitch/internal/config"
 	"github.com/sagebynature/hitch/internal/dispatch"
 	"github.com/sagebynature/hitch/internal/harness"
@@ -30,9 +29,6 @@ func main() {
 		switch os.Args[1] {
 		case "serve":
 			serve(os.Args[2:])
-			return
-		case "adapter":
-			adapter(os.Args[2:])
 			return
 		case "handler":
 			handler(os.Args[2:])
@@ -49,19 +45,34 @@ func main() {
 		case "replay":
 			replay(os.Args[2:])
 			return
+		case "help":
+			printHitchHelp(os.Stdout, os.Args[2:]...)
+			return
+		case "-h", "--help":
+			printHitchHelp(os.Stdout)
+			return
 		}
 	}
 	versionFlag := flag.Bool("version", false, "print version")
+	helpFlag := flag.Bool("help", false, "print help")
 	flag.Parse()
 	if *versionFlag {
 		fmt.Printf("hitch %s\n", version)
 		return
 	}
-	fmt.Fprintln(os.Stderr, "usage: hitch --version | hitch serve | hitch adapter | hitch handler noop-observer | hitch status | hitch doctor | hitch inspect-event | hitch replay")
+	if *helpFlag {
+		printHitchHelp(os.Stdout)
+		return
+	}
+	printHitchHelp(os.Stderr)
 	os.Exit(2)
 }
 
 func serve(args []string) {
+	if isHelp(args) {
+		printServeHelp(os.Stdout)
+		return
+	}
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	configPath := fs.String("config", "config/default.config.toml", "config file")
 	_ = fs.Parse(args)
@@ -99,19 +110,11 @@ func serve(args []string) {
 	_ = srv.Shutdown(ctx)
 }
 
-func adapter(args []string) {
-	fs := flag.NewFlagSet("adapter", flag.ExitOnError)
-	harness := fs.String("harness", "", "source harness")
-	event := fs.String("event", "", "native event type")
-	syncMode := fs.Bool("sync", false, "dispatch synchronously")
-	url := fs.String("url", clientshim.DefaultURL(), "hitch API URL")
-	_ = fs.Parse(args)
-	if err := clientshim.Run(context.Background(), clientshim.Options{Harness: *harness, Event: *event, Sync: *syncMode, URL: *url, Stdin: os.Stdin, Stdout: os.Stdout}); err != nil {
-		fatal(err)
-	}
-}
-
 func handler(args []string) {
+	if isHelp(args) {
+		printHandlerHelp(os.Stdout)
+		return
+	}
 	if len(args) != 1 || args[0] != "noop-observer" {
 		fatal(fmt.Errorf("usage: hitch handler noop-observer"))
 	}
@@ -131,12 +134,20 @@ func noopObserverHandler() {
 }
 
 func status(args []string) {
+	if isHelp(args) {
+		printStatusHelp(os.Stdout)
+		return
+	}
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "emit JSON")
 	_ = fs.Parse(args)
 	writeCLI(*jsonOut, map[string]interface{}{"config": config.DefaultPath, "version": version})
 }
 func doctor(args []string) {
+	if isHelp(args) {
+		printDoctorHelp(os.Stdout)
+		return
+	}
 	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "emit JSON")
 	_ = fs.Parse(args)
@@ -144,6 +155,10 @@ func doctor(args []string) {
 }
 
 func inspectEvent(args []string) {
+	if isHelp(args) {
+		printInspectEventHelp(os.Stdout)
+		return
+	}
 	fs := flag.NewFlagSet("inspect-event", flag.ExitOnError)
 	configPath := fs.String("config", "config/default.config.toml", "config file")
 	_ = fs.Parse(args)
@@ -167,6 +182,10 @@ func inspectEvent(args []string) {
 }
 
 func replay(args []string) {
+	if isHelp(args) {
+		printReplayHelp(os.Stdout)
+		return
+	}
 	fs := flag.NewFlagSet("replay", flag.ExitOnError)
 	configPath := fs.String("config", "config/default.config.toml", "config file")
 	dryRun := fs.Bool("dry-run", false, "do not create replay records")

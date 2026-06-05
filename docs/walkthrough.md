@@ -198,7 +198,7 @@ Each installed command has this shape, with the event name changed per lifecycle
 hitch-client -harness codex -event PreToolUse -sync
 ```
 
-`hitch adapter` remains a compatibility alias for older managed hooks. The client reads Codex hook JSON from stdin, forwards it to Hitch, and writes the Codex-native response JSON to stdout.
+`hitch-client` reads Codex hook JSON from stdin, forwards it to Hitch, and writes the Codex-native response JSON to stdout.
 
 ## Trust hooks in Codex
 
@@ -390,9 +390,9 @@ Fix: open Codex and run:
 
 Trust the Hitch hook entries.
 
-### Adapter prints `{}` even when Hitch is down
+### `hitch-client` prints `{}` even when Hitch is down
 
-For sync hooks, the adapter fails open. If Hitch is unreachable or returns no native response, the adapter emits a harness-native no-op response.
+For sync hooks, `hitch-client` fails open. If Hitch is unreachable or returns no native response, the client emits a harness-native no-op response.
 
 Check the server:
 

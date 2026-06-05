@@ -98,12 +98,13 @@ hitch-client uninstall --only pi --yes --json</code></pre>
               <tr><td><code>[log]</code></td><td>Operational logging. Native payloads are not included by default.</td></tr>
               <tr><td><code>[audit]</code></td><td>Event journal persistence. SQLite is the verified backend.</td></tr>
               <tr><td><code>[handlers.&lt;name&gt;]</code></td><td>External command handlers, event filters, mode, timeout, and error policy.</td></tr>
-              <tr><td><code>[harness.&lt;name&gt;]</code></td><td>Per-harness enable flags.</td></tr>
+              <tr><td><code>[harness.&lt;name&gt;]</code></td><td>Per-harness enable flags and source-event mappings.</td></tr>
             </tbody>
           </table>
-          <p>Strict validation rejects unknown config keys and invalid server ports, request sizes, log values, audit backends, handler event names, handler modes, and handler error or timeout policies.</p>
+          <p>Strict validation rejects unknown config keys and invalid server ports, request sizes, log values, audit backends, handler event names, handler modes, handler error or timeout policies, and harness event-map values. Optional handler <code>working_dir</code> values run commands from a stable directory; relative values resolve from the config file directory.</p>
           <pre class="code-block"><code>[handlers.noop_observer]
 command = ["hitch", "handler", "noop-observer"]
+working_dir = "."
 events = ["*"]
 mode = "sync"
 timeout_ms = 1000
@@ -143,6 +144,7 @@ on_timeout = "fail_open"</code></pre>
           </ol>
           <pre class="code-block"><code>[handlers.example_policy]
 command = ["python3", "examples/handlers/policy_handler.py"]
+working_dir = "."
 events = ["turn.user_prompt", "tool.requested", "tool.completed", "turn.completed"]
 mode = "sync"
 timeout_ms = 1000
@@ -152,6 +154,7 @@ on_timeout = "fail_closed"</code></pre>
           <p><code>examples/handlers/payload_logger.py</code> appends each event payload to a JSONL log and returns <code>behavior:"none"</code>. Configure one sync handler and one async handler with <code>events = ["*"]</code> to observe Codex, Hermes, Pi, and OMP without changing control flow.</p>
           <pre class="code-block"><code>[handlers.payload_logger_sync]
 command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
+working_dir = ".."
 events = ["*"]
 mode = "sync"
 timeout_ms = 1000
@@ -160,6 +163,7 @@ on_timeout = "fail_open"
 
 [handlers.payload_logger_async]
 command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
+working_dir = ".."
 events = ["*"]
 mode = "async"
 timeout_ms = 1000
@@ -176,7 +180,7 @@ on_timeout = "fail_open"</code></pre>
         <section id="hitch-events">
           <h2>Hitch events</h2>
           <p>Hitch normalizes Codex, Hermes, Pi, and OMP source events into one stable envelope. Current normalizers preserve the source payload unchanged in both <code>source_payload</code> and <code>payload</code> where no canonical extractor is defined, then set <code>hitch_event_type</code> from the server-side event map.</p>
-          <p>Per-harness <code>[harness.&lt;name&gt;.event_map]</code> config entries merge over built-in mappings, so operators can override or add source-event to Hitch-event mappings without changing clients.</p>
+          <p>Per-harness <code>[harness.&lt;name&gt;.event_map]</code> config entries are the source of truth for source-event to Hitch-event mapping. The default config includes the supported mappings; operators can edit or add entries without changing clients.</p>
           <h3>Normalized event types</h3>
           <table>
             <thead><tr><th>Hitch event</th><th>Meaning</th></tr></thead>

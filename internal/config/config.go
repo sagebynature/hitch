@@ -70,12 +70,13 @@ type JSONLAudit struct {
 }
 
 type HandlerConfig struct {
-	Command   []string `toml:"command"`
-	Events    []string `toml:"events"`
-	Mode      string   `toml:"mode"`
-	TimeoutMS int      `toml:"timeout_ms"`
-	OnError   string   `toml:"on_error"`
-	OnTimeout string   `toml:"on_timeout"`
+	Command    []string `toml:"command"`
+	WorkingDir string   `toml:"working_dir"`
+	Events     []string `toml:"events"`
+	Mode       string   `toml:"mode"`
+	TimeoutMS  int      `toml:"timeout_ms"`
+	OnError    string   `toml:"on_error"`
+	OnTimeout  string   `toml:"on_timeout"`
 }
 
 type HarnessConfig struct {
@@ -92,11 +93,21 @@ type HarnessToggle struct {
 
 func Load(path string) (Config, error) {
 	path = ExpandHome(path)
+	baseDir := filepath.Dir(path)
+	if absPath, err := filepath.Abs(path); err == nil {
+		path = absPath
+		baseDir = filepath.Dir(absPath)
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, err
 	}
-	return Parse(b)
+	c, err := Parse(b)
+	if err != nil {
+		return Config{}, err
+	}
+	resolveHandlerWorkingDirs(&c, baseDir)
+	return c, nil
 }
 
 func Parse(b []byte) (Config, error) {
@@ -243,6 +254,20 @@ func validatePolicy(handler, key, value string) error {
 		return nil
 	default:
 		return fmt.Errorf("handlers.%s.%s has invalid policy %q", handler, key, value)
+	}
+}
+
+func resolveHandlerWorkingDirs(c *Config, baseDir string) {
+	for name, h := range c.Handlers {
+		if h.WorkingDir == "" {
+			continue
+		}
+		dir := ExpandHome(h.WorkingDir)
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(baseDir, dir)
+		}
+		h.WorkingDir = filepath.Clean(dir)
+		c.Handlers[name] = h
 	}
 }
 

@@ -34,14 +34,68 @@ path = "~/.local/share/hitch/events.sqlite"
 [harness.codex]
 enabled = true
 
+[harness.codex.event_map]
+SessionStart = "session.started"
+SubagentStart = "subagent.started"
+UserPromptSubmit = "turn.user_prompt"
+PreToolUse = "tool.requested"
+PermissionRequest = "tool.permission_requested"
+PostToolUse = "tool.completed"
+PreCompact = "session.compacted"
+PostCompact = "session.compacted"
+SubagentStop = "subagent.completed"
+Stop = "turn.completed"
+
 [harness.hermes]
 enabled = true
+
+[harness.hermes.event_map]
+pre_tool_call = "tool.requested"
+post_tool_call = "tool.completed"
+pre_llm_call = "turn.started"
+post_llm_call = "turn.completed"
+on_session_start = "session.started"
+on_session_end = "session.ended"
+subagent_stop = "subagent.completed"
+transform_tool_result = "tool.completed"
+transform_terminal_output = "tool.completed"
+transform_llm_output = "turn.completed"
+pre_gateway_dispatch = "turn.user_prompt"
 
 [harness.pi]
 enabled = true
 
+[harness.pi.event_map]
+input = "turn.user_prompt"
+before_agent_start = "turn.started"
+agent_start = "turn.started"
+turn_start = "turn.started"
+context = "turn.started"
+before_provider_request = "turn.started"
+tool_call = "tool.requested"
+tool_result = "tool.completed"
+turn_end = "turn.completed"
+agent_end = "turn.completed"
+session_start = "session.started"
+session_shutdown = "session.ended"
+session_before_switch = "session.resumed"
+session_before_fork = "session.resumed"
+session_before_compact = "session.compacted"
+session_compact = "session.compacted"
+user_bash = "tool.requested"
+
 [harness.omp]
 enabled = true
+
+[harness.omp.event_map]
+input = "turn.user_prompt"
+before_agent_start = "turn.started"
+turn_start = "turn.started"
+tool_call = "tool.requested"
+tool_result = "tool.completed"
+turn_end = "turn.completed"
+auto_compaction_start = "session.compacted"
+todo_reminder = "turn.started"
 
 [handlers.noop_observer]
 command = ["hitch", "handler", "noop-observer"]

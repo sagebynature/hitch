@@ -27,6 +27,32 @@ func prepareClientInstallTest(t *testing.T, harness string) {
 	t.Setenv("HITCH_CLIENT_BINARY_PATH", clientPath)
 }
 
+func TestClientRootHelpMentionsInstallAndDispatch(t *testing.T) {
+	var stdout bytes.Buffer
+	if err := run([]string{"--help"}, strings.NewReader(`{}`), &stdout); err != nil {
+		t.Fatal(err)
+	}
+	text := stdout.String()
+	for _, want := range []string{"hitch-client [options]", "install", "uninstall", "-harness string", "PreToolUse"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("client help missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestClientInstallHelp(t *testing.T) {
+	var stdout bytes.Buffer
+	if err := run([]string{"help", "install"}, strings.NewReader(`{}`), &stdout); err != nil {
+		t.Fatal(err)
+	}
+	text := stdout.String()
+	for _, want := range []string{"Install Hitch-managed harness hooks", "--only string", "--dry-run", "--yes"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("install help missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func TestRunInstallSubcommandDryRun(t *testing.T) {
 	prepareClientInstallTest(t, "codex")
 

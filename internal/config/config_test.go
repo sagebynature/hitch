@@ -2,6 +2,8 @@ package config
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -100,6 +102,26 @@ BadHook = "not.real"
 	}
 }
 
+func TestLoadResolvesHandlerWorkingDirRelativeToConfig(t *testing.T) {
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(configDir, "hitch.toml")
+	text := strings.Replace(baseConfig, `command = ["hitch-handler-audit"]`, "command = [\"hitch-handler-audit\"]\nworking_dir = \"..\"", 1)
+	if err := os.WriteFile(configPath, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := cfg.Handlers["audit"].WorkingDir, dir; got != want {
+		t.Fatalf("working_dir resolved to %q, want %q", got, want)
+	}
+}
+
 func TestDefaultConfigTOMLMatchesDevelopmentConfig(t *testing.T) {
 	b, err := os.ReadFile("../../config/default.config.toml")
 	if err != nil {
@@ -108,8 +130,12 @@ func TestDefaultConfigTOMLMatchesDevelopmentConfig(t *testing.T) {
 	if string(b) != DefaultConfigTOML {
 		t.Fatalf("embedded default config differs from config/default.config.toml")
 	}
-	if _, err := Parse([]byte(DefaultConfigTOML)); err != nil {
+	cfg, err := Parse([]byte(DefaultConfigTOML))
+	if err != nil {
 		t.Fatalf("embedded default config is invalid: %v", err)
+	}
+	if cfg.Harness.Codex.EventMap["PreToolUse"] != "tool.requested" || cfg.Harness.Hermes.EventMap["pre_tool_call"] != "tool.requested" {
+		t.Fatalf("default config omitted source event mappings: %#v", cfg.Harness)
 	}
 }
 

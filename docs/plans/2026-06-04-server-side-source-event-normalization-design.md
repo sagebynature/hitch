@@ -121,10 +121,9 @@ input = "turn.user_prompt"
 
 Semantics:
 
-- Each harness keeps built-in defaults matching the current hard-coded maps.
-- Configured entries merge over defaults.
-- A configured source event may override a default mapping.
-- A configured source event may add support for a source event that the built-in map does not know.
+- `config/default.config.toml` carries the supported source-event mappings.
+- Runtime mappings come from the loaded config, not hard-coded harness package maps.
+- A configured source event may change a supported mapping or add a new source event.
 - Values must be valid Hitch event types from `internal/protocol/protocol.go:27-42`.
 - Unknown source event types are rejected unless they are configured.
 

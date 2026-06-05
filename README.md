@@ -25,7 +25,7 @@ Use Hitch to build:
 - **Synchronous decisions** translated back to each harness's native response format.
 - **SQLite audit trail** for inbound events, normalized events, handler invocations, and native responses.
 - **Local HTTP API** for event ingestion, synchronous dispatch, health checks, event inspection, and replay.
-- **CLI adapters** for shell-based harness integrations.
+- **hitch-client hook shim** for shell-based harness integrations.
 
 Verified API endpoints:
 
@@ -117,7 +117,7 @@ bun test adapters/**/*.test.ts
 Hitch currently includes:
 
 - Codex shell hook installation into `~/.codex/hooks.json`.
-- Codex and Hermes shell hook shim entrypoints via `hitch-client`, with `hitch adapter` retained as a compatibility alias.
+- Codex and Hermes shell hook shim entrypoints via `hitch-client`.
 - Pi TypeScript extension hook installation into `~/.pi/agent/extensions/hitch/index.ts`.
 - Installer config seeding for `~/.config/hitch/config.toml`.
 - Harness detection for Codex, Hermes, Pi, and OMP.
@@ -135,7 +135,6 @@ Run the hook client directly from a harness hook configuration:
 ```sh
 ./bin/hitch-client -harness codex -event PreToolUse -sync
 ./bin/hitch-client -harness hermes -event pre_tool_call -sync
-./bin/hitch adapter -harness hermes -event pre_tool_call -sync
 ```
 
 ## Configuration
@@ -148,7 +147,7 @@ Configuration covers:
 - logging sinks and payload visibility
 - SQLite audit persistence
 - handler commands, event filters, modes, timeouts, and error policy
-- per-harness enable flags
+- per-harness enable flags and source-event mappings
 
 See `docs/configuration.md` for details.
 

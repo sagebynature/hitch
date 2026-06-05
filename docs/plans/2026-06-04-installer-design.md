@@ -184,7 +184,7 @@ The current CLI requires `--yes` for non-dry-run installs unless stdin is an int
 Installed hooks should use the absolute installed binary path, not `hitch` from PATH:
 
 ```sh
-/Users/sage/.local/bin/hitch adapter -harness codex -event PreToolUse -sync
+/Users/sage/.local/bin/hitch-client -harness codex -event PreToolUse -sync
 ```
 
 This avoids PATH resolution bugs inside harness processes.

@@ -82,7 +82,7 @@ OMP should be treated as Pi-compatible until its extensions diverge in tested be
 
 ## Decision
 
-Hitch will be built as a local daemon exposing both asynchronous and synchronous REST endpoints. `hitch-client` is the preferred lightweight harness hook shim: it reads native JSON from stdin, posts to the local Hitch HTTP API, and writes only the native sync response to stdout. The legacy `hitch adapter` subcommand remains as a compatibility alias over the same implementation.
+Hitch will be built as a local daemon exposing both asynchronous and synchronous REST endpoints. `hitch-client` is the lightweight harness hook shim: it reads source JSON from stdin, posts to the local Hitch HTTP API, and writes only the native sync response to stdout.
 
 Hitch will use a stable normalized envelope and preserve the source-native payload as JSON.
 
@@ -99,54 +99,36 @@ Hitch will separate operational logging from event persistence:
 - Event persistence stores inbound events, normalized events, handler invocations, handler outputs, and native responses in SQLite initially, with optional JSONL audit output.
 
 
-## Adapter Boundary Decision
+## Hook Client Boundary Decision
 
-Hitch will include `hitch adapter` as the official harness-facing shim for command-hook harnesses.
+Hitch will keep hook dispatch out of the daemon binary. `hitch-client` is the official harness-facing shim for command-hook harnesses.
 
-The adapter is not the policy engine. Its role is transport and native-boundary translation:
+The client is not the policy engine. Its role is transport and source-boundary forwarding:
 
 ```text
 agent harness lifecycle hook
-  -> executes hitch adapter ...
-  -> adapter reads native JSON from stdin
-  -> adapter sends the event to the local Hitch HTTP API
+  -> executes hitch-client ...
+  -> hitch-client reads source JSON from stdin
+  -> hitch-client sends the source event to the local Hitch HTTP API
   -> Hitch normalizes the event and runs handlers
   -> Hitch translates the aggregate decision to harness-native JSON
-  -> adapter prints only the native JSON response to stdout
+  -> hitch-client prints only the native JSON response to stdout
   -> harness consumes stdout and continues, blocks, rewrites, or no-ops
 ```
 
 This keeps handlers portable. Handlers depend on the normalized Hitch envelope and result protocol, not on each harness hook runner's stdin/stdout details.
 
-### Server-only alternative considered
-
-A stricter server-only design would remove `hitch adapter` and require each harness to call Hitch's HTTP API directly.
-
-Benefits of the server-only design:
-
-- Fewer moving parts in the Hitch binary and installer.
-- No installed shell command that can drift from the Hitch server URL or port.
-- No stdout bridge where accidental output can corrupt a native hook response.
-- Cleaner operational boundary for authentication, metrics, retries, and tracing.
-
-Costs of the server-only design:
-
-- Every supported harness must provide first-class HTTP hooks for both observer and sync control events.
-- Harness-native response translation still has to exist somewhere.
-- Harnesses that only support shell hooks would force users to write their own shell-to-HTTP adapters.
-- Sync control semantics become coupled to each harness's HTTP timeout and response behavior.
-- Local manual testing with stdin payloads becomes less direct.
-
 Decision:
 
-- Keep `hitch adapter` for command-hook harnesses such as Codex and Hermes.
+- Remove `hitch adapter` from the daemon command surface.
+- Use `hitch-client` for command-hook harnesses such as Codex and Hermes.
 - Prefer direct HTTP integration only for harnesses that natively support synchronous HTTP hooks with reliable timeout and response semantics.
 - Treat external harness-specific adapters as thin, tested compatibility layers, not as places for policy logic.
-- Make adapter install commands explicit about the Hitch API URL so hooks invoke the intended server instance.
+- Make installed hook commands explicit about the Hitch API URL so hooks invoke the intended server instance.
 
 Rationale:
 
-Removing the adapter would not remove the integration problem. It would move it into user-authored scripts or harness-specific glue with weaker tests. Shipping `hitch adapter` makes the bridge official, audited, and consistent across harnesses.
+Keeping the hook shim in `hitch-client` gives users one dedicated dispatch binary without duplicating the same behavior in `hitch`. It also keeps the daemon CLI focused on serving, inspection, replay, and diagnostics.
 
 ## Normalized Event Envelope
 
@@ -235,7 +217,7 @@ type HitchHandlerResult = {
 Each harness mapper owns native translation, while the hook shim owns only the transport/native boundary:
 
 ```text
-stdin native payload -> hitch-client or hitch adapter -> Hitch HTTP API -> stdout native response
+stdin source payload -> hitch-client -> Hitch HTTP API -> stdout native response
 HitchHandlerResult -> Codex stdout JSON
 HitchHandlerResult -> Hermes stdout JSON
 HitchHandlerResult -> Pi/OMP callback return object or event mutation
@@ -503,7 +485,7 @@ Python is good for handler authoring and prototypes, but not the best core daemo
 
 Use **Go for the Hitch daemon, `hitch-client` hook shim, persistence layer, installer/doctor CLI, native response aggregation, and operational logging**.
 
-Use **TypeScript for harness adapters where the harness integration surface is JavaScript/TypeScript-native**, especially Pi and OMP extensions. Codex and Hermes shell-hook adapters should use the shipped `hitch-client` binary, with `hitch adapter` kept for compatibility with existing managed hooks.
+Use **TypeScript for harness adapters where the harness integration surface is JavaScript/TypeScript-native**, especially Pi and OMP extensions. Codex and Hermes shell-hook adapters should use the shipped `hitch-client` binary.
 
 Support user handlers as external commands first. This avoids committing to an in-process plugin ABI and lets handlers be written in any language.
 
