@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -22,6 +23,8 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 		env        map[string]string
 		wantFiles  []string
 		denyFiles  []string
+		wantBuild  []string
+		denyBuild  []string
 		wantLog    []string
 		denyLog    []string
 		wantOutput []string
@@ -33,6 +36,10 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 				"HITCH_SKIP_HOOK_INSTALL": "1",
 			},
 			wantFiles: []string{"hitch", "hitch-client"},
+			wantBuild: []string{
+				"/hitch ./cmd/hitch",
+				"/hitch-client ./cmd/hitch-client",
+			},
 			wantLog: []string{
 				"hitch --version",
 				"hitch-client --version",
@@ -47,6 +54,12 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 			},
 			wantFiles: []string{"hitch"},
 			denyFiles: []string{"hitch-client"},
+			wantBuild: []string{
+				"/hitch ./cmd/hitch",
+			},
+			denyBuild: []string{
+				"/hitch-client ./cmd/hitch-client",
+			},
 			wantLog: []string{
 				"hitch --version",
 				"hitch config init --json",
@@ -66,6 +79,12 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 			},
 			wantFiles: []string{"hitch-client"},
 			denyFiles: []string{"hitch"},
+			wantBuild: []string{
+				"/hitch-client ./cmd/hitch-client",
+			},
+			denyBuild: []string{
+				"/hitch ./cmd/hitch",
+			},
 			wantLog: []string{
 				"hitch-client --version",
 			},
@@ -98,6 +117,16 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 					t.Fatalf("did not expect installed %s: %v\noutput:\n%s", name, err, result.Output)
 				}
 			}
+			for _, want := range tc.wantBuild {
+				if !hasBuildTarget(result.Log, want) {
+					t.Fatalf("installer log missing build target %q\nlog:\n%s\noutput:\n%s", want, result.Log, result.Output)
+				}
+			}
+			for _, deny := range tc.denyBuild {
+				if hasBuildTarget(result.Log, deny) {
+					t.Fatalf("installer log unexpectedly contains build target %q\nlog:\n%s\noutput:\n%s", deny, result.Log, result.Output)
+				}
+			}
 			for _, want := range tc.wantLog {
 				if !strings.Contains(result.Log, want) {
 					t.Fatalf("installer log missing %q\nlog:\n%s\noutput:\n%s", want, result.Log, result.Output)
@@ -120,6 +149,15 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func hasBuildTarget(log string, target string) bool {
+	for _, line := range strings.Split(log, "\n") {
+		if strings.HasPrefix(line, "go build -o ") && strings.Contains(line, target) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestSourceInstallerRejectsInvalidInstallModeBeforeBuild(t *testing.T) {
@@ -150,6 +188,7 @@ func runSourceInstaller(t *testing.T, env map[string]string) installScriptResult
 	writeFakeGo(t, filepath.Join(fakeBin, "go"))
 
 	cmd := exec.Command("sh", filepath.Join(repoRoot, "scripts", "install.sh"))
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Env = append(os.Environ(),
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"HITCH_INSTALL_MODE=",
