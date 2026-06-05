@@ -39,7 +39,7 @@ hitch-client install --only opencode --url http://127.0.0.1:8797 --yes --json
 Installer behavior verified by tests:
 
 - `hitch config init` creates missing user config at `~/.config/hitch/config.toml` from the embedded default config.
-- Existing user config is left unchanged.
+- Existing valid user config keeps user-owned values and receives missing managed default sections, such as the OpenCode event map required by the managed plugin.
 - `hitch-client install --dry-run` does not mutate hook configuration.
 - Codex hook installation covers `SessionStart`, `SubagentStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStop`, and `Stop`, and is idempotent.
 - Hermes hook installation covers `pre_tool_call`, `post_tool_call`, `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`, `subagent_stop`, `transform_tool_result`, `transform_terminal_output`, `transform_llm_output`, and `pre_gateway_dispatch`, and is idempotent.

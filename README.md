@@ -124,7 +124,7 @@ Hitch currently includes:
 - Server config seeding via `hitch config init` for `~/.config/hitch/config.toml`.
 - Harness detection for Codex, Hermes, Pi, OMP, and OpenCode.
 
-The source installer creates missing Hitch user config with `hitch config init`, prompts for a Hitch server URL through `/dev/tty` even when installed with `curl ... | sh`, and can persist `HITCH_URL` for remote servers. `hitch-client install` installs supported Codex and Hermes hooks, installs managed Pi and OMP extensions, installs a managed OpenCode plugin, and prefers `hitch-client` in managed shell-hook commands when it is installed beside `hitch`. Generated hooks resolve the server URL at runtime unless `--url` pins one.
+The source installer creates missing Hitch user config with `hitch config init`, adds missing managed default sections to existing valid config, prompts for a Hitch server URL through `/dev/tty` even when installed with `curl ... | sh`, and can persist `HITCH_URL` for remote servers. `hitch-client install` installs supported Codex and Hermes hooks, installs managed Pi and OMP extensions, installs a managed OpenCode plugin, and prefers `hitch-client` in managed shell-hook commands when it is installed beside `hitch`. Generated hooks resolve the server URL at runtime unless `--url` pins one.
 
 Preview hook installation:
 
