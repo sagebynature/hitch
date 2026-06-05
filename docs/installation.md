@@ -6,7 +6,7 @@ Install from latest source:
 curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
 ```
 
-The source installer checks for `git` and `go`, asks which install mode to use when `/dev/tty` is available, builds the selected binaries from source, installs them to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies selected binary versions, and performs the selected setup steps.
+The source installer checks for `go`, checks for `git` when `HITCH_SOURCE_DIR` is not provided, asks which install mode to use when `/dev/tty` is available, builds the selected binaries from source, installs them to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies selected binary versions, and performs the selected setup steps.
 
 Install modes:
 
@@ -19,9 +19,9 @@ Install modes:
 For non-interactive installs, set `HITCH_INSTALL_MODE` explicitly or omit it to keep the default `all` behavior:
 
 ```sh
-HITCH_INSTALL_MODE=all sh scripts/install.sh
-HITCH_INSTALL_MODE=server sh scripts/install.sh
-HITCH_INSTALL_MODE=client HITCH_URL=http://127.0.0.1:8799 sh scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | HITCH_INSTALL_MODE=all sh
+curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | HITCH_INSTALL_MODE=server sh
+curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | HITCH_INSTALL_MODE=client HITCH_URL=http://127.0.0.1:8799 sh
 ```
 
 Set `HITCH_SKIP_HOOK_INSTALL=1` to install binaries and skip hook setup in `all` or `client` mode.
