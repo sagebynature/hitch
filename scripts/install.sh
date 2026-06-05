@@ -30,7 +30,7 @@ tty_available() {
 prompt_tty() {
   answer=
   printf '%s' "$1" > /dev/tty || return 1
-  IFS= read -r answer < /dev/tty || answer=
+  IFS= read -r answer < /dev/tty || return 1
   return 0
 }
 
@@ -54,7 +54,10 @@ select_install_mode() {
 
   if tty_available; then
     while :; do
-      prompt_tty "Install Hitch mode [all/server/client] (all): " || break
+      if ! prompt_tty "Install Hitch mode [all/server/client] (all): "; then
+        printf 'Install cancelled.\n' > /dev/tty 2>/dev/null || printf 'Install cancelled.\n' >&2
+        exit 1
+      fi
       if selected_mode=$(normalize_install_mode "$answer"); then
         HITCH_INSTALL_MODE=$selected_mode
         return 0
@@ -102,6 +105,14 @@ server_url_command() {
     fish) printf 'set -gx HITCH_URL "%s"' "$HITCH_URL" ;;
     *) printf 'export HITCH_URL="%s"' "$HITCH_URL" ;;
   esac
+}
+
+hook_setup_command() {
+  if [ -n "$HITCH_URL" ]; then
+    printf 'HITCH_URL=%s %s/hitch-client install' "$HITCH_URL" "$HITCH_INSTALL_DIR"
+  else
+    printf '%s/hitch-client install' "$HITCH_INSTALL_DIR"
+  fi
 }
 
 maybe_update_server_url() {
@@ -258,7 +269,7 @@ main() {
   if tty_available; then
     "$HITCH_INSTALL_DIR/hitch-client" install < /dev/tty
   else
-    printf 'Run hook setup with:\n\n  %s/hitch-client install\n\n' "$HITCH_INSTALL_DIR"
+    printf 'Run hook setup with:\n\n  %s\n\n' "$(hook_setup_command)"
   fi
 }
 
