@@ -38,100 +38,57 @@
     </header>
 
     <main id="content">
-      <section class="hero" aria-labelledby="hero-title">
-        <div>
+      <section class="hero editorial-hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
           <p class="eyebrow">Universal agent event layer</p>
-          <h1 id="hero-title">Control every agent lifecycle.</h1>
-          <p class="lede">Hitch turns Codex, Hermes, Pi, OMP, and OpenCode hooks into one portable event protocol. Write a hook once, preserve the native payload, observe agent activity, and route lifecycle events to local or remote handlers.</p>
-          <div class="proof-grid" aria-label="Hitch product capabilities">
-            <span>Normalized lifecycle events</span>
-            <span>Original payload preserved</span>
-            <span>Local + remote REST dispatch</span>
-            <span>Observability, audit, and replay</span>
-          </div>
-          <div class="hero-actions">
-            <a class="button primary" href="docs/latest/">Read the docs</a>
-            <a class="button" href="https://github.com/sagebynature/hitch">Install Hitch</a>
-          </div>
+          <h1 id="hero-title">One lifecycle surface for every agent harness.</h1>
+          <p class="lede">Hitch turns Codex, Hermes, Pi, OMP, and OpenCode hooks into one portable event protocol. Preserve native payloads, normalize lifecycle events, and route decisions through local or remote handlers.</p>
         </div>
-        <aside class="terminal-card" aria-label="Hitch event layer example">
-          <div class="terminal-top"><span>event layer</span><span>REST :8799</span></div>
-          <pre class="terminal-body"><code><span class="prompt">$</span> hitch serve
-<span class="comment"># routing, execution, observability, replay</span>
-
-<span class="prompt">$</span> hitch-client install --all
-{ "installed": ["codex", "hermes", "opencode"], "changed": true }
-
-<span class="prompt">$</span> curl -X POST http://127.0.0.1:8799/v1/events
-{ "hitch_event_type": "tool.requested",
-  "source_payload": { "...": "native hook JSON" } }</code></pre>
+        <aside class="event-visual" aria-label="Hitch event normalization example">
+          <div class="event-card native"><span>native payload</span><code>Codex • PreToolUse</code></div>
+          <div class="event-card envelope"><span>hitch envelope</span><code>tool.requested</code></div>
+          <div class="event-card route"><span>dispatch</span><code>REST :8799 → handler</code></div>
+          <div class="event-card decision"><span>decision</span><code>allow · deny · inject_context</code></div>
         </aside>
+        <div class="hero-cta-bar" aria-label="Primary actions">
+          <a class="button primary" href="docs/latest/">Read the docs</a>
+          <a class="button" href="https://github.com/sagebynature/hitch">Install Hitch</a>
+        </div>
       </section>
 
-      <section class="section" aria-labelledby="why-title">
-        <div class="section-grid">
-          <div class="section-intro">
-            <p class="label">Why Hitch?</p>
-            <h2 id="why-title">Agent lifecycle control should be portable.</h2>
-            <p>Every harness has its own event names, payloads, response rules, and lifecycle boundaries. Hitch gives developers and teams one stable contract instead of forcing every guardrail, logger, observer, and workflow hook to chase native formats.</p>
-          </div>
-          <div class="card-grid">
-            <article class="card">
-              <h3>Normalize once</h3>
-              <p>Source hook JSON becomes a Hitch event envelope with harness identity, source event type, normalized event type, and preserved native payload.</p>
-              <div class="pill-row"><span class="pill"><code>tool.requested</code></span><span class="pill"><code>session.started</code></span></div>
-            </article>
-            <article class="card">
-              <h3>Route anywhere</h3>
-              <p>Handlers are ordinary executables, and events arrive through a local-first REST API that also works for remote service deployments.</p>
-              <div class="pill-row"><span class="pill">shell</span><span class="pill">python</span><span class="pill">node</span><span class="pill">go</span></div>
-            </article>
-            <article class="card">
-              <h3>Control centrally</h3>
-              <p>Handler routing, synchronous decisions, observability records, and replay live behind one server config instead of five harness-specific integrations.</p>
-              <div class="pill-row"><span class="pill"><code>allow</code></span><span class="pill"><code>deny</code></span><span class="pill"><code>inject_context</code></span></div>
-            </article>
+      <section class="section section-editorial" aria-labelledby="problem-title">
+        <div class="editorial-kicker">The problem</div>
+        <div class="editorial-split">
+          <h2 id="problem-title">Every harness speaks a different lifecycle language.</h2>
+          <div class="editorial-copy">
+            <p>Each agent CLI has its own event names, payloads, response rules, and lifecycle boundaries. Guardrails, observers, context injectors, and workflow hooks should not have to chase five native formats.</p>
+            <div class="rule-list" aria-label="Hitch preserves and normalizes events">
+              <span>Native JSON preserved</span>
+              <span>Normalized event taxonomy</span>
+              <span>Harness-native responses at the edge</span>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="section" aria-labelledby="flow-title">
-        <div class="section-grid">
-          <div class="section-intro">
-            <p class="label">The contract</p>
-            <h2 id="flow-title">One control plane for local and remote agent events.</h2>
-            <p>Hitch stays boring on purpose: native JSON in, normalized events over REST, external commands out, SQLite observability records underneath today, and harness-native responses at the edge.</p>
-          </div>
+      <section class="section section-editorial" aria-labelledby="action-title">
+        <h2 id="action-title">Hitch in action</h2>
+        <div class="flow-panel" aria-label="Hitch event flow">
+          <div class="flow-step"><span>01</span><strong>Harness</strong><p>Codex, Hermes, Pi, OMP, or OpenCode emits lifecycle data.</p></div>
+          <div class="flow-step"><span>02</span><strong>Envelope</strong><p>Hitch maps it to a stable event while retaining the original payload.</p></div>
+          <div class="flow-step"><span>03</span><strong>Handler</strong><p>Configured commands inspect events and return decisions.</p></div>
+          <div class="flow-step"><span>04</span><strong>Observe</strong><p>Decisions, audit rows, and replayable history stay in one place.</p></div>
+        </div>
+      </section>
+
+      <section class="section section-editorial" aria-labelledby="quickstart-title">
+        <div class="editorial-split reverse">
           <div>
-            <div class="flow" aria-label="Hitch event flow">
-              <div class="flow-step"><span>01</span><strong>Harness</strong><p>Codex, Hermes, Pi, OMP, or OpenCode emits native lifecycle data.</p></div>
-              <div class="flow-step"><span>02</span><strong>REST API</strong><p>The hook shim posts async or sync events to a local or remote Hitch server.</p></div>
-              <div class="flow-step"><span>03</span><strong>Envelope</strong><p>Hitch maps the event into a stable schema while retaining the original payload.</p></div>
-              <div class="flow-step"><span>04</span><strong>Routing</strong><p>Server config sends matching events to policy, audit, context, or workflow handlers.</p></div>
-              <div class="flow-step"><span>05</span><strong>Observe</strong><p>Decisions become native harness responses, SQLite records today, and replayable history for future backends.</p></div>
-            </div>
-            <div class="split" style="margin-top: 1rem">
-              <article class="callout accent">
-                <h3>For solo developers</h3>
-                <p>Ship one guardrail, observer, context injector, or workflow hook without binding it to one agent CLI.</p>
-              </article>
-              <article class="callout">
-                <h3>For teams</h3>
-                <p>Let developers choose their harness while platform teams centralize lifecycle routing, execution, observability, and replay.</p>
-              </article>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section" aria-labelledby="quickstart-title">
-        <div class="section-grid">
-          <div class="section-intro">
             <p class="label">Quick start</p>
             <h2 id="quickstart-title">Local-first. Remote-ready.</h2>
-            <p>Run Hitch as a local daemon for your own agents, or point hook shims at a shared Hitch service for team-wide lifecycle routing and observability. The same handler protocol works in both modes.</p><p>Hitch stores events in SQLite today for inspection and replay. Additional storage and observability backends are planned as the event contract matures.</p><p>The source installer seeds Hitch config with <code>hitch config init</code> and adds missing managed default sections to existing valid config. <code>hitch-client install</code> installs managed hooks and extensions for supported harnesses.</p>
+            <p>Run Hitch as a local daemon for your own agents, or point hook shims at a shared Hitch service for team-wide lifecycle routing and observability.</p>
           </div>
-          <div class="callout">
+          <div class="callout command-panel">
             <pre class="code-block"><code>curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
 hitch serve --config ~/.config/hitch/config.toml
 hitch status --json
@@ -150,8 +107,8 @@ hitch-client install --only opencode --yes --json</code></pre>
         <div class="section-grid">
           <div class="section-intro">
             <p class="label">References</p>
-            <h2 id="docs-title">Docs for the hook surface area.</h2>
-            <p>Start with the latest reference page, then jump into the source markdown and schemas when you need implementation-level detail.</p>
+            <h2 id="docs-title">Jump from the story into the contracts.</h2>
+            <p>Use the latest reference page for the full handler protocol, event taxonomy, HTTP API, harness contracts, replay flow, and schemas.</p>
           </div>
           <div class="docs-index">
             <a class="doc-card" href="docs/latest/#handler-protocol"><small>Protocol</small><h3>Handler results</h3><p>Status values, decision behaviors, stdout parsing, timeout handling, and aggregation rules.</p></a>
