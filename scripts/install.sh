@@ -247,12 +247,12 @@ main() {
   esac
   maybe_update_path "$path_binary" "$installed_names"
 
-  if [ "$setup_hooks" != 1 ] || [ "$HITCH_SKIP_HOOK_INSTALL" = 1 ]; then
-    return 0
-  fi
-
   if [ "$configure_url" = 1 ]; then
     configure_server_url
+  fi
+
+  if [ "$setup_hooks" != 1 ] || [ "$HITCH_SKIP_HOOK_INSTALL" = 1 ]; then
+    return 0
   fi
 
   if tty_available; then
