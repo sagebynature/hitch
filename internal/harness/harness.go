@@ -2,7 +2,7 @@ package harness
 
 import "github.com/sagebynature/hitch/internal/protocol"
 
-type Mapper interface {
-	Map(nativeEventType string, nativePayload protocol.RawJSON) (protocol.EventEnvelope, error)
-	Translate(nativeEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error)
+type Normalizer interface {
+	Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error)
+	Translate(sourceEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error)
 }

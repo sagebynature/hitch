@@ -2,7 +2,6 @@ package pi
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/sagebynature/hitch/internal/harness"
 	"github.com/sagebynature/hitch/internal/protocol"
@@ -35,7 +34,7 @@ type Mutation struct {
 	Value interface{} `json:"value"`
 }
 
-var eventMap = map[string]protocol.EventType{
+var defaultEventMap = map[string]protocol.EventType{
 	"input":                   protocol.EventTurnUserPrompt,
 	"before_agent_start":      protocol.EventTurnStarted,
 	"agent_start":             protocol.EventTurnStarted,
@@ -55,13 +54,17 @@ var eventMap = map[string]protocol.EventType{
 	"user_bash":               protocol.EventToolRequested,
 }
 
-func (Mapper) Map(nativeEventType string, nativePayload protocol.RawJSON) (protocol.EventEnvelope, error) {
-	eventType, ok := eventMap[nativeEventType]
-	if !ok {
-		return protocol.EventEnvelope{}, fmt.Errorf("unsupported pi event %q", nativeEventType)
+func DefaultEventMap() map[string]protocol.EventType {
+	out := make(map[string]protocol.EventType, len(defaultEventMap))
+	for k, v := range defaultEventMap {
+		out[k] = v
 	}
-	eventPayload, meta := unwrapNativePayload(nativePayload)
-	env := harness.NewEnvelope(protocol.HarnessPi, nativeEventType, eventPayload, eventType, eventPayload)
+	return out
+}
+
+func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
+	eventPayload, meta := unwrapSourcePayload(sourcePayload)
+	env := harness.NewEnvelope(protocol.HarnessPi, sourceEventType, eventPayload, hitchEventType, eventPayload)
 	env.SessionID = meta.SessionID
 	env.TurnID = meta.TurnID
 	env.CWD = meta.CWD
@@ -70,10 +73,10 @@ func (Mapper) Map(nativeEventType string, nativePayload protocol.RawJSON) (proto
 	return env, protocol.ValidateEnvelope(env)
 }
 
-func unwrapNativePayload(nativePayload protocol.RawJSON) (protocol.RawJSON, nativeMetadata) {
+func unwrapSourcePayload(sourcePayload protocol.RawJSON) (protocol.RawJSON, nativeMetadata) {
 	var wrapped nativePayloadEnvelope
-	if err := json.Unmarshal(nativePayload, &wrapped); err != nil {
-		return nativePayload, nativeMetadata{}
+	if err := json.Unmarshal(sourcePayload, &wrapped); err != nil {
+		return sourcePayload, nativeMetadata{}
 	}
 	if len(wrapped.Event) != 0 && json.Valid(wrapped.Event) {
 		return wrapped.Event, wrapped.Meta
@@ -81,20 +84,20 @@ func unwrapNativePayload(nativePayload protocol.RawJSON) (protocol.RawJSON, nati
 	if len(wrapped.Legacy) != 0 && json.Valid(wrapped.Legacy) {
 		return wrapped.Legacy, wrapped.Meta
 	}
-	return nativePayload, nativeMetadata{}
+	return sourcePayload, nativeMetadata{}
 }
 
-func (Mapper) Translate(nativeEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
-	return TranslateForHarness(nativeEventType, aggregate)
+func (Mapper) Translate(sourceEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
+	return TranslateForHarness(sourceEventType, aggregate)
 }
 
-func TranslateForHarness(nativeEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
+func TranslateForHarness(sourceEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
 	d := aggregate.Decision
 	if len(d.NativeResponse) != 0 {
 		return d.NativeResponse, nil
 	}
 	resp := AdapterResponse{AdapterAction: "noop"}
-	switch nativeEventType {
+	switch sourceEventType {
 	case "input":
 		switch d.Behavior {
 		case protocol.BehaviorTransform:

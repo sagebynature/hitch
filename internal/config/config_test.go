@@ -76,6 +76,30 @@ func TestParseValidConfig(t *testing.T) {
 	}
 }
 
+func TestParseHarnessEventMap(t *testing.T) {
+	cfg, err := Parse([]byte(baseConfig + `
+[harness.codex.event_map]
+CustomHook = "turn.started"
+PreToolUse = "tool.permission_requested"
+`))
+	if err != nil {
+		t.Fatalf("valid event map rejected: %v", err)
+	}
+	if cfg.Harness.Codex.EventMap["CustomHook"] != "turn.started" {
+		t.Fatalf("event map did not parse: %#v", cfg.Harness.Codex.EventMap)
+	}
+}
+
+func TestParseRejectsInvalidHarnessEventMap(t *testing.T) {
+	_, err := Parse([]byte(baseConfig + `
+[harness.codex.event_map]
+BadHook = "not.real"
+`))
+	if err == nil {
+		t.Fatal("invalid harness event map accepted")
+	}
+}
+
 func TestDefaultConfigTOMLMatchesDevelopmentConfig(t *testing.T) {
 	b, err := os.ReadFile("../../config/default.config.toml")
 	if err != nil {

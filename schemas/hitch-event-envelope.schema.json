@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://hitch.local/schemas/hitch-event-envelope.schema.json",
   "type": "object",
-  "required": ["hitch_version", "event_id", "received_at", "harness", "native_event_type", "native_payload", "hitch_event_type", "payload"],
+  "required": ["hitch_version", "event_id", "received_at", "harness", "source_event_type", "source_payload", "hitch_event_type", "payload"],
   "additionalProperties": false,
   "properties": {
     "hitch_version": { "type": "string", "minLength": 1 },
@@ -10,8 +10,8 @@
     "received_at": { "type": "string", "format": "date-time" },
     "harness": { "enum": ["codex", "hermes", "pi", "omp"] },
     "harness_version": { "type": "string" },
-    "native_event_type": { "type": "string", "minLength": 1 },
-    "native_payload": true,
+    "source_event_type": { "type": "string", "minLength": 1 },
+    "source_payload": true,
     "hitch_event_type": {
       "enum": [
         "session.started", "session.resumed", "session.ended", "session.compacted",

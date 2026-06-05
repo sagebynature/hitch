@@ -19,11 +19,11 @@ import (
 )
 
 type eventRequest struct {
-	Harness              string           `json:"harness"`
-	HarnessVersion       string           `json:"harness_version,omitempty"`
-	NativeEventType      string           `json:"native_event_type"`
-	NativePayload        protocol.RawJSON `json:"native_payload"`
-	SourceAdapterVersion string           `json:"source_adapter_version,omitempty"`
+	Harness            string           `json:"harness"`
+	HarnessVersion     string           `json:"harness_version"`
+	SourceEventType    string           `json:"source_event_type"`
+	SourcePayload      protocol.RawJSON `json:"source_payload"`
+	HitchClientVersion string           `json:"hitch_client_version"`
 }
 
 type eventResponse struct {
@@ -46,7 +46,7 @@ type Options struct {
 	Stdout  io.Writer
 }
 
-// Run reads one native hook payload, dispatches it to the local Hitch API, and writes only
+// Run reads one source hook payload, dispatches it to the local Hitch API, and writes only
 // the harness-native response for synchronous dispatches.
 func Run(ctx context.Context, opts Options) error {
 	if err := ctx.Err(); err != nil {
@@ -80,7 +80,7 @@ func Run(ctx context.Context, opts Options) error {
 		baseURL = DefaultURL()
 	}
 	client := httpClient{baseURL: baseURL}
-	req := eventRequest{Harness: opts.Harness, NativeEventType: opts.Event, NativePayload: protocol.RawJSON(payload), SourceAdapterVersion: protocol.Version}
+	req := eventRequest{Harness: opts.Harness, SourceEventType: opts.Event, SourcePayload: protocol.RawJSON(payload), HitchClientVersion: protocol.Version}
 	if !opts.Sync {
 		var resp eventResponse
 		_ = client.post(ctx, "/v1/events", req, &resp)
@@ -150,20 +150,20 @@ func DefaultURL() string {
 }
 
 // NativeNoop returns the harness-native fail-open response used when synchronous dispatch cannot reach Hitch.
-func NativeNoop(harnessName, nativeEventType string) protocol.RawJSON {
+func NativeNoop(harnessName, sourceEventType string) protocol.RawJSON {
 	aggregate := protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorNone}}
 	switch protocol.Harness(harnessName) {
 	case protocol.HarnessCodex:
-		native, _ := codex.Mapper{}.Translate(nativeEventType, aggregate)
+		native, _ := codex.Mapper{}.Translate(sourceEventType, aggregate)
 		return native
 	case protocol.HarnessHermes:
-		native, _ := hermes.Mapper{}.Translate(nativeEventType, aggregate)
+		native, _ := hermes.Mapper{}.Translate(sourceEventType, aggregate)
 		return native
 	case protocol.HarnessPi:
-		native, _ := pi.Mapper{}.Translate(nativeEventType, aggregate)
+		native, _ := pi.Mapper{}.Translate(sourceEventType, aggregate)
 		return native
 	case protocol.HarnessOMP:
-		native, _ := omp.Mapper{}.Translate(nativeEventType, aggregate)
+		native, _ := omp.Mapper{}.Translate(sourceEventType, aggregate)
 		return native
 	default:
 		return nil

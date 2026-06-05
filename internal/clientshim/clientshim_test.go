@@ -34,9 +34,15 @@ func TestRunNormalizesEmptyStdin(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Fatalf("async dispatch wrote stdout: %q", stdout.String())
 	}
-	payload, ok := got["native_payload"].(map[string]any)
+	payload, ok := got["source_payload"].(map[string]any)
 	if !ok || len(payload) != 0 {
-		t.Fatalf("empty stdin was not normalized to object payload: %#v", got["native_payload"])
+		t.Fatalf("empty stdin was not normalized to object payload: %#v", got["source_payload"])
+	}
+	if got["source_event_type"] != "post_tool_call" || got["hitch_client_version"] == "" {
+		t.Fatalf("missing source metadata: %#v", got)
+	}
+	if _, ok := got["native_payload"]; ok {
+		t.Fatalf("old native payload key was emitted: %#v", got)
 	}
 }
 

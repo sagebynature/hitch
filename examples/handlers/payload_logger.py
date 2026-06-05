@@ -40,7 +40,7 @@ def compact_record(envelope: dict[str, Any]) -> dict[str, Any]:
         "logged_at": datetime.now(timezone.utc).isoformat(),
         "event_id": envelope.get("event_id"),
         "harness": envelope.get("harness"),
-        "native_event_type": envelope.get("native_event_type"),
+        "source_event_type": envelope.get("source_event_type"),
         "hitch_event_type": envelope.get("hitch_event_type"),
         "payload": envelope.get("payload"),
     }

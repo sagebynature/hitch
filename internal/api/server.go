@@ -22,20 +22,25 @@ import (
 )
 
 type Server struct {
-	cfg     config.Config
-	log     *slog.Logger
-	store   *store.Store
-	runner  dispatch.Runner
-	mux     *http.ServeMux
-	mappers map[protocol.Harness]harness.Mapper
+	cfg       config.Config
+	log       *slog.Logger
+	store     *store.Store
+	runner    dispatch.Runner
+	mux       *http.ServeMux
+	harnesses map[protocol.Harness]harnessRuntime
+}
+
+type harnessRuntime struct {
+	normalizer harness.Normalizer
+	eventMap   map[string]protocol.EventType
 }
 
 type EventRequest struct {
-	Harness              string           `json:"harness"`
-	HarnessVersion       string           `json:"harness_version,omitempty"`
-	NativeEventType      string           `json:"native_event_type"`
-	NativePayload        protocol.RawJSON `json:"native_payload"`
-	SourceAdapterVersion string           `json:"source_adapter_version,omitempty"`
+	Harness            string           `json:"harness"`
+	HarnessVersion     string           `json:"harness_version"`
+	SourceEventType    string           `json:"source_event_type"`
+	SourcePayload      protocol.RawJSON `json:"source_payload"`
+	HitchClientVersion string           `json:"hitch_client_version"`
 }
 
 type EventResponse struct {
@@ -50,7 +55,7 @@ type DispatchResponse struct {
 }
 
 func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
-	s := &Server{cfg: cfg, log: log, store: st, runner: dispatch.NewRunner(cfg.Handlers), mappers: map[protocol.Harness]harness.Mapper{protocol.HarnessCodex: codex.Mapper{}, protocol.HarnessHermes: hermes.Mapper{}, protocol.HarnessPi: pi.Mapper{}, protocol.HarnessOMP: omp.Mapper{}}}
+	s := &Server{cfg: cfg, log: log, store: st, runner: dispatch.NewRunner(cfg.Handlers), harnesses: buildHarnessRuntimes(cfg)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", s.handleHealth)
 	mux.HandleFunc("POST /v1/events", s.handleEvent)
@@ -58,6 +63,25 @@ func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
 	mux.HandleFunc("GET /v1/events/", s.handleGetEvent)
 	s.mux = mux
 	return s
+}
+func buildHarnessRuntimes(cfg config.Config) map[protocol.Harness]harnessRuntime {
+	return map[protocol.Harness]harnessRuntime{
+		protocol.HarnessCodex:  {normalizer: codex.Mapper{}, eventMap: mergeEventMap(codex.DefaultEventMap(), cfg.Harness.Codex.EventMap)},
+		protocol.HarnessHermes: {normalizer: hermes.Mapper{}, eventMap: mergeEventMap(hermes.DefaultEventMap(), cfg.Harness.Hermes.EventMap)},
+		protocol.HarnessPi:     {normalizer: pi.Mapper{}, eventMap: mergeEventMap(pi.DefaultEventMap(), cfg.Harness.Pi.EventMap)},
+		protocol.HarnessOMP:    {normalizer: omp.Mapper{}, eventMap: mergeEventMap(omp.DefaultEventMap(), cfg.Harness.OMP.EventMap)},
+	}
+}
+
+func mergeEventMap(defaults, overrides map[string]protocol.EventType) map[string]protocol.EventType {
+	out := make(map[string]protocol.EventType, len(defaults)+len(overrides))
+	for k, v := range defaults {
+		out[k] = v
+	}
+	for k, v := range overrides {
+		out[k] = v
+	}
+	return out
 }
 
 func (s *Server) Handler() http.Handler {
@@ -87,13 +111,13 @@ func (s *Server) handleDispatchSync(w http.ResponseWriter, r *http.Request) {
 	for _, inv := range result.Invocations {
 		_ = s.store.InsertHandlerInvocation(r.Context(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: resp.NormalizedEventID, HandlerName: inv.HandlerName, Mode: inv.Mode, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error})
 	}
-	mapper := s.mappers[env.Harness]
-	native, err := mapper.Translate(env.NativeEventType, result.Aggregate)
+	runtime := s.harnesses[env.Harness]
+	native, err := runtime.normalizer.Translate(env.SourceEventType, result.Aggregate)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	_ = s.store.InsertNativeResponse(r.Context(), store.NativeResponse{ID: harness.NewID("nresp"), NormalizedEventID: resp.NormalizedEventID, Harness: env.Harness, NativeEventType: env.NativeEventType, Response: native, EmittedAt: time.Now().UTC()})
+	_ = s.store.InsertNativeResponse(r.Context(), store.NativeResponse{ID: harness.NewID("nresp"), NormalizedEventID: resp.NormalizedEventID, Harness: env.Harness, SourceEventType: env.SourceEventType, Response: native, EmittedAt: time.Now().UTC()})
 	writeJSON(w, http.StatusOK, DispatchResponse{EventResponse: resp, Aggregate: result.Aggregate, NativeResponse: native})
 }
 
@@ -103,21 +127,28 @@ func (s *Server) ingest(ctx context.Context, r *http.Request, sync bool) (EventR
 		return EventResponse{}, protocol.EventEnvelope{}, badRequest("invalid JSON: %v", err)
 	}
 	h := protocol.Harness(req.Harness)
-	mapper := s.mappers[h]
-	if mapper == nil {
+	runtime := s.harnesses[h]
+	if runtime.normalizer == nil {
 		return EventResponse{}, protocol.EventEnvelope{}, badRequest("unsupported harness %q", req.Harness)
 	}
-	if len(req.NativePayload) == 0 || !json.Valid(req.NativePayload) {
-		return EventResponse{}, protocol.EventEnvelope{}, badRequest("native_payload must be valid JSON")
+	if req.SourceEventType == "" {
+		return EventResponse{}, protocol.EventEnvelope{}, badRequest("source_event_type is required")
 	}
-	env, err := mapper.Map(req.NativeEventType, req.NativePayload)
+	if len(req.SourcePayload) == 0 || !json.Valid(req.SourcePayload) {
+		return EventResponse{}, protocol.EventEnvelope{}, badRequest("source_payload must be valid JSON")
+	}
+	hitchEventType, ok := runtime.eventMap[req.SourceEventType]
+	if !ok {
+		return EventResponse{}, protocol.EventEnvelope{}, badRequest("unsupported %s event %q", req.Harness, req.SourceEventType)
+	}
+	env, err := runtime.normalizer.Normalize(req.SourceEventType, req.SourcePayload, hitchEventType)
 	if err != nil {
 		return EventResponse{}, protocol.EventEnvelope{}, badRequest("%s", err.Error())
 	}
 	env.HarnessVersion = req.HarnessVersion
 	inboundID := harness.NewID("in")
 	normalizedID := harness.NewID("norm")
-	if err := s.store.InsertInbound(ctx, store.InboundEvent{ID: inboundID, ReceivedAt: env.ReceivedAt, Harness: env.Harness, NativeEventType: env.NativeEventType, NativePayload: env.NativePayload, RequestHeaders: protocol.Raw(headers(r)), SourceAdapterVersion: req.SourceAdapterVersion}); err != nil {
+	if err := s.store.InsertInbound(ctx, store.InboundEvent{ID: inboundID, ReceivedAt: env.ReceivedAt, Harness: env.Harness, SourceEventType: env.SourceEventType, SourcePayload: env.SourcePayload, RequestHeaders: protocol.Raw(headers(r)), HitchClientVersion: req.HitchClientVersion}); err != nil {
 		return EventResponse{}, protocol.EventEnvelope{}, err
 	}
 	if err := s.store.InsertNormalized(ctx, store.NormalizedEvent{ID: normalizedID, InboundEventID: inboundID, HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: protocol.Version}); err != nil {

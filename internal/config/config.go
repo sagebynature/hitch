@@ -86,7 +86,8 @@ type HarnessConfig struct {
 }
 
 type HarnessToggle struct {
-	Enabled bool `toml:"enabled"`
+	Enabled  bool                          `toml:"enabled"`
+	EventMap map[string]protocol.EventType `toml:"event_map"`
 }
 
 func Load(path string) (Config, error) {
@@ -176,6 +177,18 @@ func (c Config) Validate() error {
 			}
 		}
 	}
+	if err := validateHarnessEventMap("codex", c.Harness.Codex.EventMap); err != nil {
+		return err
+	}
+	if err := validateHarnessEventMap("hermes", c.Harness.Hermes.EventMap); err != nil {
+		return err
+	}
+	if err := validateHarnessEventMap("pi", c.Harness.Pi.EventMap); err != nil {
+		return err
+	}
+	if err := validateHarnessEventMap("omp", c.Harness.OMP.EventMap); err != nil {
+		return err
+	}
 	for name, h := range c.Handlers {
 		if name == "" {
 			return errors.New("handler name cannot be empty")
@@ -204,6 +217,18 @@ func (c Config) Validate() error {
 		}
 		if err := validatePolicy(name, "on_timeout", h.OnTimeout); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validateHarnessEventMap(harnessName string, eventMap map[string]protocol.EventType) error {
+	for sourceEvent, hitchEvent := range eventMap {
+		if sourceEvent == "" {
+			return fmt.Errorf("harness.%s.event_map source event cannot be empty", harnessName)
+		}
+		if !protocol.IsValidEventType(hitchEvent) {
+			return fmt.Errorf("harness.%s.event_map.%s references unknown event %q", harnessName, sourceEvent, hitchEvent)
 		}
 	}
 	return nil

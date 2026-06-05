@@ -1,10 +1,10 @@
 # Hitch Events
 
-Hitch turns native hook payloads from Codex, Hermes, Pi, and OMP into one stable event envelope. Handlers receive the normalized envelope on stdin and return one handler result on stdout.
+Hitch turns source hook payloads from Codex, Hermes, Pi, and OMP into one stable event envelope. Handlers receive the normalized envelope on stdin and return one handler result on stdout.
 
 ## Normalized envelope
 
-Every harness mapper creates the same envelope shape:
+Every harness normalizer creates the same envelope shape:
 
 | Field | Source | Notes |
 | --- | --- | --- |
@@ -12,15 +12,27 @@ Every harness mapper creates the same envelope shape:
 | `event_id` | Hitch runtime | Unique `evt_...` identifier generated when Hitch receives the event. |
 | `received_at` | Hitch runtime | UTC timestamp generated at receipt. |
 | `harness` | Adapter selection | One of `codex`, `hermes`, `pi`, or `omp`. |
-| `harness_version` | Adapter payload or future metadata | Optional. Current mappers do not populate it. |
-| `native_event_type` | Harness source event name | The exact native hook or callback name Hitch mapped. |
-| `native_payload` | Harness source payload | The original JSON payload received by Hitch. Pi unwraps the installed extension transport envelope before normalization. |
-| `hitch_event_type` | Hitch mapper | One of the normalized event names below. |
-| `session_id`, `turn_id`, `cwd`, `model`, `transcript_path` | Adapter metadata | Optional. The Pi installed extension supplies these from Pi `ctx` and event fields when available. |
-| `payload` | Hitch mapper | Current mappers preserve the native event payload unchanged after any adapter transport unwrapping. |
+| `harness_version` | Hitch client request | Source harness version when the client can provide it. |
+| `source_event_type` | Harness source event name | The exact source hook or callback name Hitch mapped. |
+| `source_payload` | Harness source payload | The original JSON payload received by Hitch. Pi unwraps the installed extension transport envelope before normalization. |
+| `hitch_event_type` | Server event map | One of the normalized event names below. |
+| `session_id`, `turn_id`, `cwd`, `model`, `transcript_path` | Server normalizer | Optional. The Pi installed extension supplies these from Pi `ctx` and event fields when available. |
+| `payload` | Server normalizer | Hitch-normalized handler payload. Current normalizers conservatively preserve the source payload after any adapter transport unwrapping. |
 
-Unsupported native event types are rejected. Hitch does not silently coerce unknown source events into a generic type.
+Unsupported source event types are rejected unless configured in the harness event map. Hitch does not silently coerce unknown source events into a generic type.
 
+
+## Configurable source event mapping
+
+Each harness has built-in source-event mappings. User config can override or add mappings per harness:
+
+```toml
+[harness.codex.event_map]
+PreToolUse = "tool.permission_requested"
+CustomHook = "turn.started"
+```
+
+Configured entries merge over defaults. Values must be valid Hitch event names from the taxonomy below.
 ## Hitch event taxonomy
 
 | Hitch event | Meaning |
@@ -42,7 +54,7 @@ Unsupported native event types are rejected. Hitch does not silently coerce unkn
 
 ## Codex source events
 
-| Codex native event | Hitch event | Normalized payload | Native response behavior |
+| Codex source event | Hitch event | Normalized payload | Native response behavior |
 | --- | --- | --- | --- |
 | `SessionStart` | `session.started` | Original Codex payload | `inject_context` adds `additionalContext`; `block` or `deny` returns `decision: "block"` with `reason`. |
 | `SubagentStart` | `subagent.started` | Original Codex payload | `inject_context` adds `additionalContext`; `block` or `deny` returns `decision: "block"` with `reason`. |
@@ -59,7 +71,7 @@ Codex handlers may also return `decision.native_response`. When present, Hitch r
 
 ## Hermes source events
 
-| Hermes native event | Hitch event | Normalized payload | Native response behavior |
+| Hermes source event | Hitch event | Normalized payload | Native response behavior |
 | --- | --- | --- | --- |
 | `pre_tool_call` | `tool.requested` | Original Hermes payload | `block`, `deny`, or `stop` returns `action: "block"` and `message`. |
 | `post_tool_call` | `tool.completed` | Original Hermes payload | No special translation; Hitch returns `{}` unless `native_response` is supplied. |
@@ -93,7 +105,7 @@ Pi uses a TypeScript adapter response contract:
 | `return` | Return `return_value` to Pi. |
 | `mutate_and_return` | Apply each `mutations[].path` to the source event, then return `return_value`. |
 
-| Pi native event | Hitch event | Normalized payload | Adapter response behavior |
+| Pi source event | Hitch event | Normalized payload | Adapter response behavior |
 | --- | --- | --- | --- |
 | `input` | `turn.user_prompt` | Original Pi payload | `transform` returns `{action:"transform", text:<updated_input>}`; `handled` returns `{action:"handled"}`; `continue` or `allow` returns `{action:"continue"}`. |
 | `before_agent_start` | `turn.started` | Original Pi payload | No special translation; `adapter_action:"noop"`. |
@@ -119,7 +131,7 @@ Pi handlers may also return `decision.native_response`. When present, Hitch retu
 
 OMP reuses the Pi adapter response contract for translated native responses.
 
-| OMP native event | Hitch event | Normalized payload | Adapter response behavior |
+| OMP source event | Hitch event | Normalized payload | Adapter response behavior |
 | --- | --- | --- | --- |
 | `input` | `turn.user_prompt` | Original OMP payload | Same translation as Pi `input`. |
 | `before_agent_start` | `turn.started` | Original OMP payload | No special translation; `adapter_action:"noop"`. |

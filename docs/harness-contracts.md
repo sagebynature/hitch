@@ -18,4 +18,4 @@ Adapter fail-open behavior:
 - Async adapter calls print nothing and ignore Hitch network failure.
 - Sync adapter calls emit a harness-native no-op response when Hitch is unreachable or returns no native response.
 
-Unsupported native event types are rejected unless a future passthrough mode is configured.
+Unsupported source event types are rejected unless configured in the per-harness event map.

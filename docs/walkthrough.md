@@ -259,8 +259,9 @@ curl -sS -X POST http://127.0.0.1:8799/v1/dispatch-sync \
   -H 'content-type: application/json' \
   -d '{
     "harness": "codex",
-    "native_event_type": "PreToolUse",
-    "native_payload": {
+    "harness_version": "",
+    "source_event_type": "PreToolUse",
+    "source_payload": {
       "session_id": "demo-session",
       "transcript_path": null,
       "cwd": "/tmp",
@@ -273,7 +274,8 @@ curl -sS -X POST http://127.0.0.1:8799/v1/dispatch-sync \
       "tool_input": {
         "command": "pwd"
       }
-    }
+    },
+    "hitch_client_version": "manual-curl"
   }'
 ```
 
@@ -410,7 +412,7 @@ Check the config passed to `hitch serve` and verify:
 
 ```sh
 hitch handler noop-observer <<'JSON'
-{"hitch_version":"0.1.0","event_id":"evt_demo","received_at":"2026-06-04T00:00:00Z","harness":"codex","native_event_type":"SessionStart","native_payload":{},"hitch_event_type":"session.started","payload":{}}
+{"hitch_version":"0.1.0","event_id":"evt_demo","received_at":"2026-06-04T00:00:00Z","harness":"codex","source_event_type":"SessionStart","source_payload":{},"hitch_event_type":"session.started","payload":{}}
 JSON
 ```
 

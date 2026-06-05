@@ -6,8 +6,8 @@ import (
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
-func TestMapOMPToolCall(t *testing.T) {
-	env, err := (Mapper{}).Map("tool_call", protocol.Raw(map[string]interface{}{"toolName": "bash"}))
+func TestNormalizeOMPToolCall(t *testing.T) {
+	env, err := (Mapper{}).Normalize("tool_call", protocol.Raw(map[string]interface{}{"toolName": "bash"}), protocol.EventToolRequested)
 	if err != nil {
 		t.Fatal(err)
 	}

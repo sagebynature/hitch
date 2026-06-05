@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 var migrations = []string{`
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -21,9 +21,12 @@ CREATE TABLE IF NOT EXISTS inbound_events (
   id TEXT PRIMARY KEY,
   received_at TEXT NOT NULL,
   harness TEXT NOT NULL,
-  native_event_type TEXT NOT NULL,
-  native_payload_json TEXT NOT NULL,
+  source_event_type TEXT NOT NULL,
+  source_payload_json TEXT NOT NULL,
   request_headers_json TEXT,
+  hitch_client_version TEXT,
+  native_event_type TEXT,
+  native_payload_json TEXT,
   source_adapter_version TEXT,
   schema_version INTEGER NOT NULL
 );
@@ -58,7 +61,8 @@ CREATE TABLE IF NOT EXISTS native_responses (
   id TEXT PRIMARY KEY,
   normalized_event_id TEXT NOT NULL REFERENCES normalized_events(id),
   harness TEXT NOT NULL,
-  native_event_type TEXT NOT NULL,
+  source_event_type TEXT NOT NULL,
+  native_event_type TEXT,
   response_json TEXT NOT NULL,
   emitted_at TEXT NOT NULL,
   schema_version INTEGER NOT NULL
@@ -88,6 +92,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := s.ensureSourceColumns(ctx); err != nil {
+		return err
+	}
 	var count int
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_meta`).Scan(&count); err != nil {
 		return err
@@ -96,50 +103,117 @@ func (s *Store) Migrate(ctx context.Context) error {
 		_, err := s.db.ExecContext(ctx, `INSERT INTO schema_meta(version) VALUES (?)`, schemaVersion)
 		return err
 	}
+	_, err := s.db.ExecContext(ctx, `UPDATE schema_meta SET version = ?`, schemaVersion)
+	return err
+}
+
+func (s *Store) ensureSourceColumns(ctx context.Context) error {
+	if ok, err := s.columnExists(ctx, "inbound_events", "source_event_type"); err != nil {
+		return err
+	} else if !ok {
+		if _, err := s.db.ExecContext(ctx, `ALTER TABLE inbound_events ADD COLUMN source_event_type TEXT`); err != nil {
+			return err
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE inbound_events SET source_event_type = native_event_type WHERE source_event_type IS NULL AND native_event_type IS NOT NULL`); err != nil {
+			return err
+		}
+	}
+	if ok, err := s.columnExists(ctx, "inbound_events", "source_payload_json"); err != nil {
+		return err
+	} else if !ok {
+		if _, err := s.db.ExecContext(ctx, `ALTER TABLE inbound_events ADD COLUMN source_payload_json TEXT`); err != nil {
+			return err
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE inbound_events SET source_payload_json = native_payload_json WHERE source_payload_json IS NULL AND native_payload_json IS NOT NULL`); err != nil {
+			return err
+		}
+	}
+	if ok, err := s.columnExists(ctx, "inbound_events", "hitch_client_version"); err != nil {
+		return err
+	} else if !ok {
+		if _, err := s.db.ExecContext(ctx, `ALTER TABLE inbound_events ADD COLUMN hitch_client_version TEXT`); err != nil {
+			return err
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE inbound_events SET hitch_client_version = source_adapter_version WHERE hitch_client_version IS NULL AND source_adapter_version IS NOT NULL`); err != nil {
+			return err
+		}
+	}
+	if ok, err := s.columnExists(ctx, "native_responses", "source_event_type"); err != nil {
+		return err
+	} else if !ok {
+		if _, err := s.db.ExecContext(ctx, `ALTER TABLE native_responses ADD COLUMN source_event_type TEXT`); err != nil {
+			return err
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE native_responses SET source_event_type = native_event_type WHERE source_event_type IS NULL AND native_event_type IS NOT NULL`); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
+func (s *Store) columnExists(ctx context.Context, table, column string) (bool, error) {
+	rows, err := s.db.QueryContext(ctx, `PRAGMA table_info(`+table+`)`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
 type InboundEvent struct {
-	ID                   string
-	ReceivedAt           time.Time
-	Harness              protocol.Harness
-	NativeEventType      string
-	NativePayload        protocol.RawJSON
-	RequestHeaders       protocol.RawJSON
-	SourceAdapterVersion string
+	ID                 string           `json:"id"`
+	ReceivedAt         time.Time        `json:"received_at"`
+	Harness            protocol.Harness `json:"harness"`
+	SourceEventType    string           `json:"source_event_type"`
+	SourcePayload      protocol.RawJSON `json:"source_payload"`
+	RequestHeaders     protocol.RawJSON `json:"request_headers,omitempty"`
+	HitchClientVersion string           `json:"hitch_client_version"`
 }
 
 type NormalizedEvent struct {
-	ID             string
-	InboundEventID string
-	HitchEventType protocol.EventType
-	Envelope       protocol.EventEnvelope
-	MappingVersion string
+	ID             string                 `json:"id"`
+	InboundEventID string                 `json:"inbound_event_id"`
+	HitchEventType protocol.EventType     `json:"hitch_event_type"`
+	Envelope       protocol.EventEnvelope `json:"envelope"`
+	MappingVersion string                 `json:"mapping_version"`
 }
 
 type HandlerInvocation struct {
-	ID                string
-	NormalizedEventID string
-	HandlerName       string
-	Mode              string
-	StartedAt         time.Time
-	CompletedAt       time.Time
-	Status            protocol.HandlerStatus
-	Stdout            string
-	Stderr            string
-	Output            protocol.RawJSON
-	Decision          protocol.RawJSON
-	Error             string
-	ReplaySourceID    string
+	ID                string                 `json:"id"`
+	NormalizedEventID string                 `json:"normalized_event_id"`
+	HandlerName       string                 `json:"handler_name"`
+	Mode              string                 `json:"mode"`
+	StartedAt         time.Time              `json:"started_at"`
+	CompletedAt       time.Time              `json:"completed_at,omitempty"`
+	Status            protocol.HandlerStatus `json:"status"`
+	Stdout            string                 `json:"stdout,omitempty"`
+	Stderr            string                 `json:"stderr,omitempty"`
+	Output            protocol.RawJSON       `json:"output,omitempty"`
+	Decision          protocol.RawJSON       `json:"decision,omitempty"`
+	Error             string                 `json:"error,omitempty"`
+	ReplaySourceID    string                 `json:"replay_source_id,omitempty"`
 }
 
 type NativeResponse struct {
-	ID                string
-	NormalizedEventID string
-	Harness           protocol.Harness
-	NativeEventType   string
-	Response          protocol.RawJSON
-	EmittedAt         time.Time
+	ID                string           `json:"id"`
+	NormalizedEventID string           `json:"normalized_event_id"`
+	Harness           protocol.Harness `json:"harness"`
+	SourceEventType   string           `json:"source_event_type"`
+	Response          protocol.RawJSON `json:"response"`
+	EmittedAt         time.Time        `json:"emitted_at"`
 }
 
 type EventInspection struct {
@@ -150,7 +224,7 @@ type EventInspection struct {
 }
 
 func (s *Store) InsertInbound(ctx context.Context, e InboundEvent) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO inbound_events(id, received_at, harness, native_event_type, native_payload_json, request_headers_json, source_adapter_version, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, e.ID, e.ReceivedAt.Format(time.RFC3339Nano), e.Harness, e.NativeEventType, string(e.NativePayload), string(e.RequestHeaders), e.SourceAdapterVersion, schemaVersion)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO inbound_events(id, received_at, harness, source_event_type, source_payload_json, request_headers_json, hitch_client_version, native_event_type, native_payload_json, source_adapter_version, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, e.ID, e.ReceivedAt.Format(time.RFC3339Nano), e.Harness, e.SourceEventType, string(e.SourcePayload), string(e.RequestHeaders), e.HitchClientVersion, e.SourceEventType, string(e.SourcePayload), e.HitchClientVersion, schemaVersion)
 	return err
 }
 
@@ -173,7 +247,7 @@ func (s *Store) InsertHandlerInvocation(ctx context.Context, h HandlerInvocation
 }
 
 func (s *Store) InsertNativeResponse(ctx context.Context, r NativeResponse) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO native_responses(id, normalized_event_id, harness, native_event_type, response_json, emitted_at, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?)`, r.ID, r.NormalizedEventID, r.Harness, r.NativeEventType, string(r.Response), r.EmittedAt.Format(time.RFC3339Nano), schemaVersion)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO native_responses(id, normalized_event_id, harness, source_event_type, native_event_type, response_json, emitted_at, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, r.ID, r.NormalizedEventID, r.Harness, r.SourceEventType, r.SourceEventType, string(r.Response), r.EmittedAt.Format(time.RFC3339Nano), schemaVersion)
 	return err
 }
 
@@ -196,12 +270,12 @@ func (s *Store) InspectEvent(ctx context.Context, id string) (EventInspection, e
 	var receivedAt string
 
 	err := s.db.QueryRowContext(ctx, `
-SELECT i.id, i.received_at, i.harness, i.native_event_type, i.native_payload_json, i.request_headers_json, i.source_adapter_version,
+SELECT i.id, i.received_at, i.harness, i.source_event_type, i.source_payload_json, i.request_headers_json, i.hitch_client_version,
        n.id, n.inbound_event_id, n.hitch_event_type, n.normalized_payload_json, n.mapping_version
 FROM normalized_events n
 JOIN inbound_events i ON i.id = n.inbound_event_id
 WHERE n.id = ?`, id).Scan(
-		&out.Inbound.ID, &receivedAt, &out.Inbound.Harness, &out.Inbound.NativeEventType, &inboundPayloadRaw, &requestHeadersRaw, &out.Inbound.SourceAdapterVersion,
+		&out.Inbound.ID, &receivedAt, &out.Inbound.Harness, &out.Inbound.SourceEventType, &inboundPayloadRaw, &requestHeadersRaw, &out.Inbound.HitchClientVersion,
 		&out.Normalized.ID, &out.Normalized.InboundEventID, &out.Normalized.HitchEventType, &normalizedRaw, &out.Normalized.MappingVersion,
 	)
 	if err != nil {
@@ -211,7 +285,7 @@ WHERE n.id = ?`, id).Scan(
 	if err != nil {
 		return EventInspection{}, err
 	}
-	out.Inbound.NativePayload = protocol.RawJSON(inboundPayloadRaw)
+	out.Inbound.SourcePayload = protocol.RawJSON(inboundPayloadRaw)
 	if requestHeadersRaw != "" {
 		out.Inbound.RequestHeaders = protocol.RawJSON(requestHeadersRaw)
 	}
@@ -252,7 +326,7 @@ WHERE n.id = ?`, id).Scan(
 		return EventInspection{}, err
 	}
 
-	responseRows, err := s.db.QueryContext(ctx, `SELECT id, normalized_event_id, harness, native_event_type, response_json, emitted_at FROM native_responses WHERE normalized_event_id = ? ORDER BY emitted_at, id`, id)
+	responseRows, err := s.db.QueryContext(ctx, `SELECT id, normalized_event_id, harness, source_event_type, response_json, emitted_at FROM native_responses WHERE normalized_event_id = ? ORDER BY emitted_at, id`, id)
 	if err != nil {
 		return EventInspection{}, err
 	}
@@ -260,7 +334,7 @@ WHERE n.id = ?`, id).Scan(
 	for responseRows.Next() {
 		var r NativeResponse
 		var emittedAt, responseRaw string
-		if err := responseRows.Scan(&r.ID, &r.NormalizedEventID, &r.Harness, &r.NativeEventType, &responseRaw, &emittedAt); err != nil {
+		if err := responseRows.Scan(&r.ID, &r.NormalizedEventID, &r.Harness, &r.SourceEventType, &responseRaw, &emittedAt); err != nil {
 			return EventInspection{}, err
 		}
 		r.EmittedAt, err = time.Parse(time.RFC3339Nano, emittedAt)

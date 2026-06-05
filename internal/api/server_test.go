@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/sagebynature/hitch/internal/config"
+	"github.com/sagebynature/hitch/internal/protocol"
 	"github.com/sagebynature/hitch/internal/store"
 )
 
@@ -65,7 +66,7 @@ func TestHealthAndEvent(t *testing.T) {
 		t.Fatalf("health code %d", w.Code)
 	}
 
-	body := `{"harness":"codex","native_event_type":"PreToolUse","native_payload":{"tool":"bash"}}`
+	body := `{"harness":"codex","harness_version":"","source_event_type":"PreToolUse","source_payload":{"tool":"bash"},"hitch_client_version":"test"}`
 	req = httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
@@ -90,7 +91,7 @@ func TestDispatchSync(t *testing.T) {
 	defer st.Close()
 	cfg := testConfig()
 	s := New(cfg, slog.Default(), st)
-	body := []byte(`{"harness":"hermes","native_event_type":"pre_tool_call","native_payload":{"tool_name":"bash"}}`)
+	body := []byte(`{"harness":"hermes","harness_version":"","source_event_type":"pre_tool_call","source_payload":{"tool_name":"bash"},"hitch_client_version":"test"}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
@@ -116,5 +117,72 @@ func TestDispatchSync(t *testing.T) {
 	}
 	if inspection["inbound"] == nil || inspection["normalized"] == nil || inspection["native_responses"] == nil {
 		t.Fatalf("incomplete inspection: %s", inspectW.Body.String())
+	}
+}
+
+func TestEventMapOverrideAndAddition(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := testConfig()
+	cfg.Harness.Codex.EventMap = map[string]protocol.EventType{
+		"PreToolUse": protocol.EventToolPermissionRequest,
+		"CustomHook": protocol.EventTurnStarted,
+	}
+	s := New(cfg, slog.Default(), st)
+
+	overrideReq := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", strings.NewReader(`{"harness":"codex","harness_version":"","source_event_type":"PreToolUse","source_payload":{"tool":"bash"},"hitch_client_version":"test"}`))
+	overrideW := httptest.NewRecorder()
+	s.Handler().ServeHTTP(overrideW, overrideReq)
+	if overrideW.Code != http.StatusOK {
+		t.Fatalf("override dispatch code %d body %s", overrideW.Code, overrideW.Body.String())
+	}
+	var overrideResp DispatchResponse
+	if err := json.Unmarshal(overrideW.Body.Bytes(), &overrideResp); err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := st.InspectEvent(ctx, overrideResp.NormalizedEventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.Normalized.HitchEventType != protocol.EventToolPermissionRequest {
+		t.Fatalf("override mapping ignored: %#v", inspection.Normalized)
+	}
+
+	addedReq := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"harness":"codex","harness_version":"","source_event_type":"CustomHook","source_payload":{},"hitch_client_version":"test"}`))
+	addedW := httptest.NewRecorder()
+	s.Handler().ServeHTTP(addedW, addedReq)
+	if addedW.Code != http.StatusAccepted {
+		t.Fatalf("added event code %d body %s", addedW.Code, addedW.Body.String())
+	}
+	var addedResp EventResponse
+	if err := json.Unmarshal(addedW.Body.Bytes(), &addedResp); err != nil {
+		t.Fatal(err)
+	}
+	inspection, err = st.InspectEvent(ctx, addedResp.NormalizedEventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.Inbound.SourceEventType != "CustomHook" || inspection.Normalized.HitchEventType != protocol.EventTurnStarted {
+		t.Fatalf("added mapping ignored: %#v", inspection)
+	}
+}
+
+func TestUnsupportedSourceEventRejected(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	s := New(testConfig(), slog.Default(), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"harness":"codex","harness_version":"","source_event_type":"CustomHook","source_payload":{},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("unsupported source event code %d body %s", w.Code, w.Body.String())
 	}
 }

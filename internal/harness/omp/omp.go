@@ -1,8 +1,6 @@
 package omp
 
 import (
-	"fmt"
-
 	"github.com/sagebynature/hitch/internal/harness"
 	piharness "github.com/sagebynature/hitch/internal/harness/pi"
 	"github.com/sagebynature/hitch/internal/protocol"
@@ -10,7 +8,7 @@ import (
 
 type Mapper struct{}
 
-var eventMap = map[string]protocol.EventType{
+var defaultEventMap = map[string]protocol.EventType{
 	"input":                 protocol.EventTurnUserPrompt,
 	"before_agent_start":    protocol.EventTurnStarted,
 	"turn_start":            protocol.EventTurnStarted,
@@ -21,15 +19,19 @@ var eventMap = map[string]protocol.EventType{
 	"todo_reminder":         protocol.EventTurnStarted,
 }
 
-func (Mapper) Map(nativeEventType string, nativePayload protocol.RawJSON) (protocol.EventEnvelope, error) {
-	eventType, ok := eventMap[nativeEventType]
-	if !ok {
-		return protocol.EventEnvelope{}, fmt.Errorf("unsupported omp event %q", nativeEventType)
+func DefaultEventMap() map[string]protocol.EventType {
+	out := make(map[string]protocol.EventType, len(defaultEventMap))
+	for k, v := range defaultEventMap {
+		out[k] = v
 	}
-	env := harness.NewEnvelope(protocol.HarnessOMP, nativeEventType, nativePayload, eventType, nativePayload)
+	return out
+}
+
+func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
+	env := harness.NewEnvelope(protocol.HarnessOMP, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
 	return env, protocol.ValidateEnvelope(env)
 }
 
-func (Mapper) Translate(nativeEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
-	return piharness.TranslateForHarness(nativeEventType, aggregate)
+func (Mapper) Translate(sourceEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
+	return piharness.TranslateForHarness(sourceEventType, aggregate)
 }

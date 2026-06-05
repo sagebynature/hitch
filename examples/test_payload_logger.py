@@ -92,28 +92,30 @@ def wait_for_log_count(count: int) -> list[dict[str, Any]]:
     raise TimeoutError(f"expected at least {count} payload log lines, found {len(read_log_lines())}")
 
 
-def dispatch_sync(harness: str, native_event_type: str, native_payload: dict[str, Any]) -> None:
+def dispatch_sync(harness: str, source_event_type: str, source_payload: dict[str, Any]) -> None:
     request(
         "POST",
         "/v1/dispatch-sync",
         {
             "harness": harness,
-            "native_event_type": native_event_type,
-            "native_payload": native_payload,
-            "source_adapter_version": "payload-logger-example",
+            "harness_version": "",
+            "source_event_type": source_event_type,
+            "source_payload": source_payload,
+            "hitch_client_version": "payload-logger-example",
         },
     )
 
 
-def dispatch_async(harness: str, native_event_type: str, native_payload: dict[str, Any]) -> None:
+def dispatch_async(harness: str, source_event_type: str, source_payload: dict[str, Any]) -> None:
     request(
         "POST",
         "/v1/events",
         {
             "harness": harness,
-            "native_event_type": native_event_type,
-            "native_payload": native_payload,
-            "source_adapter_version": "payload-logger-example",
+            "harness_version": "",
+            "source_event_type": source_event_type,
+            "source_payload": source_payload,
+            "hitch_client_version": "payload-logger-example",
         },
     )
 
@@ -153,7 +155,7 @@ def main() -> int:
 
         print(f"payload log: {LOG}")
         for line in lines:
-            print(json.dumps({"harness": line["harness"], "native_event_type": line["native_event_type"], "hitch_event_type": line["hitch_event_type"], "payload": line["payload"]}, indent=2, sort_keys=True))
+            print(json.dumps({"harness": line["harness"], "source_event_type": line["source_event_type"], "hitch_event_type": line["hitch_event_type"], "payload": line["payload"]}, indent=2, sort_keys=True))
         print("\nPayload logger test drive completed.")
         return 0
     finally:

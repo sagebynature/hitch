@@ -79,8 +79,8 @@ The handler receives the normalized envelope on stdin.
   "event_id": "evt_...",
   "received_at": "2026-06-04T00:00:00Z",
   "harness": "codex",
-  "native_event_type": "PreToolUse",
-  "native_payload": {
+  "source_event_type": "PreToolUse",
+  "source_payload": {
     "hook_event_name": "PreToolUse",
     "tool_name": "Bash",
     "tool_input": {"command": "pwd"}
@@ -94,7 +94,7 @@ The handler receives the normalized envelope on stdin.
 }
 ```
 
-Current mappers preserve native payloads unchanged in both `native_payload` and `payload`. Write handlers against `hitch_event_type` first, then inspect `harness` and `native_event_type` only when a harness-specific field is required.
+Current normalizers preserve source payloads unchanged in both `source_payload` and `payload` where no canonical payload extractor is defined. Write handlers against `hitch_event_type` first, then inspect `harness` and `source_event_type` only when a harness-specific field is required.
 
 ## Step 4: Return a handler result
 
@@ -170,7 +170,7 @@ Rules for production handlers:
 1. Write only the JSON result to stdout.
 2. Write debugging text to stderr, not stdout.
 3. Return quickly. Hitch enforces `timeout_ms`.
-4. Treat missing fields as normal. Different harnesses use different native payload shapes.
+4. Treat missing fields as normal. Different harnesses use different source payload shapes.
 5. Avoid calling Hitch recursively from inside a handler. Hitch sets `HITCH_CHILD=1` so adapters can no-op inside handler children.
 6. Use `native_response` only when Hitch's normalized behaviors cannot express the harness response you need.
 
@@ -226,7 +226,7 @@ Example log record:
   "logged_at": "2026-06-04T00:00:00+00:00",
   "event_id": "evt_...",
   "harness": "codex",
-  "native_event_type": "PreToolUse",
+  "source_event_type": "PreToolUse",
   "hitch_event_type": "tool.requested",
   "payload": {
     "hook_event_name": "PreToolUse",
@@ -340,7 +340,7 @@ go run ./cmd/hitch inspect-event --config examples/test-drive.config.toml norm_.
 
 The inspection output includes:
 
-- inbound native event and headers;
+- inbound source event and headers;
 - normalized Hitch envelope;
 - handler invocation status, stdout, stderr, parsed output, and decision;
 - native response emitted back to the harness.
@@ -361,13 +361,13 @@ Use dry-run first when you only want to verify the stored event. Non-dry-run rep
 Check all of these:
 
 - The request path matches handler mode: `/v1/events` for async, `/v1/dispatch-sync` for sync.
-- `events` contains the normalized Hitch event, not the native source event.
-- The native event maps to the Hitch event you expect. See [`events.md`](events.md).
+- `events` contains the normalized Hitch event, not the source event.
+- The source event maps to the Hitch event you expect. See [`events.md`](events.md).
 - The command path is correct relative to the Hitch server working directory.
 
 ### The harness ignores my decision
 
-Check the native event supports that behavior. For example, `inject_context` translates for Codex prompt/session/tool-complete events and Hermes `pre_llm_call`, but it is not meaningful for every event.
+Check the source event supports that behavior. For example, `inject_context` translates for Codex prompt/session/tool-complete events and Hermes `pre_llm_call`, but it is not meaningful for every event.
 
 ### My handler output is recorded as an error
 

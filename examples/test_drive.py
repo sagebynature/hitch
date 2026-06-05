@@ -59,15 +59,16 @@ def wait_for_health(proc: subprocess.Popen[str]) -> None:
     raise TimeoutError("hitch server did not become healthy")
 
 
-def dispatch(harness: str, native_event_type: str, native_payload: dict[str, Any]) -> dict[str, Any]:
+def dispatch(harness: str, source_event_type: str, source_payload: dict[str, Any]) -> dict[str, Any]:
     return request(
         "POST",
         "/v1/dispatch-sync",
         {
             "harness": harness,
-            "native_event_type": native_event_type,
-            "native_payload": native_payload,
-            "source_adapter_version": "example-test-drive",
+            "harness_version": "",
+            "source_event_type": source_event_type,
+            "source_payload": source_payload,
+            "hitch_client_version": "example-test-drive",
         },
     )
 

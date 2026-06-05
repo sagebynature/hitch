@@ -49,5 +49,5 @@ func (c Client) Dispatch(req EventRequest) (DispatchResponse, error) {
 }
 
 func NewEventRequest(harness, event string, payload protocol.RawJSON) EventRequest {
-	return EventRequest{Harness: harness, NativeEventType: event, NativePayload: payload, SourceAdapterVersion: protocol.Version}
+	return EventRequest{Harness: harness, SourceEventType: event, SourcePayload: payload, HitchClientVersion: protocol.Version}
 }

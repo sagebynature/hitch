@@ -68,7 +68,7 @@ func TestRunDispatchesSyncResponse(t *testing.T) {
 	if strings.TrimSpace(stdout.String()) != `{"permissionDecision":"allow"}` {
 		t.Fatalf("unexpected stdout: %q", stdout.String())
 	}
-	if got["harness"] != "codex" || got["native_event_type"] != "PreToolUse" {
+	if got["harness"] != "codex" || got["source_event_type"] != "PreToolUse" || got["hitch_client_version"] == "" {
 		t.Fatalf("unexpected request metadata: %#v", got)
 	}
 }

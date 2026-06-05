@@ -13,7 +13,7 @@ import (
 )
 
 func testEnv() protocol.EventEnvelope {
-	return protocol.EventEnvelope{HitchVersion: protocol.Version, EventID: "evt", ReceivedAt: time.Now().UTC(), Harness: protocol.HarnessCodex, NativeEventType: "PreToolUse", NativePayload: protocol.Raw(map[string]interface{}{}), HitchEventType: protocol.EventToolRequested, Payload: protocol.Raw(map[string]interface{}{})}
+	return protocol.EventEnvelope{HitchVersion: protocol.Version, EventID: "evt", ReceivedAt: time.Now().UTC(), Harness: protocol.HarnessCodex, SourceEventType: "PreToolUse", SourcePayload: protocol.Raw(map[string]interface{}{}), HitchEventType: protocol.EventToolRequested, Payload: protocol.Raw(map[string]interface{}{})}
 }
 
 func script(t *testing.T, body string) string {

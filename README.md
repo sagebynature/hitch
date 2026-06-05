@@ -73,8 +73,8 @@ A Hitch handler is any executable command. It receives a normalized Hitch event 
   "event_id": "evt_...",
   "received_at": "2026-06-04T10:47:00Z",
   "harness": "codex",
-  "native_event_type": "PreToolUse",
-  "native_payload": {},
+  "source_event_type": "PreToolUse",
+  "source_payload": {},
   "hitch_event_type": "tool.requested",
   "payload": {}
 }

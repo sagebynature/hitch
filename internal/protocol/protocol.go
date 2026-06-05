@@ -88,8 +88,8 @@ type EventEnvelope struct {
 	ReceivedAt      time.Time `json:"received_at"`
 	Harness         Harness   `json:"harness"`
 	HarnessVersion  string    `json:"harness_version,omitempty"`
-	NativeEventType string    `json:"native_event_type"`
-	NativePayload   RawJSON   `json:"native_payload"`
+	SourceEventType string    `json:"source_event_type"`
+	SourcePayload   RawJSON   `json:"source_payload"`
 	HitchEventType  EventType `json:"hitch_event_type"`
 	SessionID       string    `json:"session_id,omitempty"`
 	TurnID          string    `json:"turn_id,omitempty"`
@@ -145,11 +145,11 @@ func ValidateEnvelope(e EventEnvelope) error {
 	if !IsValidHarness(e.Harness) {
 		return fmt.Errorf("unknown harness %q", e.Harness)
 	}
-	if e.NativeEventType == "" {
-		return errors.New("native_event_type is required")
+	if e.SourceEventType == "" {
+		return errors.New("source_event_type is required")
 	}
-	if len(e.NativePayload) == 0 || !json.Valid(e.NativePayload) {
-		return errors.New("native_payload must be valid JSON")
+	if len(e.SourcePayload) == 0 || !json.Valid(e.SourcePayload) {
+		return errors.New("source_payload must be valid JSON")
 	}
 	if !IsValidEventType(e.HitchEventType) {
 		return fmt.Errorf("unknown hitch_event_type %q", e.HitchEventType)

@@ -62,7 +62,7 @@ def main() -> int:
         return 0
 
     event_type = envelope.get("hitch_event_type")
-    native_event_type = envelope.get("native_event_type")
+    source_event_type = envelope.get("source_event_type")
     payload = envelope.get("payload")
     if not isinstance(payload, dict):
         none()
@@ -81,13 +81,13 @@ def main() -> int:
         if "production" in text.lower():
             result("inject_context", context="Before production work: confirm environment, rollback plan, and approval ticket.")
             return 0
-        if native_event_type == "pre_gateway_dispatch" and text.startswith("rewrite:"):
+        if source_event_type == "pre_gateway_dispatch" and text.startswith("rewrite:"):
             result("transform", updated_input=text.removeprefix("rewrite:").strip())
             return 0
         none()
         return 0
 
-    if native_event_type in {"transform_tool_result", "transform_terminal_output", "transform_llm_output"}:
+    if source_event_type in {"transform_tool_result", "transform_terminal_output", "transform_llm_output"}:
         output = payload.get("output")
         if isinstance(output, str):
             result("replace_result", updated_output=f"[reviewed by hitch] {output}")

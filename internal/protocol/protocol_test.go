@@ -11,8 +11,8 @@ func validEnvelope() EventEnvelope {
 		EventID:         "evt_1",
 		ReceivedAt:      time.Now().UTC(),
 		Harness:         HarnessCodex,
-		NativeEventType: "PreToolUse",
-		NativePayload:   Raw(map[string]interface{}{"hook_event_name": "PreToolUse"}),
+		SourceEventType: "PreToolUse",
+		SourcePayload:   Raw(map[string]interface{}{"hook_event_name": "PreToolUse"}),
 		HitchEventType:  EventToolRequested,
 		Payload:         Raw(map[string]interface{}{"tool": "bash"}),
 	}
@@ -36,9 +36,9 @@ func TestValidateEnvelope(t *testing.T) {
 	}
 
 	e = validEnvelope()
-	e.NativePayload = RawJSON(`{`)
+	e.SourcePayload = RawJSON(`{`)
 	if err := ValidateEnvelope(e); err == nil {
-		t.Fatal("invalid native payload accepted")
+		t.Fatal("invalid source payload accepted")
 	}
 }
 

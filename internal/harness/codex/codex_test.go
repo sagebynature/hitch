@@ -7,8 +7,8 @@ import (
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
-func TestMapPreToolUse(t *testing.T) {
-	env, err := (Mapper{}).Map("PreToolUse", protocol.Raw(map[string]interface{}{"tool": "bash"}))
+func TestNormalizePreToolUse(t *testing.T) {
+	env, err := (Mapper{}).Normalize("PreToolUse", protocol.Raw(map[string]interface{}{"tool": "bash"}), protocol.EventToolRequested)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -719,10 +719,10 @@ function collectMetadata(event, ctx) {
 }
 
 
-async function dispatchToHitch(nativeEventType, event, ctx) {
-  let nativePayload;
+async function dispatchToHitch(sourceEventType, event, ctx) {
+  let sourcePayload;
   try {
-    nativePayload = {
+    sourcePayload = {
       event: JSON.parse(JSON.stringify(event ?? {})),
       metadata: collectMetadata(event, ctx)
     };
@@ -736,9 +736,10 @@ async function dispatchToHitch(nativeEventType, event, ctx) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         harness: "pi",
-        native_event_type: nativeEventType,
-        native_payload: nativePayload,
-        source_adapter_version: "hitch-pi-extension"
+        harness_version: "",
+        source_event_type: sourceEventType,
+        source_payload: sourcePayload,
+        hitch_client_version: "hitch-pi-extension"
       })
     });
     if (!response.ok) return undefined;
@@ -750,8 +751,8 @@ async function dispatchToHitch(nativeEventType, event, ctx) {
 }
 
 export default function(pi) {
-  for (const nativeEventType of HITCH_EVENTS) {
-    pi.on(nativeEventType, async (event, ctx) => dispatchToHitch(nativeEventType, event, ctx));
+  for (const sourceEventType of HITCH_EVENTS) {
+    pi.on(sourceEventType, async (event, ctx) => dispatchToHitch(sourceEventType, event, ctx));
   }
 }
 `, piManagedExtensionMarker, urlLiteral, strings.Join(events, ", "))), nil

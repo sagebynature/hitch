@@ -2,7 +2,6 @@ package hermes
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/sagebynature/hitch/internal/harness"
 	"github.com/sagebynature/hitch/internal/protocol"
@@ -10,7 +9,7 @@ import (
 
 type Mapper struct{}
 
-var eventMap = map[string]protocol.EventType{
+var defaultEventMap = map[string]protocol.EventType{
 	"pre_tool_call":             protocol.EventToolRequested,
 	"post_tool_call":            protocol.EventToolCompleted,
 	"pre_llm_call":              protocol.EventTurnStarted,
@@ -24,22 +23,26 @@ var eventMap = map[string]protocol.EventType{
 	"pre_gateway_dispatch":      protocol.EventTurnUserPrompt,
 }
 
-func (Mapper) Map(nativeEventType string, nativePayload protocol.RawJSON) (protocol.EventEnvelope, error) {
-	eventType, ok := eventMap[nativeEventType]
-	if !ok {
-		return protocol.EventEnvelope{}, fmt.Errorf("unsupported hermes event %q", nativeEventType)
+func DefaultEventMap() map[string]protocol.EventType {
+	out := make(map[string]protocol.EventType, len(defaultEventMap))
+	for k, v := range defaultEventMap {
+		out[k] = v
 	}
-	env := harness.NewEnvelope(protocol.HarnessHermes, nativeEventType, nativePayload, eventType, nativePayload)
+	return out
+}
+
+func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
+	env := harness.NewEnvelope(protocol.HarnessHermes, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
 	return env, protocol.ValidateEnvelope(env)
 }
 
-func (Mapper) Translate(nativeEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
+func (Mapper) Translate(sourceEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
 	d := aggregate.Decision
 	if len(d.NativeResponse) != 0 {
 		return d.NativeResponse, nil
 	}
 	out := map[string]interface{}{}
-	switch nativeEventType {
+	switch sourceEventType {
 	case "pre_tool_call":
 		if d.Behavior == protocol.BehaviorBlock || d.Behavior == protocol.BehaviorDeny || d.Behavior == protocol.BehaviorStop {
 			out["action"] = "block"

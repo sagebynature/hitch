@@ -34,7 +34,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 func runHook(args []string, stdin io.Reader, stdout io.Writer) error {
 	fs := flag.NewFlagSet("hitch-client", flag.ExitOnError)
 	harness := fs.String("harness", "", "source harness")
-	event := fs.String("event", "", "native event type")
+	event := fs.String("event", "", "source event type")
 	syncMode := fs.Bool("sync", false, "dispatch synchronously")
 	url := fs.String("url", clientshim.DefaultURL(), "hitch API URL")
 	versionFlag := fs.Bool("version", false, "print version")

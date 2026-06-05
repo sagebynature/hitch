@@ -7,9 +7,9 @@ import (
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
-func TestMapPromotesPiMetadataEnvelope(t *testing.T) {
+func TestNormalizePromotesPiMetadataEnvelope(t *testing.T) {
 	payload := protocol.RawJSON(`{"event":{"input":{"command":"pwd"},"turnIndex":2},"metadata":{"session_id":"session-1","turn_id":"turn-2","cwd":"/tmp/project","model":"anthropic/claude","transcript_path":"/tmp/session-1.jsonl"}}`)
-	env, err := (Mapper{}).Map("tool_call", payload)
+	env, err := (Mapper{}).Normalize("tool_call", payload, protocol.EventToolRequested)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,14 +19,14 @@ func TestMapPromotesPiMetadataEnvelope(t *testing.T) {
 	if string(env.Payload) != `{"input":{"command":"pwd"},"turnIndex":2}` {
 		t.Fatalf("payload should be unwrapped Pi event, got %s", env.Payload)
 	}
-	if string(env.NativePayload) != `{"input":{"command":"pwd"},"turnIndex":2}` {
-		t.Fatalf("native payload should be unwrapped Pi event, got %s", env.NativePayload)
+	if string(env.SourcePayload) != `{"input":{"command":"pwd"},"turnIndex":2}` {
+		t.Fatalf("source payload should be unwrapped Pi event, got %s", env.SourcePayload)
 	}
 }
 
-func TestMapKeepsBarePiPayloadCompatible(t *testing.T) {
+func TestNormalizeKeepsBarePiPayloadCompatible(t *testing.T) {
 	payload := protocol.RawJSON(`{"input":{"command":"pwd"}}`)
-	env, err := (Mapper{}).Map("tool_call", payload)
+	env, err := (Mapper{}).Normalize("tool_call", payload, protocol.EventToolRequested)
 	if err != nil {
 		t.Fatal(err)
 	}

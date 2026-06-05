@@ -2,7 +2,6 @@ package codex
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/sagebynature/hitch/internal/harness"
 	"github.com/sagebynature/hitch/internal/protocol"
@@ -10,7 +9,7 @@ import (
 
 type Mapper struct{}
 
-var eventMap = map[string]protocol.EventType{
+var defaultEventMap = map[string]protocol.EventType{
 	"SessionStart":      protocol.EventSessionStarted,
 	"SubagentStart":     protocol.EventSubagentStarted,
 	"UserPromptSubmit":  protocol.EventTurnUserPrompt,
@@ -23,22 +22,26 @@ var eventMap = map[string]protocol.EventType{
 	"Stop":              protocol.EventTurnCompleted,
 }
 
-func (Mapper) Map(nativeEventType string, nativePayload protocol.RawJSON) (protocol.EventEnvelope, error) {
-	eventType, ok := eventMap[nativeEventType]
-	if !ok {
-		return protocol.EventEnvelope{}, fmt.Errorf("unsupported codex event %q", nativeEventType)
+func DefaultEventMap() map[string]protocol.EventType {
+	out := make(map[string]protocol.EventType, len(defaultEventMap))
+	for k, v := range defaultEventMap {
+		out[k] = v
 	}
-	env := harness.NewEnvelope(protocol.HarnessCodex, nativeEventType, nativePayload, eventType, nativePayload)
+	return out
+}
+
+func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
+	env := harness.NewEnvelope(protocol.HarnessCodex, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
 	return env, protocol.ValidateEnvelope(env)
 }
 
-func (Mapper) Translate(nativeEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
+func (Mapper) Translate(sourceEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
 	d := aggregate.Decision
 	if len(d.NativeResponse) != 0 {
 		return d.NativeResponse, nil
 	}
 	out := map[string]interface{}{}
-	switch nativeEventType {
+	switch sourceEventType {
 	case "PermissionRequest":
 		if d.Behavior == protocol.BehaviorDeny || d.Behavior == protocol.BehaviorBlock || d.Behavior == protocol.BehaviorStop {
 			out["hookSpecificOutput"] = map[string]interface{}{"decision": map[string]interface{}{"behavior": "deny", "message": d.Reason}}

@@ -135,9 +135,9 @@ on_timeout = "fail_open"</code></pre>
           <h3>Step-by-step</h3>
           <ol>
             <li>Choose async observer mode for passive work, or sync control mode when the harness needs a decision.</li>
-            <li>Pick normalized event names such as <code>tool.requested</code>, <code>turn.user_prompt</code>, or <code>tool.completed</code>. Use the Hitch event mapping below to connect native harness events to normalized names.</li>
+            <li>Pick normalized event names such as <code>tool.requested</code>, <code>turn.user_prompt</code>, or <code>tool.completed</code>. Use the Hitch event mapping below to connect source harness events to normalized names.</li>
             <li>Add a <code>[handlers.&lt;name&gt;]</code> config entry with <code>command</code>, <code>events</code>, <code>mode</code>, <code>timeout_ms</code>, and fail-open or fail-closed policy.</li>
-            <li>Read <code>hitch_event_type</code> first. Inspect <code>harness</code> and <code>native_event_type</code> only when a harness-specific field is needed.</li>
+            <li>Read <code>hitch_event_type</code> first. Inspect <code>harness</code> and <code>source_event_type</code> only when a harness-specific field is needed.</li>
             <li>Return a decision behavior: <code>none</code>, <code>allow</code>, <code>deny</code>, <code>block</code>, <code>continue</code>, <code>stop</code>, <code>transform</code>, <code>replace_result</code>, <code>inject_context</code>, or <code>handled</code>.</li>
             <li>Test policy decisions with <code>python3 examples/test_drive.py</code>, or test payload logging across all harnesses with <code>python3 examples/test_payload_logger.py</code>.</li>
           </ol>
@@ -175,7 +175,8 @@ on_timeout = "fail_open"</code></pre>
 
         <section id="hitch-events">
           <h2>Hitch events</h2>
-          <p>Hitch normalizes Codex, Hermes, Pi, and OMP source events into one stable envelope. Current mappers preserve the harness payload unchanged in both <code>native_payload</code> and <code>payload</code>, then set <code>hitch_event_type</code> from the native event name.</p>
+          <p>Hitch normalizes Codex, Hermes, Pi, and OMP source events into one stable envelope. Current normalizers preserve the source payload unchanged in both <code>source_payload</code> and <code>payload</code> where no canonical extractor is defined, then set <code>hitch_event_type</code> from the server-side event map.</p>
+          <p>Per-harness <code>[harness.&lt;name&gt;.event_map]</code> config entries merge over built-in mappings, so operators can override or add source-event to Hitch-event mappings without changing clients.</p>
           <h3>Normalized event types</h3>
           <table>
             <thead><tr><th>Hitch event</th><th>Meaning</th></tr></thead>
@@ -282,12 +283,14 @@ on_timeout = "fail_open"</code></pre>
   -H 'content-type: application/json' \
   -d '{
     "harness": "codex",
-    "native_event_type": "PreToolUse",
-    "native_payload": {
+    "harness_version": "",
+    "source_event_type": "PreToolUse",
+    "source_payload": {
       "hook_event_name": "PreToolUse",
       "tool_name": "Bash",
       "tool_input": {"command": "pwd"}
-    }
+    },
+    "hitch_client_version": "manual-curl"
   }'</code></pre>
         </section>
 

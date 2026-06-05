@@ -118,7 +118,7 @@ func captureStdoutForTest(t *testing.T, fn func()) string {
 	return string(out)
 }
 
-func TestAdapterDispatchSyncPreservesNativePayloadAndPrintsNativeResponse(t *testing.T) {
+func TestAdapterDispatchSyncPreservesSourcePayloadAndPrintsNativeResponse(t *testing.T) {
 
 	var got map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,15 +142,15 @@ func TestAdapterDispatchSyncPreservesNativePayloadAndPrintsNativeResponse(t *tes
 	if native["permissionDecision"] != "deny" || native["reason"] != "policy" {
 		t.Fatalf("unexpected native response: %#v", native)
 	}
-	if got["harness"] != "codex" || got["native_event_type"] != "PreToolUse" {
+	if got["harness"] != "codex" || got["source_event_type"] != "PreToolUse" || got["hitch_client_version"] == "" {
 		t.Fatalf("unexpected request metadata: %#v", got)
 	}
-	payload, ok := got["native_payload"].(map[string]any)
+	payload, ok := got["source_payload"].(map[string]any)
 	if !ok {
-		t.Fatalf("native_payload was not an object: %#v", got["native_payload"])
+		t.Fatalf("source_payload was not an object: %#v", got["source_payload"])
 	}
 	if payload["tool"] != "bash" {
-		t.Fatalf("native payload was not preserved: %#v", payload)
+		t.Fatalf("source payload was not preserved: %#v", payload)
 	}
 }
 
@@ -191,7 +191,7 @@ func TestAdapterFailsOpenWhenHitchIsUnreachable(t *testing.T) {
 }
 
 func TestNoopObserverHandlerConsumesEnvelopeAndReturnsNone(t *testing.T) {
-	out := runNoopObserverForTest(t, `{"hitch_version":"0.1.0","event_id":"evt","received_at":"2026-06-04T00:00:00Z","harness":"codex","native_event_type":"SessionStart","native_payload":{},"hitch_event_type":"session.started","payload":{}}`)
+	out := runNoopObserverForTest(t, `{"hitch_version":"0.1.0","event_id":"evt","received_at":"2026-06-04T00:00:00Z","harness":"codex","source_event_type":"SessionStart","source_payload":{},"hitch_event_type":"session.started","payload":{}}`)
 
 	var result protocol.HandlerResult
 	if err := json.Unmarshal([]byte(out), &result); err != nil {
@@ -293,8 +293,8 @@ func seedReplayFixture(t *testing.T, ctx context.Context, handlerJSON string) (s
 	defer st.Close()
 
 	now := time.Now().UTC()
-	env := protocol.EventEnvelope{HitchVersion: protocol.Version, EventID: "evt_replay", ReceivedAt: now, Harness: protocol.HarnessCodex, NativeEventType: "PreToolUse", NativePayload: protocol.Raw(map[string]interface{}{"tool": "bash"}), HitchEventType: protocol.EventToolRequested, Payload: protocol.Raw(map[string]interface{}{"tool": "bash"})}
-	if err := st.InsertInbound(ctx, store.InboundEvent{ID: "in_replay", ReceivedAt: now, Harness: env.Harness, NativeEventType: env.NativeEventType, NativePayload: env.NativePayload}); err != nil {
+	env := protocol.EventEnvelope{HitchVersion: protocol.Version, EventID: "evt_replay", ReceivedAt: now, Harness: protocol.HarnessCodex, SourceEventType: "PreToolUse", SourcePayload: protocol.Raw(map[string]interface{}{"tool": "bash"}), HitchEventType: protocol.EventToolRequested, Payload: protocol.Raw(map[string]interface{}{"tool": "bash"})}
+	if err := st.InsertInbound(ctx, store.InboundEvent{ID: "in_replay", ReceivedAt: now, Harness: env.Harness, SourceEventType: env.SourceEventType, SourcePayload: env.SourcePayload}); err != nil {
 		t.Fatal(err)
 	}
 	normalizedID := "norm_replay"
@@ -304,7 +304,7 @@ func seedReplayFixture(t *testing.T, ctx context.Context, handlerJSON string) (s
 	if err := st.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: "handler_original", NormalizedEventID: normalizedID, HandlerName: "original", Mode: "sync", StartedAt: now, CompletedAt: now, Status: protocol.StatusOK, Output: protocol.Raw(map[string]interface{}{"status": "ok"}), Decision: protocol.Raw(map[string]interface{}{"behavior": "none"})}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.InsertNativeResponse(ctx, store.NativeResponse{ID: "native_original", NormalizedEventID: normalizedID, Harness: env.Harness, NativeEventType: env.NativeEventType, Response: protocol.Raw(map[string]interface{}{}), EmittedAt: now}); err != nil {
+	if err := st.InsertNativeResponse(ctx, store.NativeResponse{ID: "native_original", NormalizedEventID: normalizedID, Harness: env.Harness, SourceEventType: env.SourceEventType, Response: protocol.Raw(map[string]interface{}{}), EmittedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -441,7 +441,7 @@ func TestE2ECodexLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s inspection failed: %v", event.native, err)
 		}
-		if inspection.Inbound.NativeEventType != event.native || inspection.Normalized.HitchEventType != event.hitch {
+		if inspection.Inbound.SourceEventType != event.native || inspection.Normalized.HitchEventType != event.hitch {
 			t.Fatalf("%s was not persisted with expected mapping: %#v", event.native, inspection)
 		}
 		if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].HandlerName != "noop_observer" || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
