@@ -15,7 +15,8 @@ Use Hitch when you want to:
 - write one policy, logger, or workflow hook and reuse it across multiple agent harnesses
 - move between agent tools without rebuilding your automation for every hook format
 - preserve native harness payloads while relying on stable normalized lifecycle fields
-- expose local agent lifecycle events over a REST API for inspection, replay, or remote dispatch
+- expose local agent lifecycle events over a REST API for inspection, replay, observability, or remote dispatch
+- use Hitch as an observability layer for agent activity across harnesses
 - deploy Hitch as a service so teams can centralize hook routing, execution, audit, and governance
 
 ## For solo developers
@@ -28,7 +29,7 @@ A single Hitch handler can watch tool calls, block risky commands, inject contex
 
 Let developers choose their harness. Keep lifecycle control centralized.
 
-Your team may use Codex, Hermes, Pi, OMP, OpenCode, or a new harness next month. Hitch lets those tools emit lifecycle events into one REST API, locally or remotely, so platform, security, and developer-experience teams can manage routing and handler execution from one place without forcing every developer onto the same agent CLI.
+Your team may use Codex, Hermes, Pi, OMP, OpenCode, or a new harness next month. Hitch lets those tools emit lifecycle events into one REST API, locally or remotely, so platform, security, and developer-experience teams can manage routing, handler execution, and observability from one place without forcing every developer onto the same agent CLI.
 
 ## What it provides
 
@@ -38,7 +39,8 @@ Your team may use Codex, Hermes, Pi, OMP, OpenCode, or a new harness next month.
 - **Synchronous decisions** translated back to each harness's native response format.
 - **Local-first, remote-ready REST API** for event ingestion, synchronous dispatch, health checks, event inspection, and replay.
 - **Central hook routing and execution** through server-side handler config.
-- **SQLite audit trail** for inbound events, normalized events, handler invocations, and native responses.
+- **Observability layer for agent activity** across tool calls, prompts, lifecycle transitions, handler decisions, and native responses.
+- **SQLite audit backend today** for inbound events, normalized events, handler invocations, and native responses, with additional storage and observability backends planned.
 - **hitch-client hook shim** for shell-based harness integrations.
 
 Verified API endpoints:
@@ -75,7 +77,13 @@ In another shell, check the installation:
 ./bin/hitch status --json
 ```
 
-The default server listens on `127.0.0.1:8799` and stores audit records at `~/.local/share/hitch/events.sqlite`.
+The default server listens on `127.0.0.1:8799` and stores audit and observability records in SQLite at `~/.local/share/hitch/events.sqlite`. SQLite is the current verified backend; additional storage and observability backends are planned.
+
+## Agent observability
+
+Hitch can also sit between your agent harnesses and your observability stack. Every supported harness emits into the same event stream, so you can inspect prompts, tool requests, tool results, lifecycle transitions, handler invocations, decisions, and native responses without building one collector per agent CLI.
+
+Today Hitch persists that stream to SQLite for local inspection and replay. The backend is intentionally small and boring while the event contract stabilizes, but the model is designed for additional storage and observability backends in the future.
 
 ## Handler model
 
@@ -166,7 +174,7 @@ Configuration covers:
 
 - server host, port, and request size limits
 - logging sinks and payload visibility
-- SQLite audit persistence
+- SQLite audit and observability persistence today
 - handler commands, event filters, modes, timeouts, and error policy
 - per-harness enable flags and source-event mappings
 

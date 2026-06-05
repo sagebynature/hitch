@@ -52,7 +52,7 @@
       <article class="docs-content">
         <p class="eyebrow" id="top">Latest reference</p>
         <h1>Hitch Documentation</h1>
-        <p class="lede">Hitch is the universal event layer for Codex, Hermes, Pi, OMP, and OpenCode. It gives developers and teams one portable handler protocol for guardrails, audit logs, policy checks, context injection, result transformation, and centralized lifecycle routing.</p>
+        <p class="lede">Hitch is the universal event and observability layer for Codex, Hermes, Pi, OMP, and OpenCode. It gives developers and teams one portable handler protocol for guardrails, audit logs, policy checks, context injection, result transformation, centralized lifecycle routing, and agent activity inspection.</p>
 
         <section id="quickstart">
           <h2>Quickstart</h2>
@@ -63,7 +63,7 @@ hitch status --json
 hitch doctor --json
 hitch-client install --only codex --dry-run --json
 hitch-client install --only opencode --yes --json</code></pre>
-          <p>The default server listens on <code>127.0.0.1:8799</code> and stores SQLite audit records at <code>~/.local/share/hitch/events.sqlite</code>.</p>
+          <p>The default server listens on <code>127.0.0.1:8799</code> and stores SQLite audit and observability records at <code>~/.local/share/hitch/events.sqlite</code>. SQLite is the current verified backend; additional storage and observability backends are planned.</p>
         </section>
 
         <section id="installation">
@@ -103,7 +103,7 @@ hitch-client uninstall --only opencode --yes --json</code></pre>
             <tbody>
               <tr><td><code>[server]</code></td><td>Local API bind address and request size limit.</td></tr>
               <tr><td><code>[log]</code></td><td>Operational logging. Native payloads are not included by default.</td></tr>
-              <tr><td><code>[audit]</code></td><td>Event journal persistence. SQLite is the verified backend.</td></tr>
+              <tr><td><code>[audit]</code></td><td>Event journal and observability persistence. SQLite is the verified backend today; additional backends are planned.</td></tr>
               <tr><td><code>[handlers.&lt;name&gt;]</code></td><td>External command handlers, event filters, mode, timeout, and error policy.</td></tr>
               <tr><td><code>[harness.&lt;name&gt;]</code></td><td>Per-harness enable flags and source-event mappings.</td></tr>
             </tbody>

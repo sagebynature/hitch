@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hitch — one event layer for every agent harness</title>
-    <meta name="description" content="Hitch is the universal event layer for Codex, Hermes, Pi, OMP, and OpenCode. Normalize lifecycle events, preserve native payloads, and route hooks locally or remotely." />
+    <meta name="description" content="Hitch is the universal event and observability layer for Codex, Hermes, Pi, OMP, and OpenCode. Normalize lifecycle events, preserve native payloads, and route hooks locally or remotely." />
     <meta property="og:title" content="Hitch" />
     <meta property="og:description" content="Write hooks once, run them across harnesses, and route lifecycle events through one local-first, remote-ready REST API." />
     <meta property="og:type" content="website" />
@@ -42,12 +42,12 @@
         <div>
           <p class="eyebrow">Universal agent event layer</p>
           <h1 id="hero-title">Control every agent lifecycle.</h1>
-          <p class="lede">Hitch turns Codex, Hermes, Pi, OMP, and OpenCode hooks into one portable event protocol. Write a hook once, preserve the native payload, and route lifecycle events to local or remote handlers.</p>
+          <p class="lede">Hitch turns Codex, Hermes, Pi, OMP, and OpenCode hooks into one portable event protocol. Write a hook once, preserve the native payload, observe agent activity, and route lifecycle events to local or remote handlers.</p>
           <div class="proof-grid" aria-label="Hitch product capabilities">
             <span>Normalized lifecycle events</span>
             <span>Original payload preserved</span>
             <span>Local + remote REST dispatch</span>
-            <span>Central routing, audit, and replay</span>
+            <span>Observability, audit, and replay</span>
           </div>
           <div class="hero-actions">
             <a class="button primary" href="docs/latest/">Read the docs</a>
@@ -57,7 +57,7 @@
         <aside class="terminal-card" aria-label="Hitch event layer example">
           <div class="terminal-top"><span>event layer</span><span>REST :8799</span></div>
           <pre class="terminal-body"><code><span class="prompt">$</span> hitch serve
-<span class="comment"># central routing, execution, audit, replay</span>
+<span class="comment"># routing, execution, observability, replay</span>
 
 <span class="prompt">$</span> hitch-client install --all
 { "installed": ["codex", "hermes", "opencode"], "changed": true }
@@ -73,7 +73,7 @@
           <div class="section-intro">
             <p class="label">Why Hitch?</p>
             <h2 id="why-title">Agent lifecycle control should be portable.</h2>
-            <p>Every harness has its own event names, payloads, response rules, and lifecycle boundaries. Hitch gives developers and teams one stable contract instead of forcing every guardrail, logger, and workflow hook to chase native formats.</p>
+            <p>Every harness has its own event names, payloads, response rules, and lifecycle boundaries. Hitch gives developers and teams one stable contract instead of forcing every guardrail, logger, observer, and workflow hook to chase native formats.</p>
           </div>
           <div class="card-grid">
             <article class="card">
@@ -88,7 +88,7 @@
             </article>
             <article class="card">
               <h3>Control centrally</h3>
-              <p>Handler routing, synchronous decisions, audit records, and replay live behind one server config instead of five harness-specific integrations.</p>
+              <p>Handler routing, synchronous decisions, observability records, and replay live behind one server config instead of five harness-specific integrations.</p>
               <div class="pill-row"><span class="pill"><code>allow</code></span><span class="pill"><code>deny</code></span><span class="pill"><code>inject_context</code></span></div>
             </article>
           </div>
@@ -100,7 +100,7 @@
           <div class="section-intro">
             <p class="label">The contract</p>
             <h2 id="flow-title">One control plane for local and remote agent events.</h2>
-            <p>Hitch stays boring on purpose: native JSON in, normalized events over REST, external commands out, audit records underneath, and harness-native responses at the edge.</p>
+            <p>Hitch stays boring on purpose: native JSON in, normalized events over REST, external commands out, SQLite observability records underneath today, and harness-native responses at the edge.</p>
           </div>
           <div>
             <div class="flow" aria-label="Hitch event flow">
@@ -108,7 +108,7 @@
               <div class="flow-step"><span>02</span><strong>REST API</strong><p>The hook shim posts async or sync events to a local or remote Hitch server.</p></div>
               <div class="flow-step"><span>03</span><strong>Envelope</strong><p>Hitch maps the event into a stable schema while retaining the original payload.</p></div>
               <div class="flow-step"><span>04</span><strong>Routing</strong><p>Server config sends matching events to policy, audit, context, or workflow handlers.</p></div>
-              <div class="flow-step"><span>05</span><strong>Control</strong><p>Decisions become native harness responses, audit records, and replayable history.</p></div>
+              <div class="flow-step"><span>05</span><strong>Observe</strong><p>Decisions become native harness responses, SQLite records today, and replayable history for future backends.</p></div>
             </div>
             <div class="split" style="margin-top: 1rem">
               <article class="callout accent">
@@ -117,7 +117,7 @@
               </article>
               <article class="callout">
                 <h3>For teams</h3>
-                <p>Let developers choose their harness while platform teams centralize lifecycle routing, execution, audit, and replay.</p>
+                <p>Let developers choose their harness while platform teams centralize lifecycle routing, execution, observability, and replay.</p>
               </article>
             </div>
           </div>
@@ -129,7 +129,7 @@
           <div class="section-intro">
             <p class="label">Quick start</p>
             <h2 id="quickstart-title">Local-first. Remote-ready.</h2>
-            <p>Run Hitch as a local daemon for your own agents, or point hook shims at a shared Hitch service for team-wide lifecycle routing. The same handler protocol works in both modes.</p><p>The source installer seeds Hitch config with <code>hitch config init</code> and adds missing managed default sections to existing valid config. <code>hitch-client install</code> installs managed hooks and extensions for supported harnesses.</p>
+            <p>Run Hitch as a local daemon for your own agents, or point hook shims at a shared Hitch service for team-wide lifecycle routing and observability. The same handler protocol works in both modes.</p><p>Hitch stores events in SQLite today for inspection and replay. Additional storage and observability backends are planned as the event contract matures.</p><p>The source installer seeds Hitch config with <code>hitch config init</code> and adds missing managed default sections to existing valid config. <code>hitch-client install</code> installs managed hooks and extensions for supported harnesses.</p>
           </div>
           <div class="callout">
             <pre class="code-block"><code>curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
@@ -166,7 +166,7 @@ hitch-client install --only opencode --yes --json</code></pre>
     </main>
 
     <footer class="footer">
-      <span>Hitch is the universal event layer for agent harnesses.</span>
+      <span>Hitch is the universal event and observability layer for agent harnesses.</span>
       <span> · </span>
       <a href="docs/latest/">Docs</a>
       <span> · </span>
