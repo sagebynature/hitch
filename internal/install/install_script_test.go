@@ -1,3 +1,6 @@
+//go:build !windows
+// +build !windows
+
 package install
 
 import (
@@ -9,6 +12,11 @@ import (
 	"syscall"
 	"testing"
 )
+
+type buildTarget struct {
+	Binary  string
+	Package string
+}
 
 type installScriptResult struct {
 	Output     string
@@ -23,8 +31,8 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 		env        map[string]string
 		wantFiles  []string
 		denyFiles  []string
-		wantBuild  []string
-		denyBuild  []string
+		wantBuild  []buildTarget
+		denyBuild  []buildTarget
 		wantLog    []string
 		denyLog    []string
 		wantOutput []string
@@ -36,9 +44,9 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 				"HITCH_SKIP_HOOK_INSTALL": "1",
 			},
 			wantFiles: []string{"hitch", "hitch-client"},
-			wantBuild: []string{
-				"/hitch ./cmd/hitch",
-				"/hitch-client ./cmd/hitch-client",
+			wantBuild: []buildTarget{
+				{Binary: "hitch", Package: "./cmd/hitch"},
+				{Binary: "hitch-client", Package: "./cmd/hitch-client"},
 			},
 			wantLog: []string{
 				"hitch --version",
@@ -54,11 +62,11 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 			},
 			wantFiles: []string{"hitch"},
 			denyFiles: []string{"hitch-client"},
-			wantBuild: []string{
-				"/hitch ./cmd/hitch",
+			wantBuild: []buildTarget{
+				{Binary: "hitch", Package: "./cmd/hitch"},
 			},
-			denyBuild: []string{
-				"/hitch-client ./cmd/hitch-client",
+			denyBuild: []buildTarget{
+				{Binary: "hitch-client", Package: "./cmd/hitch-client"},
 			},
 			wantLog: []string{
 				"hitch --version",
@@ -79,11 +87,11 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 			},
 			wantFiles: []string{"hitch-client"},
 			denyFiles: []string{"hitch"},
-			wantBuild: []string{
-				"/hitch-client ./cmd/hitch-client",
+			wantBuild: []buildTarget{
+				{Binary: "hitch-client", Package: "./cmd/hitch-client"},
 			},
-			denyBuild: []string{
-				"/hitch ./cmd/hitch",
+			denyBuild: []buildTarget{
+				{Binary: "hitch", Package: "./cmd/hitch"},
 			},
 			wantLog: []string{
 				"hitch-client --version",
@@ -119,12 +127,12 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 			}
 			for _, want := range tc.wantBuild {
 				if !hasBuildTarget(result.Log, want) {
-					t.Fatalf("installer log missing build target %q\nlog:\n%s\noutput:\n%s", want, result.Log, result.Output)
+					t.Fatalf("installer log missing build target %+v\nlog:\n%s\noutput:\n%s", want, result.Log, result.Output)
 				}
 			}
 			for _, deny := range tc.denyBuild {
 				if hasBuildTarget(result.Log, deny) {
-					t.Fatalf("installer log unexpectedly contains build target %q\nlog:\n%s\noutput:\n%s", deny, result.Log, result.Output)
+					t.Fatalf("installer log unexpectedly contains build target %+v\nlog:\n%s\noutput:\n%s", deny, result.Log, result.Output)
 				}
 			}
 			for _, want := range tc.wantLog {
@@ -151,9 +159,16 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 	}
 }
 
-func hasBuildTarget(log string, target string) bool {
+func hasBuildTarget(log string, target buildTarget) bool {
 	for _, line := range strings.Split(log, "\n") {
-		if strings.HasPrefix(line, "go build -o ") && strings.Contains(line, target) {
+		fields := strings.Fields(line)
+		if len(fields) != 5 {
+			continue
+		}
+		if fields[0] != "go" || fields[1] != "build" || fields[2] != "-o" {
+			continue
+		}
+		if filepath.Base(fields[3]) == target.Binary && fields[4] == target.Package {
 			return true
 		}
 	}
