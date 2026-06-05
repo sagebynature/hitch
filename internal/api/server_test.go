@@ -204,3 +204,52 @@ func TestDefaultConfigExcludesNoisySourceEventsButAllowsOptIn(t *testing.T) {
 		t.Fatalf("opt-in mapping did not use llm.requested: %#v", inspection.Normalized)
 	}
 }
+
+func TestIngestPersistsDerivedAssistantCompletionEvent(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	s := New(testConfig(), slog.Default(), st)
+
+	body := `{"harness":"pi","source_event_type":"turn_end","source_payload":{"event":{"type":"turn_end","turnIndex":3,"message":{"role":"assistant","content":[{"type":"text","text":"done"}]},"toolResults":[]},"metadata":{"session_id":"session_1","turn_id":"turn_3","cwd":"/tmp/hitch","model":"gpt-test","transcript_path":"/tmp/transcript.jsonl"}},"hitch_client_version":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("event code %d body %s", w.Code, w.Body.String())
+	}
+	var resp EventResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	primary, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if primary.Normalized.HitchEventType != protocol.EventTurnCompleted {
+		t.Fatalf("primary mapping changed: %#v", primary.Normalized)
+	}
+	derivedID, err := st.LatestEventIDByType(ctx, protocol.EventTurnAssistantCompleted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if derivedID == resp.NormalizedEventID {
+		t.Fatalf("derived event reused primary id %q", derivedID)
+	}
+	derived, err := st.InspectEvent(ctx, derivedID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if derived.Normalized.InboundEventID != primary.Normalized.InboundEventID {
+		t.Fatalf("derived event not tied to same inbound event: primary=%#v derived=%#v", primary.Normalized, derived.Normalized)
+	}
+	if derived.Normalized.Envelope.HitchEventType != protocol.EventTurnAssistantCompleted {
+		t.Fatalf("derived event has wrong type: %#v", derived.Normalized.Envelope)
+	}
+	if derived.Normalized.Envelope.SessionID != "session_1" || derived.Normalized.Envelope.TurnID != "turn_3" || derived.Normalized.Envelope.Model != "gpt-test" {
+		t.Fatalf("derived event lost metadata: %#v", derived.Normalized.Envelope)
+	}
+}

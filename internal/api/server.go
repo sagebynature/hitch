@@ -141,10 +141,39 @@ func (s *Server) ingest(ctx context.Context, r *http.Request, sync bool) (EventR
 	if err := s.store.InsertNormalized(ctx, store.NormalizedEvent{ID: normalizedID, InboundEventID: inboundID, HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: protocol.Version}); err != nil {
 		return EventResponse{}, protocol.EventEnvelope{}, err
 	}
+	if derivedType, ok := derivedEventType(env); ok {
+		derived := env
+		derived.EventID = harness.NewID("evt")
+		derived.HitchEventType = derivedType
+		if err := s.store.InsertNormalized(ctx, store.NormalizedEvent{ID: harness.NewID("norm"), InboundEventID: inboundID, HitchEventType: derived.HitchEventType, Envelope: derived, MappingVersion: protocol.Version}); err != nil {
+			return EventResponse{}, protocol.EventEnvelope{}, err
+		}
+	}
 	if !sync {
 		go s.dispatchAsync(context.Background(), normalizedID, env)
 	}
 	return EventResponse{EventID: env.EventID, NormalizedEventID: normalizedID}, env, nil
+}
+
+func derivedEventType(env protocol.EventEnvelope) (protocol.EventType, bool) {
+	if env.HitchEventType == protocol.EventTurnAssistantCompleted {
+		return "", false
+	}
+	switch env.Harness {
+	case protocol.HarnessCodex:
+		if env.SourceEventType == "Stop" {
+			return protocol.EventTurnAssistantCompleted, true
+		}
+	case protocol.HarnessHermes:
+		if env.SourceEventType == "transform_llm_output" {
+			return protocol.EventTurnAssistantCompleted, true
+		}
+	case protocol.HarnessPi:
+		if env.SourceEventType == "turn_end" {
+			return protocol.EventTurnAssistantCompleted, true
+		}
+	}
+	return "", false
 }
 
 func (s *Server) dispatchAsync(ctx context.Context, normalizedID string, env protocol.EventEnvelope) {

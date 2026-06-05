@@ -34,11 +34,18 @@ func ExtractSourceMetadata(sourcePayload protocol.RawJSON) SourceMetadata {
 	var wrapped struct {
 		SourceMetadata
 		Extra struct {
+			SourceMetadata
 			TaskID string `json:"task_id"`
 		} `json:"extra"`
 	}
 	_ = json.Unmarshal(sourcePayload, &wrapped)
 	meta := wrapped.SourceMetadata
+	if meta.TurnID == "" {
+		meta.TurnID = wrapped.Extra.TurnID
+	}
+	if meta.Model == "" {
+		meta.Model = wrapped.Extra.Model
+	}
 	if meta.SessionID == "" && wrapped.Extra.TaskID != "default" {
 		meta.SessionID = wrapped.Extra.TaskID
 	}

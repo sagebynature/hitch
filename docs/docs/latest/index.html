@@ -154,6 +154,7 @@ mode = "sync"
 timeout_ms = 1000
 on_error = "fail_closed"
 on_timeout = "fail_closed"</code></pre>
+          <p><code>turn.assistant_completed</code> is the consistent assistant-output-complete audit signal. Hitch derives it from Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, and Pi <code>turn_end</code>, while OMP emits it directly from <code>message_end</code>. Derived audit rows are not used for sync native-response translation or live handler dispatch.</p>
           <h3>Payload logger for every harness</h3>
           <p><code>examples/handlers/payload_logger.py</code> appends each event payload to a JSONL log and returns <code>behavior:"none"</code>. Configure one sync handler and one async handler with <code>events = ["*"]</code> to observe Codex, Hermes, Pi, and OMP without changing control flow.</p>
           <pre class="code-block"><code>[handlers.payload_logger_sync]
@@ -196,8 +197,8 @@ on_timeout = "fail_open"</code></pre>
               <tr><td><code>turn.started</code></td><td>A model or agent turn begins.</td></tr>
               <tr><td><code>turn.user_prompt</code></td><td>User input or gateway dispatch is submitted.</td></tr>
               <tr><td><code>turn.assistant_started</code></td><td>Assistant output starts; retained for compatibility with earlier configs.</td></tr>
-              <tr><td><code>turn.assistant_completed</code></td><td>Assistant output is available.</td></tr>
-              <tr><td><code>turn.completed</code></td><td>A model or agent turn completes.</td></tr>
+              <tr><td><code>turn.assistant_completed</code></td><td>Assistant output is available. Hitch may persist this as a derived audit row in addition to the primary source-event mapping.</td></tr>
+              <tr><td><code>turn.completed</code></td><td>A model or agent turn completes. This is distinct from assistant-output completion when a harness exposes both boundaries.</td></tr>
               <tr><td><code>llm.requested</code></td><td>A provider/LLM request is about to be sent. High-volume provider payloads are opt-in for Pi/OMP defaults.</td></tr>
               <tr><td><code>llm.completed</code></td><td>A provider/LLM response or transformed model output is available.</td></tr>
               <tr><td><code>tool.requested</code></td><td>A tool command, shell command, or tool call is requested before execution.</td></tr>
@@ -211,6 +212,9 @@ on_timeout = "fail_open"</code></pre>
               <tr><td><code>error.reported</code></td><td>A normalized harness error or credential failure is reported.</td></tr>
             </tbody>
           </table>
+
+          <h3>Derived normalized events</h3>
+          <p>Most source events produce one primary normalized event from <code>[harness.&lt;name&gt;.event_map]</code>. Hitch also persists secondary audit rows for assistant-output completion from Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, and Pi <code>turn_end</code>. Derived rows share the same inbound event and payload as the primary row and are for audit/query consistency; they are not dispatched to live handlers or used for sync native-response translation.</p>
 
           <h3>Codex event mapping</h3>
           <table>

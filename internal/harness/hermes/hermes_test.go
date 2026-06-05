@@ -37,6 +37,23 @@ func TestNormalizeUsesHermesTaskIDFallback(t *testing.T) {
 	}
 }
 
+func TestNormalizeCopiesHermesNestedTurnAndModelMetadata(t *testing.T) {
+	env, err := (Mapper{}).Normalize("pre_tool_call", protocol.Raw(map[string]interface{}{
+		"session_id": "session_1",
+		"cwd":        "/tmp/hitch",
+		"extra": map[string]interface{}{
+			"turn_id": "turn_nested",
+			"model":   "gpt-test",
+		},
+	}), protocol.EventToolRequested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.SessionID != "session_1" || env.TurnID != "turn_nested" || env.Model != "gpt-test" {
+		t.Fatalf("nested metadata not copied: %#v", env)
+	}
+}
+
 func TestNormalizeIgnoresHermesDefaultTaskID(t *testing.T) {
 	env, err := (Mapper{}).Normalize("transform_terminal_output", protocol.Raw(map[string]interface{}{
 		"session_id": "",

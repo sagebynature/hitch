@@ -44,8 +44,8 @@ Keys are source hook/callback names. Values must be valid Hitch event names from
 | `turn.started` | A model or agent turn begins. |
 | `turn.user_prompt` | User input or gateway dispatch is submitted. |
 | `turn.assistant_started` | Assistant output starts; retained for compatibility with earlier configs. |
-| `turn.assistant_completed` | Assistant output is available. |
-| `turn.completed` | A model or agent turn completes. |
+| `turn.assistant_completed` | Assistant output is available. Hitch may persist this as a derived audit row in addition to the primary source-event mapping. |
+| `turn.completed` | A model or agent turn completes. This is distinct from assistant-output completion when a harness exposes both boundaries. |
 | `llm.requested` | A provider/LLM request is about to be sent. High-volume provider payloads are opt-in for Pi/OMP defaults. |
 | `llm.completed` | A provider/LLM response or transformed model output is available. |
 | `tool.requested` | A tool command, shell command, or tool call is requested before execution. |
@@ -57,6 +57,18 @@ Keys are source hook/callback names. Values must be valid Hitch event names from
 | `subagent.started` | A subagent starts. |
 | `subagent.completed` | A subagent completes or stops. |
 | `error.reported` | A normalized harness error or credential failure is reported. |
+
+## Derived normalized events
+
+Most source events produce one primary normalized event from `[harness.<name>.event_map]`. A small set also produces a secondary normalized audit row so queries can interpret assistant-output completion consistently across harnesses without changing the primary lifecycle mapping:
+
+| Source event | Primary Hitch event | Derived Hitch event |
+| --- | --- | --- |
+| Codex `Stop` | `turn.completed` | `turn.assistant_completed` |
+| Hermes `transform_llm_output` | `llm.completed` | `turn.assistant_completed` |
+| Pi `turn_end` | `turn.completed` | `turn.assistant_completed` |
+
+Derived rows share the same inbound event and payload as the primary row. They are for audit/query consistency and are not dispatched to live handlers; sync handler decisions and native responses are evaluated against the primary event only.
 
 ## Codex source events
 
