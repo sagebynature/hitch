@@ -499,6 +499,7 @@ h3 { margin: 0 0 .7rem; font-size: clamp(1.35rem, 1.8vw, 1.8rem); letter-spacing
   gap: clamp(2rem, 4vw, 4rem);
   padding: clamp(2rem, 5vw, 5rem) 0;
 }
+.docs-hero { padding-bottom: clamp(2rem, 5vw, 4rem); border-bottom: 1px solid var(--line); }
 .docs-sidebar {
   position: sticky;
   top: 88px;
@@ -509,6 +510,7 @@ h3 { margin: 0 0 .7rem; font-size: clamp(1.35rem, 1.8vw, 1.8rem); letter-spacing
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: linear-gradient(180deg, rgb(255 255 255 / 0.055), rgb(255 255 255 / 0.025));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 18px 48px var(--shadow);
 }
 .docs-sidebar a {
   display: block;
@@ -520,8 +522,10 @@ h3 { margin: 0 0 .7rem; font-size: clamp(1.35rem, 1.8vw, 1.8rem); letter-spacing
 }
 .docs-sidebar a:hover { background: rgb(255 255 255 / 0.055); color: var(--text); }
 .docs-content { max-width: 820px; }
+.docs-content section { padding: clamp(2rem, 5vw, 4rem) 0; border-bottom: 1px solid var(--line); }
+.docs-content section:last-child { border-bottom: 0; }
 .docs-content h1 { max-width: none; font-size: clamp(3.1rem, 8vw, 6.4rem); }
-.docs-content h2 { margin-top: 4rem; font-size: clamp(2.25rem, 4.4vw, 4.1rem); }
+.docs-content h2 { margin-top: 0; font-size: clamp(2.25rem, 4.4vw, 4.1rem); }
 .docs-content h3 { margin-top: 2rem; }
 .docs-content p, .docs-content li { color: var(--copy); }
 .docs-content li + li { margin-top: .35rem; }
