@@ -41,7 +41,7 @@ Installer behavior verified by tests:
 - Hermes hook installation covers `pre_tool_call`, `post_tool_call`, `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`, `subagent_stop`, `transform_tool_result`, `transform_terminal_output`, `transform_llm_output`, and `pre_gateway_dispatch`, and is idempotent.
 - Pi extension installation covers Pi's documented extension event callbacks and is idempotent.
 - Generated Codex and Hermes hook commands embed the resolved Hitch API URL and use `hitch-client` when it is available.
-- Generated Pi extensions embed the resolved Hitch API URL and fail open if Hitch is unavailable.
+- Generated Pi extensions embed the resolved Hitch API URL, promote Pi `ctx` metadata into Hitch envelope fields when available, and fail open if Hitch is unavailable.
 - Existing Codex, Hermes, and Pi hook configuration is backed up before Hitch modifies it.
 - Unsupported available harnesses are reported as skipped.
 - Unknown harness names are rejected.

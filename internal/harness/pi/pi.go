@@ -10,6 +10,20 @@ import (
 
 type Mapper struct{}
 
+type nativePayloadEnvelope struct {
+	Event  protocol.RawJSON `json:"event"`
+	Meta   nativeMetadata   `json:"metadata"`
+	Legacy protocol.RawJSON `json:"payload"`
+}
+
+type nativeMetadata struct {
+	SessionID      string `json:"session_id"`
+	TurnID         string `json:"turn_id"`
+	CWD            string `json:"cwd"`
+	Model          string `json:"model"`
+	TranscriptPath string `json:"transcript_path"`
+}
+
 type AdapterResponse struct {
 	AdapterAction string      `json:"adapter_action"`
 	ReturnValue   interface{} `json:"return_value,omitempty"`
@@ -46,8 +60,28 @@ func (Mapper) Map(nativeEventType string, nativePayload protocol.RawJSON) (proto
 	if !ok {
 		return protocol.EventEnvelope{}, fmt.Errorf("unsupported pi event %q", nativeEventType)
 	}
-	env := harness.NewEnvelope(protocol.HarnessPi, nativeEventType, nativePayload, eventType, nativePayload)
+	eventPayload, meta := unwrapNativePayload(nativePayload)
+	env := harness.NewEnvelope(protocol.HarnessPi, nativeEventType, eventPayload, eventType, eventPayload)
+	env.SessionID = meta.SessionID
+	env.TurnID = meta.TurnID
+	env.CWD = meta.CWD
+	env.Model = meta.Model
+	env.TranscriptPath = meta.TranscriptPath
 	return env, protocol.ValidateEnvelope(env)
+}
+
+func unwrapNativePayload(nativePayload protocol.RawJSON) (protocol.RawJSON, nativeMetadata) {
+	var wrapped nativePayloadEnvelope
+	if err := json.Unmarshal(nativePayload, &wrapped); err != nil {
+		return nativePayload, nativeMetadata{}
+	}
+	if len(wrapped.Event) != 0 && json.Valid(wrapped.Event) {
+		return wrapped.Event, wrapped.Meta
+	}
+	if len(wrapped.Legacy) != 0 && json.Valid(wrapped.Legacy) {
+		return wrapped.Legacy, wrapped.Meta
+	}
+	return nativePayload, nativeMetadata{}
 }
 
 func (Mapper) Translate(nativeEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {

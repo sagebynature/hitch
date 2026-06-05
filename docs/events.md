@@ -14,10 +14,10 @@ Every harness mapper creates the same envelope shape:
 | `harness` | Adapter selection | One of `codex`, `hermes`, `pi`, or `omp`. |
 | `harness_version` | Adapter payload or future metadata | Optional. Current mappers do not populate it. |
 | `native_event_type` | Harness source event name | The exact native hook or callback name Hitch mapped. |
-| `native_payload` | Harness source payload | The original JSON payload received by Hitch. |
+| `native_payload` | Harness source payload | The original JSON payload received by Hitch. Pi unwraps the installed extension transport envelope before normalization. |
 | `hitch_event_type` | Hitch mapper | One of the normalized event names below. |
-| `session_id`, `turn_id`, `cwd`, `model`, `transcript_path` | Future or adapter-specific metadata | Optional. Current mappers do not extract these fields. |
-| `payload` | Hitch mapper | Current mappers preserve the native payload unchanged. |
+| `session_id`, `turn_id`, `cwd`, `model`, `transcript_path` | Adapter metadata | Optional. The Pi installed extension supplies these from Pi `ctx` and event fields when available. |
+| `payload` | Hitch mapper | Current mappers preserve the native event payload unchanged after any adapter transport unwrapping. |
 
 Unsupported native event types are rejected. Hitch does not silently coerce unknown source events into a generic type.
 

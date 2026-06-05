@@ -255,7 +255,7 @@ func TestApplyOpsInstallsPiExtensionIdempotentlyAndBacksUpExistingFile(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(first), `const HITCH_API_URL = "http://127.0.0.1:8797";`) || !strings.Contains(string(first), `pi.on(nativeEventType`) || !strings.Contains(string(first), `"tool_call"`) {
+	if !strings.Contains(string(first), `const HITCH_API_URL = "http://127.0.0.1:8797";`) || !strings.Contains(string(first), `pi.on(nativeEventType, async (event, ctx)`) || !strings.Contains(string(first), `metadata: collectMetadata(event, ctx)`) || !strings.Contains(string(first), `"tool_call"`) {
 		t.Fatalf("Pi extension did not embed expected adapter logic: %s", first)
 	}
 	if err := applyOps(ops, false); err != nil {

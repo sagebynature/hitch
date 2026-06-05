@@ -664,10 +664,68 @@ function applyAdapterResponse(adapterResponse, event) {
   return undefined;
 }
 
-async function dispatchToHitch(nativeEventType, event) {
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.length > 0) return value;
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
+}
+
+function sessionFileFrom(ctx) {
+  const manager = ctx?.sessionManager;
+  if (!manager) return undefined;
+  try {
+    if (typeof manager.getSessionFile === "function") return manager.getSessionFile();
+  } catch {}
+  return firstString(manager.sessionFile, manager.file, manager.path);
+}
+
+function sessionIDFrom(event, ctx, transcriptPath) {
+  const direct = firstString(event?.session_id, event?.sessionId, ctx?.session_id, ctx?.sessionId);
+  if (direct) return direct;
+  const manager = ctx?.sessionManager;
+  try {
+    const id = manager && typeof manager.getSessionId === "function" ? manager.getSessionId() : undefined;
+    if (id) return String(id);
+  } catch {}
+  const fromManager = firstString(manager?.session_id, manager?.sessionId, manager?.id);
+  if (fromManager) return fromManager;
+  if (typeof transcriptPath === "string" && transcriptPath.length > 0) {
+    const name = transcriptPath.split(/[\\/]/).pop() || transcriptPath;
+    return name.replace(/\.(jsonl|json)$/i, "");
+  }
+  return undefined;
+}
+
+function modelString(model) {
+  if (typeof model === "string") return model;
+  if (!model || typeof model !== "object") return undefined;
+  const provider = firstString(model.provider, model.providerId, model.vendor);
+  const id = firstString(model.id, model.model, model.name);
+  if (provider && id) return provider + "/" + id;
+  return id || provider;
+}
+
+function collectMetadata(event, ctx) {
+  const transcriptPath = firstString(event?.transcript_path, event?.transcriptPath, sessionFileFrom(ctx));
+  return {
+    session_id: sessionIDFrom(event, ctx, transcriptPath),
+    turn_id: firstString(event?.turn_id, event?.turnId, event?.turnIndex),
+    cwd: firstString(event?.cwd, ctx?.cwd),
+    model: firstString(event?.model) || modelString(event?.model) || modelString(ctx?.model),
+    transcript_path: transcriptPath
+  };
+}
+
+
+async function dispatchToHitch(nativeEventType, event, ctx) {
   let nativePayload;
   try {
-    nativePayload = JSON.parse(JSON.stringify(event ?? {}));
+    nativePayload = {
+      event: JSON.parse(JSON.stringify(event ?? {})),
+      metadata: collectMetadata(event, ctx)
+    };
   } catch {
     return undefined;
   }
@@ -693,7 +751,7 @@ async function dispatchToHitch(nativeEventType, event) {
 
 export default function(pi) {
   for (const nativeEventType of HITCH_EVENTS) {
-    pi.on(nativeEventType, async (event) => dispatchToHitch(nativeEventType, event));
+    pi.on(nativeEventType, async (event, ctx) => dispatchToHitch(nativeEventType, event, ctx));
   }
 }
 `, piManagedExtensionMarker, urlLiteral, strings.Join(events, ", "))), nil
