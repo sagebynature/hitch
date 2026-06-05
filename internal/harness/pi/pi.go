@@ -35,13 +35,20 @@ type Mutation struct {
 }
 
 func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
+	return NormalizeForHarness(protocol.HarnessPi, sourceEventType, sourcePayload, hitchEventType)
+}
+
+func NormalizeForHarness(h protocol.Harness, sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
 	eventPayload, meta := unwrapSourcePayload(sourcePayload)
-	env := harness.NewEnvelope(protocol.HarnessPi, sourceEventType, eventPayload, hitchEventType, eventPayload)
+	env := harness.NewEnvelope(h, sourceEventType, eventPayload, hitchEventType, eventPayload)
 	env.SessionID = meta.SessionID
 	env.TurnID = meta.TurnID
 	env.CWD = meta.CWD
 	env.Model = meta.Model
 	env.TranscriptPath = meta.TranscriptPath
+	if env.SessionID == "" && env.TurnID == "" && env.CWD == "" && env.Model == "" && env.TranscriptPath == "" {
+		harness.ApplySourceMetadata(&env, eventPayload)
+	}
 	return env, protocol.ValidateEnvelope(env)
 }
 
@@ -108,7 +115,7 @@ func TranslateForHarness(sourceEventType string, aggregate protocol.AggregateDec
 			resp.AdapterAction = "return"
 			resp.ReturnValue = v
 		}
-	case "session_before_switch", "session_before_fork", "session_before_compact":
+	case "session_before_switch", "session_before_fork", "session_before_branch", "session_before_compact", "session_before_tree":
 		if d.Behavior == protocol.BehaviorBlock || d.Behavior == protocol.BehaviorStop {
 			resp.AdapterAction = "return"
 			resp.ReturnValue = map[string]interface{}{"cancel": true}

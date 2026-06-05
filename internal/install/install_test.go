@@ -255,6 +255,61 @@ func TestApplyOpsInstallsPiExtensionIdempotentlyAndBacksUpExistingFile(t *testin
 	}
 }
 
+func TestApplyOpsInstallsOMPExtensionIdempotentlyAndBacksUpExistingFile(t *testing.T) {
+	prepareInstallerTest(t, "omp")
+
+	ops, err := plannedOps([]string{"omp"}, false, "http://127.0.0.1:8797")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ops) != 1 || ops[0].Action != "install_omp_extension" {
+		t.Fatalf("unexpected operations: %#v", ops)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	hookOp := ops[0]
+	first, err := os.ReadFile(hookOp.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(first)
+	for _, needle := range []string{
+		`const HITCH_API_URL = "http://127.0.0.1:8797";`,
+		`pi.on(sourceEventType, async (event, ctx)`,
+		`metadata: collectMetadata(event, ctx)`,
+		`"session_before_branch"`,
+		`"session.compacting"`,
+		`harness: "omp"`,
+		`hitch_client_version: "hitch-omp-extension"`,
+	} {
+		if !strings.Contains(content, needle) {
+			t.Fatalf("OMP extension missing %q: %s", needle, content)
+		}
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(hookOp.BackupPath); !os.IsNotExist(err) {
+		t.Fatalf("idempotent OMP install should not create backup: %v", err)
+	}
+
+	existing := "// user-owned extension\nexport default function(pi) {}\n"
+	if err := os.WriteFile(hookOp.Path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyOps(ops, false); err != nil {
+		t.Fatal(err)
+	}
+	backup, err := os.ReadFile(hookOp.BackupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(backup) != existing {
+		t.Fatalf("backup did not preserve previous OMP extension: %q", backup)
+	}
+}
+
 func TestApplyOpsUninstallRemovesOnlyManagedPiExtension(t *testing.T) {
 	prepareInstallerTest(t, "pi")
 
@@ -414,15 +469,18 @@ func TestDetectHarnessesReportsAvailabilityAndSupport(t *testing.T) {
 	}
 }
 
-func TestPlannedOpsSkipsUnsupportedAvailableHarness(t *testing.T) {
+func TestPlannedOpsInstallsAvailableOMPHarness(t *testing.T) {
 	prepareInstallerTest(t, "omp")
 
 	ops, err := plannedOps([]string{"omp"}, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ops) != 1 || ops[0].Action != "skip" || ops[0].Status != "skipped" {
-		t.Fatalf("unexpected unsupported harness plan: %#v", ops)
+	if len(ops) != 1 || ops[0].Action != "install_omp_extension" || ops[0].Status != "planned" {
+		t.Fatalf("unexpected OMP harness plan: %#v", ops)
+	}
+	if !strings.HasSuffix(ops[0].Path, filepath.Join(".omp", "agent", "extensions", "hitch", "index.ts")) {
+		t.Fatalf("unexpected OMP extension path: %q", ops[0].Path)
 	}
 }
 

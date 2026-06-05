@@ -119,10 +119,11 @@ Hitch currently includes:
 - Codex shell hook installation into `~/.codex/hooks.json`.
 - Codex and Hermes shell hook shim entrypoints via `hitch-client`.
 - Pi TypeScript extension hook installation into `~/.pi/agent/extensions/hitch/index.ts`.
+- OMP TypeScript extension hook installation into `~/.omp/agent/extensions/hitch/index.ts`.
 - Server config seeding via `hitch config init` for `~/.config/hitch/config.toml`.
 - Harness detection for Codex, Hermes, Pi, and OMP.
 
-The source installer creates missing Hitch user config with `hitch config init`. `hitch-client install` installs supported Codex and Hermes hooks, installs a managed Pi extension, and prefers `hitch-client` in managed shell-hook commands when it is installed beside `hitch`. OMP is detected and reported, but real hook patching is not implemented for it yet.
+The source installer creates missing Hitch user config with `hitch config init`. `hitch-client install` installs supported Codex and Hermes hooks, installs managed Pi and OMP extensions, and prefers `hitch-client` in managed shell-hook commands when it is installed beside `hitch`.
 
 Preview hook installation:
 

@@ -133,14 +133,17 @@ OMP reuses the Pi adapter response contract for translated native responses.
 
 | OMP source event | Hitch event | Normalized payload | Adapter response behavior |
 | --- | --- | --- | --- |
-| `input` | `turn.user_prompt` | Original OMP payload | Same translation as Pi `input`. |
-| `before_agent_start` | `turn.started` | Original OMP payload | No special translation; `adapter_action:"noop"`. |
-| `turn_start` | `turn.started` | Original OMP payload | No special translation; `adapter_action:"noop"`. |
-| `tool_call` | `tool.requested` | Original OMP payload | Same translation as Pi `tool_call`. |
-| `tool_result` | `tool.completed` | Original OMP payload | Same translation as Pi `tool_result`. |
-| `turn_end` | `turn.completed` | Original OMP payload | No special translation; `adapter_action:"noop"`. |
-| `auto_compaction_start` | `session.compacted` | Original OMP payload | No special translation; `adapter_action:"noop"`. |
-| `todo_reminder` | `turn.started` | Original OMP payload | No special translation; `adapter_action:"noop"`. |
+| `input` | `turn.user_prompt` | Unwrapped OMP extension `event` payload when posted by the managed extension; bare payloads remain compatible. | Same translation as Pi `input`. |
+| `before_agent_start`, `agent_start`, `turn_start`, `context`, `before_provider_request`, `message_update`, `ttsr_triggered`, `todo_reminder`, `goal_updated` | `turn.started` | OMP payload | `context` and `before_provider_request` may return transformed input; otherwise `adapter_action:"noop"`. |
+| `message_start` | `turn.assistant_started` | OMP payload | No special translation; `adapter_action:"noop"`. |
+| `agent_end`, `turn_end`, `after_provider_response`, `message_end`, `auto_retry_end` | `turn.completed` | OMP payload | No special translation; `adapter_action:"noop"`. |
+| `tool_call`, `tool_execution_start`, `user_bash`, `user_python` | `tool.requested` | OMP payload | `tool_call` uses Pi block/transform translation; the others are observational unless `native_response` is supplied. |
+| `tool_result`, `tool_execution_update`, `tool_execution_end` | `tool.completed` | OMP payload | `tool_result` uses Pi result replacement translation; the others are observational unless `native_response` is supplied. |
+| `session_start` | `session.started` | OMP payload | No special translation; `adapter_action:"noop"`. |
+| `session_before_switch`, `session_switch`, `session_before_branch`, `session_branch`, `session_before_tree`, `session_tree` | `session.resumed` | OMP payload | `session_before_switch`, `session_before_branch`, and `session_before_tree` can return `{cancel:true}` for `block` or `stop`. |
+| `session_before_compact`, `session.compacting`, `session_compact`, `auto_compaction_start`, `auto_compaction_end` | `session.compacted` | OMP payload | `session_before_compact` can return `{cancel:true}` for `block` or `stop`; other compaction customization uses `native_response`. |
+| `session_shutdown` | `session.ended` | OMP payload | No special translation; `adapter_action:"noop"`. |
+| `credential_disabled` | `error.reported` | OMP payload | No special translation; `adapter_action:"noop"`. |
 
 OMP handlers may also return `decision.native_response`. When present, Hitch returns that adapter response JSON directly.
 
