@@ -76,7 +76,7 @@ var ompExtensionEvents = []string{
 	"after_provider_response",
 	"context",
 	"message_start",
-	"message_update",
+	// "message_update",
 	"message_end",
 	"tool_call",
 	"tool_result",

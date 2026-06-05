@@ -12,7 +12,7 @@ include_native_payload = false
 enabled = true
 
 [log.file]
-enabled = false
+enabled = true
 path = "~/.config/hitch/hitch.log"
 max_size_mb = 100
 max_backups = 10
@@ -98,7 +98,7 @@ before_provider_request = "turn.started"
 after_provider_response = "turn.completed"
 context = "turn.started"
 message_start = "turn.assistant_started"
-message_update = "turn.assistant_started"
+# message_update = "turn.assistant_started" // too verbose
 message_end = "turn.completed"
 tool_call = "tool.requested"
 tool_result = "tool.completed"
