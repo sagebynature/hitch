@@ -53,6 +53,7 @@ temp/
 .cache/
 
 # Keep planning artifacts if present
+.superpowers/
 .omx/
 !.omx/plans/
 !.omx/plans/**
