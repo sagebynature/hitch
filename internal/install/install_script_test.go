@@ -25,6 +25,7 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 		wantLog    []string
 		denyLog    []string
 		wantOutput []string
+		denyOutput []string
 	}{
 		{
 			name: "default all installs server and client",
@@ -42,8 +43,7 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 		{
 			name: "server installs only server binary and config",
 			env: map[string]string{
-				"HITCH_INSTALL_MODE":      "server",
-				"HITCH_SKIP_HOOK_INSTALL": "1",
+				"HITCH_INSTALL_MODE": "server",
 			},
 			wantFiles: []string{"hitch"},
 			denyFiles: []string{"hitch-client"},
@@ -56,6 +56,7 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 				"hitch-client install",
 			},
 			wantOutput: []string{"Installed Hitch server to"},
+			denyOutput: []string{"Run hook setup with:"},
 		},
 		{
 			name: "client installs only client binary and prints manual hook setup without tty",
@@ -110,6 +111,11 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 			for _, want := range tc.wantOutput {
 				if !strings.Contains(result.Output, want) {
 					t.Fatalf("installer output missing %q\noutput:\n%s", want, result.Output)
+				}
+			}
+			for _, deny := range tc.denyOutput {
+				if strings.Contains(result.Output, deny) {
+					t.Fatalf("installer output unexpectedly contains %q\noutput:\n%s", deny, result.Output)
 				}
 			}
 		})
