@@ -160,15 +160,9 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 }
 
 func hasBuildTarget(log string, target buildTarget) bool {
+	want := "go build output=" + target.Binary + " package=" + target.Package
 	for _, line := range strings.Split(log, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) != 5 {
-			continue
-		}
-		if fields[0] != "go" || fields[1] != "build" || fields[2] != "-o" {
-			continue
-		}
-		if filepath.Base(fields[3]) == target.Binary && fields[4] == target.Package {
+		if line == want {
 			return true
 		}
 	}
@@ -236,15 +230,22 @@ func writeFakeGo(t *testing.T, path string) {
 set -eu
 printf 'go %s\n' "$*" >> "$HITCH_TEST_LOG"
 out=
+pkg=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -o)
       shift
       out=$1
       ;;
+    -*)
+      ;;
+    *)
+      pkg=$1
+      ;;
   esac
   shift || break
 done
+printf 'go build output=%s package=%s\n' "${out##*/}" "$pkg" >> "$HITCH_TEST_LOG"
 if [ -z "$out" ]; then
   printf 'fake go: missing -o\n' >&2
   exit 2
