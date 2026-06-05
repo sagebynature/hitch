@@ -39,7 +39,7 @@ Verified API endpoints:
 Install from latest source:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
 ```
 
 Or build the CLI locally:

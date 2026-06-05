@@ -71,7 +71,7 @@ jobs:
         run: make install-dry-run
 
       - name: Check installer shell syntax
-        run: sh -n install.sh
+        run: sh -n scripts/install.sh
 
       - name: Package release artifacts
         run: scripts/package-release.sh "$VERSION"

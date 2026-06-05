@@ -3,7 +3,7 @@
 Install from latest source:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
 ```
 
 The source installer checks for `git` and `go`, builds `./cmd/hitch` and `./cmd/hitch-client`, installs both binaries to `$HITCH_INSTALL_DIR` or `~/.local/bin`, verifies `hitch --version` and `hitch-client --version`, seeds `~/.config/hitch/config.toml` with `hitch config init`, prompts for a Hitch server URL through `/dev/tty` even when installed with `curl ... | sh`, and then offers to run hook setup.

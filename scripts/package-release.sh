@@ -66,8 +66,8 @@ package_root = out_dir / "packages"
 package_root.mkdir(parents=True, exist_ok=True)
 
 repo_files = [Path("README.md")]
-if Path("install.sh").exists():
-    repo_files.append(Path("install.sh"))
+if Path("scripts/install.sh").exists():
+    repo_files.append(Path("scripts/install.sh"))
 
 archives = []
 for build_dir in sorted(p for p in build_root.iterdir() if p.is_dir()):
@@ -85,14 +85,14 @@ for build_dir in sorted(p for p in build_root.iterdir() if p.is_dir()):
             zf.write(hitch_binary, arcname=hitch_binary.name)
             zf.write(client_binary, arcname=client_binary.name)
             for path in repo_files:
-                zf.write(path, arcname=path.name)
+                zf.write(path, arcname=str(path))
     else:
         archive = package_root / f"{name}.tar.gz"
         with tarfile.open(archive, "w:gz") as tf:
             tf.add(hitch_binary, arcname="hitch")
             tf.add(client_binary, arcname="hitch-client")
             for path in repo_files:
-                tf.add(path, arcname=path.name)
+                tf.add(path, arcname=str(path))
 
     archives.append(archive)
 

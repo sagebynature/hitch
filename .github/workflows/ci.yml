@@ -43,7 +43,7 @@ jobs:
         run: make install-dry-run
 
       - name: Check installer shell syntax
-        run: sh -n install.sh
+        run: sh -n scripts/install.sh
 
       - name: Run source installer smoke test
         env:
@@ -51,5 +51,5 @@ jobs:
           HITCH_INSTALL_DIR: ${{ runner.temp }}/hitch-bin
           HITCH_SKIP_HOOK_INSTALL: "1"
         run: |
-          ./install.sh
+          ./scripts/install.sh
           "$HITCH_INSTALL_DIR/hitch" --version

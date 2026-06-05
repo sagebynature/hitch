@@ -44,7 +44,7 @@ If `codex --version` fails, you can still run the manual Hitch API example, but 
 Run the installer:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
 ```
 
 The installer:
@@ -97,7 +97,7 @@ The default sample handler config uses `hitch handler noop-observer`, so `hitch`
 
 Use the config that matches how you installed Hitch.
 
-If you installed with `install.sh`, use the seeded user config:
+If you installed with `scripts/install.sh`, use the seeded user config:
 
 ```sh
 hitch serve --config ~/.config/hitch/config.toml
@@ -304,7 +304,7 @@ Expected response shape:
 
 Copy `normalized_event_id`, then inspect the persisted records with the same config path used by the server.
 
-For an `install.sh` setup:
+For a `scripts/install.sh` setup:
 
 ```sh
 hitch inspect-event --config ~/.config/hitch/config.toml norm_...

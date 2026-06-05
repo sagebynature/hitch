@@ -50,7 +50,7 @@
         </div>
         <aside class="terminal-card" aria-label="Install Hitch from source">
           <div class="terminal-top"><span>local install</span><span>127.0.0.1:8799</span></div>
-          <pre class="terminal-body"><code><span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
+          <pre class="terminal-body"><code><span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
 <span class="ok">✓</span> hitch 0.1.0
 
 <span class="prompt">$</span> hitch serve --config ~/.config/hitch/config.toml
@@ -125,7 +125,7 @@
             <p>The source installer seeds Hitch config with <code>hitch config init</code>. <code>hitch-client install</code> installs managed Codex command hooks into <code>~/.codex/hooks.json</code>, installs Hermes shell hooks into <code>~/.hermes/config.yaml</code>, installs a Pi extension into <code>~/.pi/agent/extensions/hitch/index.ts</code>, and installs an OMP extension into <code>~/.omp/agent/extensions/hitch/index.ts</code>.</p>
           </div>
           <div class="callout">
-            <pre class="code-block"><code>curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/install.sh | sh
+            <pre class="code-block"><code>curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
 hitch serve --config ~/.config/hitch/config.toml
 hitch status --json
 hitch doctor --json
