@@ -21,12 +21,15 @@ path_is_first() {
 }
 
 tty_available() {
-  [ -r /dev/tty ] && [ -w /dev/tty ]
+  [ -c /dev/tty ] || return 1
+  (: < /dev/tty) >/dev/null 2>&1
 }
 
 prompt_tty() {
-  printf '%s' "$1" > /dev/tty
+  answer=
+  printf '%s' "$1" > /dev/tty || return 1
   IFS= read -r answer < /dev/tty || answer=
+  return 0
 }
 
 
@@ -74,8 +77,7 @@ maybe_update_server_url() {
 
   command_text=$(server_url_command)
   config_file=$(shell_config_file)
-  if tty_available; then
-    prompt_tty "Persist HITCH_URL to $config_file for future harness launches? [Y/n] "
+  if tty_available && prompt_tty "Persist HITCH_URL to $config_file for future harness launches? [Y/n] "; then
     case "$answer" in
       n|N|no|NO) ;;
       *)
@@ -92,8 +94,7 @@ maybe_update_server_url() {
 
 configure_server_url() {
   default_url=${HITCH_URL:-http://127.0.0.1:8799}
-  if tty_available; then
-    prompt_tty "Hitch server URL [$default_url]: "
+  if tty_available && prompt_tty "Hitch server URL [$default_url]: "; then
     if [ -n "$answer" ]; then
       HITCH_URL=$answer
     else
@@ -115,8 +116,7 @@ maybe_update_path() {
   command_text=$(path_command)
   config_file=$(shell_config_file)
   printf '\nHitch was installed at %s/hitch, but that directory is not first on PATH.\n' "$HITCH_INSTALL_DIR"
-  if tty_available; then
-    prompt_tty "Add it to $config_file now? [Y/n] "
+  if tty_available && prompt_tty "Add it to $config_file now? [Y/n] "; then
     case "$answer" in
       n|N|no|NO) ;;
       *)
