@@ -20,8 +20,8 @@ Hitch has two handler modes. Choose the mode based on whether the source harness
 
 | Handler mode | Configure with | Triggered by | Use for | Response path |
 | --- | --- | --- | --- | --- |
-| Async observer | `mode = "async"` | `POST /v1/events` | Audit, metrics, passive logging, background indexing | Hitch ignores native responses. |
-| Sync control | `mode = "sync"` | `POST /v1/dispatch-sync` | Blocking tools, allowing tools, adding prompt context, rewriting input, replacing output | Hitch aggregates decisions and translates them to harness-native JSON. |
+| Async observer | `mode = "async"` | `POST /v1/events`, and after `POST /v1/dispatch-sync` for the same normalized event | Audit, metrics, passive logging, background indexing | Hitch ignores native responses. |
+| Sync control | `mode = "sync"` | `POST /v1/dispatch-sync` | Blocking tools, allowing tools, adding prompt context, rewriting input, replacing output | Hitch aggregates sync decisions and translates them to harness-native JSON. |
 
 Use async handlers when the harness should continue regardless of handler output. Use sync handlers when the harness needs a decision before it proceeds.
 
@@ -366,7 +366,7 @@ Use dry-run first when you only want to verify the stored event. Non-dry-run rep
 
 Check all of these:
 
-- The request path matches handler mode: `/v1/events` for async, `/v1/dispatch-sync` for sync.
+- The request path can reach the handler mode: `/v1/events` for async observers, `/v1/dispatch-sync` for sync handlers; async observers also run after sync dispatch for the same normalized event.
 - `events` contains the normalized Hitch event, not the source event.
 - The source event maps to the Hitch event you expect. See [`events.md`](events.md).
 - The command path is correct relative to the Hitch server working directory.

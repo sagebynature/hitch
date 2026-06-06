@@ -101,6 +101,7 @@ func (s *Server) handleDispatchSync(w http.ResponseWriter, r *http.Request) {
 	for _, inv := range result.Invocations {
 		_ = s.store.InsertHandlerInvocation(r.Context(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: resp.NormalizedEventID, HandlerName: inv.HandlerName, Mode: inv.Mode, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error})
 	}
+	go s.dispatchAsync(context.Background(), resp.NormalizedEventID, env)
 	runtime := s.harnesses[env.Harness]
 	native, err := runtime.normalizer.Translate(env.SourceEventType, result.Aggregate)
 	if err != nil {

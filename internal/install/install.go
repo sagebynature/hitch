@@ -64,6 +64,17 @@ var piExtensionEvents = []string{
 	"user_bash",
 }
 
+var piExtensionSyncEvents = []string{
+	"input",
+	"context",
+	"before_provider_request",
+	"tool_call",
+	"tool_result",
+	"session_before_switch",
+	"session_before_fork",
+	"session_before_compact",
+}
+
 var ompExtensionEvents = []string{
 	"input",
 	"before_agent_start",
@@ -103,6 +114,18 @@ var ompExtensionEvents = []string{
 	"credential_disabled",
 	"user_bash",
 	"user_python",
+}
+var ompExtensionSyncEvents = []string{
+	"input",
+	"context",
+	"before_provider_request",
+	"tool_call",
+	"tool_result",
+	"session_before_switch",
+	"session_before_branch",
+	"session_before_compact",
+	"session.compacting",
+	"session_before_tree",
 }
 
 var opencodeHookEvents = []string{
@@ -774,23 +797,27 @@ func uninstallOpenCodePlugin(path, backup string) error {
 }
 
 func piExtensionContent(apiURL string) ([]byte, error) {
-	return extensionContent("pi", "hitch-pi-extension", piExtensionEvents, apiURL)
+	return extensionContent("pi", "hitch-pi-extension", piExtensionEvents, piExtensionSyncEvents, apiURL)
 }
 
 func ompExtensionContent(apiURL string) ([]byte, error) {
-	return extensionContent("omp", "hitch-omp-extension", ompExtensionEvents, apiURL)
+	return extensionContent("omp", "hitch-omp-extension", ompExtensionEvents, ompExtensionSyncEvents, apiURL)
 }
 
 func opencodePluginContent(apiURL string) ([]byte, error) {
 	return openCodePluginContent("opencode", "hitch-opencode-plugin", opencodeHookEvents, apiURL)
 }
 
-func extensionContent(harnessName, clientVersion string, sourceEvents []string, apiURL string) ([]byte, error) {
+func extensionContent(harnessName, clientVersion string, sourceEvents, syncEvents []string, apiURL string) ([]byte, error) {
 	urlLiteral, err := jsonStringLiteral(apiURL)
 	if err != nil {
 		return nil, err
 	}
 	eventsLiteral, err := jsonArrayLiteral(sourceEvents)
+	if err != nil {
+		return nil, err
+	}
+	syncEventsLiteral, err := jsonArrayLiteral(syncEvents)
 	if err != nil {
 		return nil, err
 	}
@@ -804,7 +831,7 @@ func extensionContent(harnessName, clientVersion string, sourceEvents []string, 
 	}
 
 	var b strings.Builder
-	b.Grow(2500 + len(piManagedExtensionMarker) + len(urlLiteral) + len(eventsLiteral) + len(harnessLiteral) + len(versionLiteral))
+	b.Grow(2700 + len(piManagedExtensionMarker) + len(urlLiteral) + len(eventsLiteral) + len(syncEventsLiteral) + len(harnessLiteral) + len(versionLiteral))
 	b.WriteString("// ")
 	b.WriteString(piManagedExtensionMarker)
 	b.WriteString(`.
@@ -817,6 +844,10 @@ const HITCH_DEFAULT_API_URL = "http://127.0.0.1:8799";
 const HITCH_EVENTS = `)
 	b.WriteString(eventsLiteral)
 	b.WriteString(`;
+const HITCH_SYNC_EVENTS = `)
+	b.WriteString(syncEventsLiteral)
+	b.WriteString(`;
+const HITCH_SYNC_EVENT_SET = new Set(HITCH_SYNC_EVENTS);
 
 function envString(name) {
   const processLike = typeof globalThis === "object" ? Object(globalThis).process : undefined;
@@ -919,8 +950,9 @@ async function dispatchToHitch(sourceEventType, event, ctx) {
     return undefined;
   }
 
+  const endpoint = HITCH_SYNC_EVENT_SET.has(sourceEventType) ? "/v1/dispatch-sync" : "/v1/events";
   try {
-    const response = await fetch(hitchAPIURL() + "/v1/dispatch-sync", {
+    const response = await fetch(hitchAPIURL() + endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -935,6 +967,7 @@ async function dispatchToHitch(sourceEventType, event, ctx) {
       })
     });
     if (!response.ok) return undefined;
+    if (!HITCH_SYNC_EVENT_SET.has(sourceEventType)) return undefined;
     const payload = await response.json();
     return applyAdapterResponse(payload.native_response, event);
   } catch {

@@ -93,7 +93,7 @@ hitch-client uninstall --only hermes --yes --json
 hitch-client uninstall --only pi --yes --json
 hitch-client uninstall --only omp --yes --json
 hitch-client uninstall --only opencode --yes --json</code></pre>
-          <p>The source installer seeds <code>~/.config/hitch/config.toml</code> when missing, adds missing managed default sections to existing valid config, prompts for a Hitch server URL through <code>/dev/tty</code> even when installed with <code>curl ... | sh</code>, and can persist <code>HITCH_URL</code> for remote servers. <code>hitch-client install</code> installs Hitch-managed Codex hooks into <code>~/.codex/hooks.json</code>, installs Hitch-managed Hermes shell hooks into <code>~/.hermes/config.yaml</code>, installs a Hitch-managed Pi extension into <code>~/.pi/agent/extensions/hitch/index.ts</code>, installs a Hitch-managed OMP extension into <code>~/.omp/agent/extensions/hitch/index.ts</code>, and installs a Hitch-managed OpenCode plugin into <code>~/.config/opencode/plugins/hitch.ts</code>. Managed shell hook commands omit <code>-url</code> by default, resolve the server URL at runtime, and execute <code>hitch-client</code> directly.</p>
+          <p>The source installer seeds <code>~/.config/hitch/config.toml</code> when missing, adds missing managed default sections to existing valid config, prompts for a Hitch server URL through <code>/dev/tty</code>, and can persist <code>HITCH_URL</code> for remote servers. <code>hitch-client install</code> installs managed Codex, Hermes, Pi, OMP, and OpenCode adapters. Generated Pi and OMP extensions route observer callbacks to <code>/v1/events</code>, route return-capable control callbacks to <code>/v1/dispatch-sync</code>, promote adapter metadata into Hitch envelope fields, and fail open if Hitch is unavailable.</p>
         </section>
 
         <section id="configuration">
@@ -162,6 +162,7 @@ on_timeout = "fail_closed"</code></pre>
           <p><code>turn.assistant_completed</code> is the consistent assistant-output-complete audit signal. Hitch stores it directly for OMP <code>message_end</code> and as a configured secondary row for Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, Pi <code>turn_end</code>, and OpenCode <code>session.idle</code>. Secondary audit rows are not used for sync native-response translation or live handler dispatch.</p>
           <h3>Payload logger for every harness</h3>
           <p><code>examples/handlers/payload_logger.py</code> appends each event payload to a JSONL log and returns <code>behavior:"none"</code>. Configure one sync handler and one async handler with <code>events = ["*"]</code> to observe Codex, Hermes, Pi, OMP, and OpenCode without changing control flow.</p>
+          <p>Async handlers also run after a sync dispatch for the same normalized event, so passive observers can subscribe with <code>mode = "async"</code> without affecting the harness-native sync response.</p>
           <pre class="code-block"><code>[handlers.payload_logger_sync]
 command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
 working_dir = ".."
@@ -348,7 +349,7 @@ on_timeout = "fail_open"</code></pre>
             <tbody>
               <tr><td>Codex</td><td>Maps native command hook payloads and translates decisions to Codex stdout JSON. The verified path covers every supported Codex lifecycle event and <code>PreToolUse</code> deny translation.</td></tr>
               <tr><td>Hermes</td><td>Maps shell hook payloads and translates decisions to Hermes stdout JSON. The verified <code>pre_tool_call</code> block response is <code>{"action":"block","message":"..."}</code>.</td></tr>
-              <tr><td>Pi / OMP</td><td>Maps extension callback events in Go and installs managed TypeScript extensions that post callbacks plus extension <code>ctx</code> metadata to Hitch, apply adapter-response return values or mutations, and fail open when Hitch is unavailable.</td></tr>
+              <tr><td>Pi / OMP</td><td>Maps extension callback events in Go and installs managed TypeScript extensions that post observer callbacks plus extension <code>ctx</code> metadata to <code>/v1/events</code>, post return-capable control callbacks to <code>/v1/dispatch-sync</code>, apply adapter-response return values or mutations only for sync responses, and fail open when Hitch is unavailable.</td></tr>
             </tbody>
           </table>
           <p>Async adapter calls print nothing and ignore Hitch network failure. Sync adapter calls emit a harness-native no-op response when Hitch is unreachable or returns no native response.</p>

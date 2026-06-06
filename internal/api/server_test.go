@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sagebynature/hitch/internal/config"
 	"github.com/sagebynature/hitch/internal/protocol"
@@ -97,6 +98,65 @@ func TestDispatchSync(t *testing.T) {
 	}
 	if inspection["inbound"] == nil || inspection["normalized"] == nil || inspection["native_responses"] == nil {
 		t.Fatalf("incomplete inspection: %s", inspectW.Body.String())
+	}
+}
+
+func TestDispatchSyncAlsoRunsAsyncObservers(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := testConfig()
+	cfg.Handlers = map[string]config.HandlerConfig{
+		"async_noop": {
+			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"none"}}'`},
+			Events:    []string{"*"},
+			Mode:      "async",
+			TimeoutMS: 1000,
+			OnError:   "fail_open",
+			OnTimeout: "fail_open",
+		},
+		"sync_noop": {
+			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"none"}}'`},
+			Events:    []string{"*"},
+			Mode:      "sync",
+			TimeoutMS: 1000,
+			OnError:   "fail_open",
+			OnTimeout: "fail_open",
+		},
+	}
+	s := New(cfg, slog.Default(), st)
+	body := []byte(`{"harness":"omp","source_event_type":"tool_call","source_payload":{"event":{"name":"bash","input":{"command":"pwd"}}},"hitch_client_version":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("dispatch code %d body %s", w.Code, w.Body.String())
+	}
+	var resp DispatchResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen := map[string]string{}
+		for _, inv := range inspection.HandlerInvocations {
+			seen[inv.HandlerName] = inv.Mode
+		}
+		if seen["sync_noop"] == "sync" && seen["async_noop"] == "async" {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("dispatch-sync did not persist both sync and async handler invocations: %#v", inspection.HandlerInvocations)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 

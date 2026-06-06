@@ -234,7 +234,8 @@ func TestPlannedOpsOmitsAdapterURLWhenNotPinned(t *testing.T) {
 func TestExtensionContentEmbedsQuotedValuesAsJSONLiterals(t *testing.T) {
 	wantURL := "http://127.0.0.1:8797/path?name=\"quoted\"&slash=\\"
 	wantEvents := []string{"turn\"end", "path\\name", "line\nbreak"}
-	contentBytes, err := extensionContent("pi\"harness", "client\"version\\", wantEvents, wantURL)
+	wantSyncEvents := []string{"input", "tool_call"}
+	contentBytes, err := extensionContent("pi\"harness", "client\"version\\", wantEvents, wantSyncEvents, wantURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,6 +259,19 @@ func TestExtensionContentEmbedsQuotedValuesAsJSONLiterals(t *testing.T) {
 	for i := range wantEvents {
 		if gotEvents[i] != wantEvents[i] {
 			t.Fatalf("events literal decoded to %#v, want %#v", gotEvents, wantEvents)
+		}
+	}
+
+	var gotSyncEvents []string
+	if err := json.Unmarshal([]byte(jsValueBetween(t, content, `const HITCH_SYNC_EVENTS = `, ";\n")), &gotSyncEvents); err != nil {
+		t.Fatal(err)
+	}
+	if len(gotSyncEvents) != len(wantSyncEvents) {
+		t.Fatalf("sync events literal decoded to %#v, want %#v", gotSyncEvents, wantSyncEvents)
+	}
+	for i := range wantSyncEvents {
+		if gotSyncEvents[i] != wantSyncEvents[i] {
+			t.Fatalf("sync events literal decoded to %#v, want %#v", gotSyncEvents, wantSyncEvents)
 		}
 	}
 
@@ -332,6 +346,38 @@ func TestApplyOpsInstallsPiExtensionIdempotentlyAndBacksUpExistingFile(t *testin
 	}
 	if string(backup) != existing {
 		t.Fatalf("backup did not preserve previous Pi extension: %q", backup)
+	}
+}
+
+func TestPiOMPExtensionsRouteObserverEventsAsync(t *testing.T) {
+	cases := map[string]func(string) ([]byte, error){
+		"pi":  piExtensionContent,
+		"omp": ompExtensionContent,
+	}
+	for name, build := range cases {
+		t.Run(name, func(t *testing.T) {
+			contentBytes, err := build("http://127.0.0.1:8797")
+			if err != nil {
+				t.Fatal(err)
+			}
+			content := string(contentBytes)
+			for _, want := range []string{
+				`const HITCH_SYNC_EVENTS = `,
+				`const HITCH_SYNC_EVENT_SET = new Set(HITCH_SYNC_EVENTS);`,
+				`const endpoint = HITCH_SYNC_EVENT_SET.has(sourceEventType) ? "/v1/dispatch-sync" : "/v1/events";`,
+				`if (!HITCH_SYNC_EVENT_SET.has(sourceEventType)) return undefined;`,
+				`fetch(hitchAPIURL() + endpoint`,
+			} {
+				if !strings.Contains(content, want) {
+					t.Fatalf("%s extension missing %q:\n%s", name, want, content)
+				}
+			}
+			for _, asyncEvent := range []string{`"turn_end"`, `"message_end"`} {
+				if strings.Contains(jsValueBetween(t, content, `const HITCH_SYNC_EVENTS = `, `;`), asyncEvent) {
+					t.Fatalf("%s observer event %s must not be routed through dispatch-sync:\n%s", name, asyncEvent, content)
+				}
+			}
+		})
 	}
 }
 
