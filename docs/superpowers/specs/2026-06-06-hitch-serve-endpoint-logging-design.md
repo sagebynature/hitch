@@ -269,7 +269,7 @@ Prefer log assertions with a JSON `slog` handler writing into a buffer, matching
 
 ## Implementation notes
 
-Likely touch points:
+Primary touch points:
 
 - `internal/api/server.go`
   - add request-summary helper
