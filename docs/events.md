@@ -94,12 +94,12 @@ Codex handlers may also return `decision.native_response`. When present, Hitch r
 | Hermes source event | Hitch event | Default | Normalized payload | Native response behavior |
 | --- | --- | --- | --- | --- |
 | `pre_tool_call` | `tool.requested` | Yes | Original Hermes payload | `block`, `deny`, or `stop` returns `action: "block"` and `message`. |
-| `post_tool_call` | `tool.completed` | No | Original Hermes payload | Observer-only duplicate of `transform_tool_result` in observed runs; configure explicitly when that distinct callback is needed. Hitch returns `{}` unless `native_response` is supplied. |
+| `post_tool_call` | `tool.completed` | No | Original Hermes payload | Observer-only duplicate of `transform_tool_result` in observed runs; configure explicitly when that distinct callback is needed. |
 | `pre_llm_call` | `llm.requested`, `turn.user_prompt` | Yes | Original Hermes payload | Primary `llm.requested` handles `inject_context` as `context`; secondary `turn.user_prompt` is audit-only. |
-| `post_llm_call` | `llm.completed` | No | Original Hermes payload | Observer-only and potentially large; configure explicitly when raw post-call telemetry is needed. Hitch returns `{}` unless `native_response` is supplied. |
-| `on_session_start` | `session.started` | Yes | Original Hermes payload | No special translation; Hitch returns `{}` unless `native_response` is supplied. |
-| `on_session_end` | `session.ended` | Yes | Original Hermes payload | No special translation; Hitch returns `{}` unless `native_response` is supplied. |
-| `subagent_stop` | `subagent.completed` | Yes | Original Hermes payload | No special translation; Hitch returns `{}` unless `native_response` is supplied. |
+| `post_llm_call` | `llm.completed` | No | Original Hermes payload | Observer-only and potentially large; configure explicitly when raw post-call telemetry is needed. |
+| `on_session_start` | `session.started` | Yes | Original Hermes payload | Observer-only lifecycle event. |
+| `on_session_end` | `session.ended` | Yes | Original Hermes payload | Observer-only lifecycle event. |
+| `subagent_stop` | `subagent.completed` | Yes | Original Hermes payload | Observer-only lifecycle event. |
 | `transform_tool_result` | `tool.completed` | Yes | Original Hermes payload | `replace_result` or `transform` returns `result` from `updated_output`. |
 | `transform_terminal_output` | `tool.completed` | Yes | Original Hermes payload | `replace_result` or `transform` returns `result` from `updated_output`. |
 | `transform_llm_output` | `llm.completed`, `turn.assistant_completed` | Yes | Original Hermes payload | Primary `llm.completed` handles `replace_result` or `transform` by returning `result` from `updated_output`; secondary `turn.assistant_completed` is audit-only. |
@@ -143,7 +143,7 @@ Pi uses a TypeScript adapter response contract:
 | `session_before_fork` | `session.resumed` | Yes | Original Pi payload | `block` or `stop` returns `{cancel:true}`. |
 | `session_before_compact` | `session.compacted` | Yes | Original Pi payload | `block` or `stop` returns `{cancel:true}`. |
 | `session_compact` | `session.compacted` | Yes | Original Pi payload | No special translation; `adapter_action:"noop"`. |
-| `user_bash` | `tool.requested` | Yes | Original Pi payload | No special translation; `adapter_action:"noop"`. |
+| `user_bash` | `tool.requested` | Yes | Original Pi payload | Uses Pi tool-command control translation: `block`, `deny`, or `stop` returns `{block:true, reason}`; `transform` mutates `event.input`. |
 
 Pi handlers may also return `decision.native_response`. When present, Hitch returns that adapter response JSON directly.
 
@@ -180,8 +180,8 @@ OMP reuses the Pi adapter response contract for translated native responses.
 | `todo_reminder` | `turn.started` | No | OMP payload | Product-specific observer event; configure explicitly if relevant. |
 | `goal_updated` | `turn.started` | No | OMP payload | Product-specific observer event; configure explicitly if relevant. |
 | `credential_disabled` | `error.reported` | Yes | OMP payload | No special translation; `adapter_action:"noop"`. |
-| `user_bash` | `tool.requested` | Yes | OMP payload | Observational unless `native_response` is supplied. |
-| `user_python` | `tool.requested` | Yes | OMP payload | Observational unless `native_response` is supplied. |
+| `user_bash` | `tool.requested` | Yes | OMP payload | Uses Pi tool-command control translation: `block`, `deny`, or `stop` returns `{block:true, reason}`; `transform` mutates `event.input`. |
+| `user_python` | `tool.requested` | Yes | OMP payload | Uses Pi tool-command control translation: `block`, `deny`, or `stop` returns `{block:true, reason}`; `transform` mutates `event.input`. |
 
 OMP handlers may also return `decision.native_response`. When present, Hitch returns that adapter response JSON directly.
 
@@ -232,4 +232,4 @@ OpenCode typed-hook handlers may also return `decision.native_response`. When pr
 1. Handler decisions are aggregated before harness translation. See [`handler-protocol.md`](handler-protocol.md) for precedence and timeout behavior.
 2. `decision.native_response` is an escape hatch. It bypasses Hitch's behavior translation and returns harness-native JSON unchanged.
 3. A translated empty object or `adapter_action:"noop"` means Hitch made no control-flow change.
-4. Async observer dispatch uses `POST /v1/events` and ignores native responses. Sync control dispatch uses `POST /v1/dispatch-sync` and returns the translated native response.
+4. All dispatch uses `POST /v1/events`. Missing or `"async"` request mode runs observer handlers and ignores native responses; `"sync"` request mode is accepted only for control-capable source events and returns the translated native response body directly.

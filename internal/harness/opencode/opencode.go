@@ -9,6 +9,25 @@ import (
 
 type Mapper struct{}
 
+var controlCapableEvents = map[string]struct{}{
+	"chat.message":                         {},
+	"tool.execute.before":                  {},
+	"tool.execute.after":                   {},
+	"permission.ask":                       {},
+	"command.execute.before":               {},
+	"chat.params":                          {},
+	"chat.headers":                         {},
+	"shell.env":                            {},
+	"tool.definition":                      {},
+	"experimental.session.compacting":      {},
+	"experimental.compaction.autocontinue": {},
+	"experimental.text.complete":           {},
+}
+
+func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
+	return harness.CapabilityFromSet(sourceEventType, controlCapableEvents)
+}
+
 type pluginPayloadEnvelope struct {
 	Event    protocol.RawJSON `json:"event"`
 	Metadata pluginMetadata   `json:"metadata"`

@@ -81,17 +81,24 @@ func TestRunAsyncDispatchWritesNoStdout(t *testing.T) {
 }
 
 func TestRunSyncDispatchPrintsNativeResponse(t *testing.T) {
+	var got map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/dispatch-sync" {
+		if r.URL.Path != "/v1/events" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
-		_, _ = w.Write([]byte(`{"event_id":"evt","normalized_event_id":"norm","aggregate":{"decision":{"behavior":"deny"}},"native_response":{"action":"block","message":"policy"}}`))
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"action":"block","message":"policy"}`))
 	}))
 	defer server.Close()
 
 	var stdout bytes.Buffer
 	if err := Run(context.Background(), Options{Harness: "hermes", Event: "pre_tool_call", Sync: true, URL: server.URL, Stdin: strings.NewReader(`{"name":"Bash"}`), Stdout: &stdout}); err != nil {
 		t.Fatal(err)
+	}
+	if got["mode"] != "sync" {
+		t.Fatalf("sync request mode not set: %#v", got)
 	}
 	if strings.TrimSpace(stdout.String()) != `{"action":"block","message":"policy"}` {
 		t.Fatalf("unexpected sync stdout: %q", stdout.String())
@@ -127,13 +134,13 @@ func TestRunSyncInvalidOrEmptyResponseReturnsNativeNoop(t *testing.T) {
 		body   string
 	}{
 		{name: "server error", status: http.StatusInternalServerError, body: `{"error":"boom"}`},
-		{name: "missing native response", status: http.StatusOK, body: `{"event_id":"evt","normalized_event_id":"norm","aggregate":{"decision":{"behavior":"none"}}}`},
+		{name: "empty body", status: http.StatusOK, body: ``},
 		{name: "invalid JSON", status: http.StatusOK, body: `{`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/v1/dispatch-sync" {
+				if r.URL.Path != "/v1/events" {
 					t.Fatalf("unexpected path %s", r.URL.Path)
 				}
 				w.WriteHeader(tt.status)

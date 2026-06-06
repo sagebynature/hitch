@@ -157,9 +157,14 @@ func TestApplyOpsInstallsHermesHooksIdempotentlyAndBacksUpExistingFile(t *testin
 		t.Fatal(err)
 	}
 	for _, event := range hermesHookEvents {
-		needle := "-harness hermes -event " + event + " -sync"
+		needle := "-harness hermes -event " + event
 		if !strings.Contains(string(first), needle) {
 			t.Fatalf("hermes %s hook was not installed: %s", event, first)
+		}
+		syncNeedle := needle + " -sync"
+		_, syncEvent := hermesHookSyncEvents[event]
+		if strings.Contains(string(first), syncNeedle) != syncEvent {
+			t.Fatalf("hermes %s sync routing mismatch: %s", event, first)
 		}
 	}
 	if err := applyOps(ops, false); err != nil {
@@ -364,10 +369,10 @@ func TestPiOMPExtensionsRouteObserverEventsAsync(t *testing.T) {
 			for _, want := range []string{
 				`const HITCH_SYNC_EVENTS = `,
 				`const HITCH_SYNC_EVENT_SET = new Set(HITCH_SYNC_EVENTS);`,
-				`const endpoint = HITCH_SYNC_EVENT_SET.has(sourceEventType) ? "/v1/dispatch-sync" : "/v1/events";`,
-				`if (!HITCH_SYNC_EVENT_SET.has(sourceEventType)) return undefined;`,
-				`fetch(hitchAPIURL() + endpoint`,
-				`if (!response.ok) return undefined;`,
+				`const sync = HITCH_SYNC_EVENT_SET.has(sourceEventType);`,
+				`mode: sync ? "sync" : "async",`,
+				`fetch(hitchAPIURL() + "/v1/events"`,
+				`if (!response.ok || !sync) return undefined;`,
 				`} catch {`,
 				`return undefined;`,
 			} {
@@ -377,7 +382,32 @@ func TestPiOMPExtensionsRouteObserverEventsAsync(t *testing.T) {
 			}
 			for _, asyncEvent := range []string{`"turn_end"`, `"message_end"`} {
 				if strings.Contains(jsValueBetween(t, content, `const HITCH_SYNC_EVENTS = `, `;`), asyncEvent) {
-					t.Fatalf("%s observer event %s must not be routed through dispatch-sync:\n%s", name, asyncEvent, content)
+					t.Fatalf("%s observer event %s must not be routed as a sync event:\n%s", name, asyncEvent, content)
+				}
+			}
+		})
+	}
+}
+
+func TestPiOMPExtensionsRouteUserCommandsSync(t *testing.T) {
+	tests := []struct {
+		name  string
+		build func(string) ([]byte, error)
+		want  []string
+	}{
+		{name: "pi", build: piExtensionContent, want: []string{`"user_bash"`}},
+		{name: "omp", build: ompExtensionContent, want: []string{`"user_bash"`, `"user_python"`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			contentBytes, err := tt.build("http://127.0.0.1:8797")
+			if err != nil {
+				t.Fatal(err)
+			}
+			syncEvents := jsValueBetween(t, string(contentBytes), `const HITCH_SYNC_EVENTS = `, `;`)
+			for _, want := range tt.want {
+				if !strings.Contains(syncEvents, want) {
+					t.Fatalf("%s sync events missing %s: %s", tt.name, want, syncEvents)
 				}
 			}
 		})
@@ -464,7 +494,7 @@ func TestApplyOpsInstallsOpenCodePluginIdempotentlyAndBacksUpExistingFile(t *tes
 		"export const HitchPlugin",
 		`"tool.execute.before"`,
 		`"permission.ask"`,
-		"/v1/dispatch-sync",
+		`mode: endpoint`,
 		"/v1/events",
 	} {
 		if !strings.Contains(content, want) {
@@ -540,7 +570,7 @@ func TestOpenCodePluginContentAppliesThrowSetAppendAndInjectContext(t *testing.T
 		t.Fatal(err)
 	}
 	content := string(contentBytes)
-	for _, want := range []string{"function applyAdapterResponse", "async function postToHitch", "async function observeWithHitch", `hitchAPIURL() + "/v1/events"`, `postToHitch("/v1/dispatch-sync"`, `if (!response.ok || endpoint !== "/v1/dispatch-sync") return;`, `catch (err)`, `if (err && err.hitchAdapterThrow) throw err;`, `adapter_action === "throw"`, `adapter_action === "set"`, `adapter_action === "append"`, `adapter_action === "inject_context"`, "client.session.prompt", "HITCH_DEFAULT_API_URL"} {
+	for _, want := range []string{"function applyAdapterResponse", "async function postToHitch", "async function observeWithHitch", `hitchAPIURL() + "/v1/events"`, `postToHitch("sync"`, `if (!response.ok || endpoint !== "sync") return;`, `mode: endpoint`, `mode: "async"`, `catch (err)`, `if (err && err.hitchAdapterThrow) throw err;`, `adapter_action === "throw"`, `adapter_action === "set"`, `adapter_action === "append"`, `adapter_action === "inject_context"`, "client.session.prompt", "HITCH_DEFAULT_API_URL"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("generated plugin missing %q:\n%s", want, content)
 		}

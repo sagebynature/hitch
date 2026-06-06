@@ -150,7 +150,7 @@ command = [
 ]
 working_dir = ".."
 events = ["*"]
-mode = "sync"
+kind = "control"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"
@@ -164,7 +164,7 @@ command = [
 ]
 working_dir = ".."
 events = ["*"]
-mode = "async"
+kind = "observer"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"

@@ -37,6 +37,7 @@ type harnessRuntime struct {
 }
 
 type EventRequest struct {
+	Mode               string           `json:"mode"`
 	Harness            string           `json:"harness"`
 	SourceEventType    string           `json:"source_event_type"`
 	SourcePayload      protocol.RawJSON `json:"source_payload"`
@@ -48,10 +49,20 @@ type EventResponse struct {
 	NormalizedEventID string `json:"normalized_event_id"`
 }
 
-type DispatchResponse struct {
-	EventResponse
-	Aggregate      protocol.AggregateDecision `json:"aggregate"`
-	NativeResponse protocol.RawJSON           `json:"native_response"`
+const (
+	requestModeAsync = "async"
+	requestModeSync  = "sync"
+)
+
+func normalizeRequestMode(mode string) (string, error) {
+	switch strings.TrimSpace(mode) {
+	case "", requestModeAsync:
+		return requestModeAsync, nil
+	case requestModeSync:
+		return requestModeSync, nil
+	default:
+		return "", badRequest("mode must be async or sync")
+	}
 }
 
 func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
@@ -59,7 +70,6 @@ func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", s.handleHealth)
 	mux.HandleFunc("POST /v1/events", s.handleEvent)
-	mux.HandleFunc("POST /v1/dispatch-sync", s.handleDispatchSync)
 	mux.HandleFunc("GET /v1/events/", s.handleGetEvent)
 	s.mux = mux
 	return s
@@ -83,25 +93,25 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
-	resp, _, err := s.ingest(r.Context(), r, false)
+	resp, env, mode, err := s.ingest(r.Context(), r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, resp)
+	if mode == requestModeAsync {
+		go s.dispatchObservers(context.Background(), resp.NormalizedEventID, env)
+		writeJSON(w, http.StatusAccepted, resp)
+		return
+	}
+	s.handleSyncEvent(w, r, resp, env)
 }
 
-func (s *Server) handleDispatchSync(w http.ResponseWriter, r *http.Request) {
-	resp, env, err := s.ingest(r.Context(), r, true)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	result := s.runner.Dispatch(r.Context(), env, "sync", 2*time.Second)
+func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp EventResponse, env protocol.EventEnvelope) {
+	result := s.runner.Dispatch(r.Context(), env, "control", 2*time.Second)
 	for _, inv := range result.Invocations {
-		_ = s.store.InsertHandlerInvocation(r.Context(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: resp.NormalizedEventID, HandlerName: inv.HandlerName, Mode: inv.Mode, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error})
+		_ = s.store.InsertHandlerInvocation(r.Context(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: resp.NormalizedEventID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error})
 	}
-	go s.dispatchAsync(context.Background(), resp.NormalizedEventID, env)
+	go s.dispatchObservers(context.Background(), resp.NormalizedEventID, env)
 	runtime := s.harnesses[env.Harness]
 	native, err := runtime.normalizer.Translate(env.SourceEventType, result.Aggregate)
 	if err != nil {
@@ -109,59 +119,67 @@ func (s *Server) handleDispatchSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.InsertNativeResponse(r.Context(), store.NativeResponse{ID: harness.NewID("nresp"), NormalizedEventID: resp.NormalizedEventID, Response: native, EmittedAt: time.Now().UTC()})
-	writeJSON(w, http.StatusOK, DispatchResponse{EventResponse: resp, Aggregate: result.Aggregate, NativeResponse: native})
+	w.Header().Set("X-Hitch-Event-ID", resp.EventID)
+	w.Header().Set("X-Hitch-Normalized-Event-ID", resp.NormalizedEventID)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(native)
 }
 
-func (s *Server) ingest(ctx context.Context, r *http.Request, sync bool) (EventResponse, protocol.EventEnvelope, error) {
+func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, protocol.EventEnvelope, string, error) {
 	var req EventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return EventResponse{}, protocol.EventEnvelope{}, badRequest("invalid JSON: %v", err)
+		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("invalid JSON: %v", err)
+	}
+	mode, err := normalizeRequestMode(req.Mode)
+	if err != nil {
+		return EventResponse{}, protocol.EventEnvelope{}, "", err
 	}
 	h := protocol.Harness(req.Harness)
 	runtime := s.harnesses[h]
 	if runtime.normalizer == nil {
-		return EventResponse{}, protocol.EventEnvelope{}, badRequest("unsupported harness %q", req.Harness)
+		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("unsupported harness %q", req.Harness)
 	}
 	if req.SourceEventType == "" {
-		return EventResponse{}, protocol.EventEnvelope{}, badRequest("source_event_type is required")
+		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("source_event_type is required")
 	}
 	if len(req.SourcePayload) == 0 || !json.Valid(req.SourcePayload) {
-		return EventResponse{}, protocol.EventEnvelope{}, badRequest("source_payload must be valid JSON")
+		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("source_payload must be valid JSON")
 	}
 	hitchEventTypes, ok := runtime.eventMap[req.SourceEventType]
 	if !ok {
-		return EventResponse{}, protocol.EventEnvelope{}, badRequest("unsupported %s event %q", req.Harness, req.SourceEventType)
+		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("unsupported %s event %q", req.Harness, req.SourceEventType)
+	}
+	if mode == requestModeSync && runtime.normalizer.Capability(req.SourceEventType) != harness.CapabilityControlCapable {
+		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("%s event %q does not support sync dispatch", req.Harness, req.SourceEventType)
 	}
 	env, err := runtime.normalizer.Normalize(req.SourceEventType, req.SourcePayload, hitchEventTypes[0])
 	if err != nil {
-		return EventResponse{}, protocol.EventEnvelope{}, badRequest("%s", err.Error())
+		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("%s", err.Error())
 	}
 	inboundID := harness.NewID("in")
 	normalizedID := harness.NewID("norm")
 	if err := s.store.InsertInbound(ctx, store.InboundEvent{ID: inboundID, ReceivedAt: env.ReceivedAt, Harness: env.Harness, SourceEventType: env.SourceEventType, SourcePayload: env.SourcePayload, RequestHeaders: protocol.Raw(headers(r)), HitchClientVersion: req.HitchClientVersion}); err != nil {
-		return EventResponse{}, protocol.EventEnvelope{}, err
+		return EventResponse{}, protocol.EventEnvelope{}, "", err
 	}
 	if err := s.store.InsertNormalized(ctx, store.NormalizedEvent{ID: normalizedID, InboundEventID: inboundID, HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: protocol.Version}); err != nil {
-		return EventResponse{}, protocol.EventEnvelope{}, err
+		return EventResponse{}, protocol.EventEnvelope{}, "", err
 	}
 	for _, eventType := range hitchEventTypes[1:] {
 		derived := env
 		derived.EventID = harness.NewID("evt")
 		derived.HitchEventType = eventType
 		if err := s.store.InsertNormalized(ctx, store.NormalizedEvent{ID: harness.NewID("norm"), InboundEventID: inboundID, HitchEventType: derived.HitchEventType, Envelope: derived, MappingVersion: protocol.Version}); err != nil {
-			return EventResponse{}, protocol.EventEnvelope{}, err
+			return EventResponse{}, protocol.EventEnvelope{}, "", err
 		}
 	}
-	if !sync {
-		go s.dispatchAsync(context.Background(), normalizedID, env)
-	}
-	return EventResponse{EventID: env.EventID, NormalizedEventID: normalizedID}, env, nil
+	return EventResponse{EventID: env.EventID, NormalizedEventID: normalizedID}, env, mode, nil
 }
 
-func (s *Server) dispatchAsync(ctx context.Context, normalizedID string, env protocol.EventEnvelope) {
-	result := s.runner.Dispatch(ctx, env, "async", 0)
+func (s *Server) dispatchObservers(ctx context.Context, normalizedID string, env protocol.EventEnvelope) {
+	result := s.runner.Dispatch(ctx, env, "observer", 0)
 	for _, inv := range result.Invocations {
-		_ = s.store.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: normalizedID, HandlerName: inv.HandlerName, Mode: inv.Mode, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error})
+		_ = s.store.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: normalizedID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error})
 	}
 }
 

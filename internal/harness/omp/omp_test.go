@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/sagebynature/hitch/internal/harness"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -58,5 +59,34 @@ func TestTranslateOMPCancelableBranch(t *testing.T) {
 	}
 	if got.AdapterAction != "return" || got.ReturnValue["cancel"] != true {
 		t.Fatalf("expected cancel return, got %#v", got)
+	}
+}
+
+func TestTranslateOMPUserPythonControlDecision(t *testing.T) {
+	out, err := (Mapper{}).Translate("user_python", protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorBlock, Reason: "no"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		AdapterAction string         `json:"adapter_action"`
+		ReturnValue   map[string]any `json:"return_value"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.AdapterAction != "return" || got.ReturnValue["block"] != true {
+		t.Fatalf("expected block return, got %#v", got)
+	}
+}
+
+func TestCapabilityClassifiesSourceEvents(t *testing.T) {
+	if got := (Mapper{}).Capability("user_python"); got != harness.CapabilityControlCapable {
+		t.Fatalf("user_python capability = %s", got)
+	}
+	if got := (Mapper{}).Capability("tool_call"); got != harness.CapabilityControlCapable {
+		t.Fatalf("tool_call capability = %s", got)
+	}
+	if got := (Mapper{}).Capability("turn_end"); got != harness.CapabilityObserverOnly {
+		t.Fatalf("turn_end capability = %s", got)
 	}
 }

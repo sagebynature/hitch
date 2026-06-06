@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/sagebynature/hitch/internal/harness"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -117,5 +118,14 @@ func TestTranslateUsesNativeResponseDirectly(t *testing.T) {
 	}
 	if string(got) != string(want) {
 		t.Fatalf("got %s want %s", got, want)
+	}
+}
+
+func TestCapabilityClassifiesSourceEvents(t *testing.T) {
+	if got := (Mapper{}).Capability("tool.execute.before"); got != harness.CapabilityControlCapable {
+		t.Fatalf("tool.execute.before capability = %s", got)
+	}
+	if got := (Mapper{}).Capability("session.idle"); got != harness.CapabilityObserverOnly {
+		t.Fatalf("session.idle capability = %s", got)
 	}
 }

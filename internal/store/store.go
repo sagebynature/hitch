@@ -9,7 +9,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 var migrations = []string{`
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS handler_invocations (
   id TEXT PRIMARY KEY,
   normalized_event_id TEXT NOT NULL REFERENCES normalized_events(id),
   handler_name TEXT NOT NULL,
-  mode TEXT NOT NULL,
+  kind TEXT NOT NULL,
   started_at TEXT NOT NULL,
   completed_at TEXT,
   status TEXT NOT NULL,
@@ -146,7 +146,7 @@ type HandlerInvocation struct {
 	ID                string                 `json:"id"`
 	NormalizedEventID string                 `json:"normalized_event_id"`
 	HandlerName       string                 `json:"handler_name"`
-	Mode              string                 `json:"mode"`
+	Kind              string                 `json:"kind"`
 	StartedAt         time.Time              `json:"started_at"`
 	CompletedAt       time.Time              `json:"completed_at,omitempty"`
 	Status            protocol.HandlerStatus `json:"status"`
@@ -192,7 +192,7 @@ func (s *Store) InsertHandlerInvocation(ctx context.Context, h HandlerInvocation
 	if !h.CompletedAt.IsZero() {
 		completed = h.CompletedAt.Format(time.RFC3339Nano)
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO handler_invocations(id, normalized_event_id, handler_name, mode, started_at, completed_at, status, stdout, stderr, output_json, decision_json, error, replay_source_id, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, h.ID, h.NormalizedEventID, h.HandlerName, h.Mode, h.StartedAt.Format(time.RFC3339Nano), completed, h.Status, h.Stdout, h.Stderr, string(h.Output), string(h.Decision), h.Error, h.ReplaySourceID, schemaVersion)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO handler_invocations(id, normalized_event_id, handler_name, kind, started_at, completed_at, status, stdout, stderr, output_json, decision_json, error, replay_source_id, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, h.ID, h.NormalizedEventID, h.HandlerName, h.Kind, h.StartedAt.Format(time.RFC3339Nano), completed, h.Status, h.Stdout, h.Stderr, string(h.Output), string(h.Decision), h.Error, h.ReplaySourceID, schemaVersion)
 	return err
 }
 
@@ -248,7 +248,7 @@ WHERE n.id = ?`, id).Scan(
 		return EventInspection{}, err
 	}
 
-	rows, err := s.db.QueryContext(ctx, `SELECT id, normalized_event_id, handler_name, mode, started_at, completed_at, status, stdout, stderr, output_json, decision_json, error, replay_source_id FROM handler_invocations WHERE normalized_event_id = ? ORDER BY started_at, id`, id)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, normalized_event_id, handler_name, kind, started_at, completed_at, status, stdout, stderr, output_json, decision_json, error, replay_source_id FROM handler_invocations WHERE normalized_event_id = ? ORDER BY started_at, id`, id)
 	if err != nil {
 		return EventInspection{}, err
 	}
@@ -256,7 +256,7 @@ WHERE n.id = ?`, id).Scan(
 	for rows.Next() {
 		var h HandlerInvocation
 		var startedAt, completedAt, outputRaw, decisionRaw string
-		if err := rows.Scan(&h.ID, &h.NormalizedEventID, &h.HandlerName, &h.Mode, &startedAt, &completedAt, &h.Status, &h.Stdout, &h.Stderr, &outputRaw, &decisionRaw, &h.Error, &h.ReplaySourceID); err != nil {
+		if err := rows.Scan(&h.ID, &h.NormalizedEventID, &h.HandlerName, &h.Kind, &startedAt, &completedAt, &h.Status, &h.Stdout, &h.Stderr, &outputRaw, &decisionRaw, &h.Error, &h.ReplaySourceID); err != nil {
 			return EventInspection{}, err
 		}
 		h.StartedAt, err = time.Parse(time.RFC3339Nano, startedAt)

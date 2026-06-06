@@ -215,9 +215,9 @@ func replay(args []string) {
 		writeCLI(true, map[string]interface{}{"dry_run": true, "event": env})
 		return
 	}
-	result := dispatch.NewRunner(cfg.Handlers).Dispatch(context.Background(), env, "sync", 2*time.Second)
+	result := dispatch.NewRunner(cfg.Handlers).Dispatch(context.Background(), env, "control", 2*time.Second)
 	for _, inv := range result.Invocations {
-		err := st.InsertHandlerInvocation(context.Background(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: fs.Arg(0), HandlerName: inv.HandlerName, Mode: inv.Mode, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error, ReplaySourceID: fs.Arg(0)})
+		err := st.InsertHandlerInvocation(context.Background(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: fs.Arg(0), HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error, ReplaySourceID: fs.Arg(0)})
 		if err != nil {
 			fatal(err)
 		}

@@ -72,21 +72,21 @@ func TestDispatchSync(t *testing.T) {
 	defer st.Close()
 	cfg := testConfig()
 	s := New(cfg, slog.Default(), st)
-	body := []byte(`{"harness":"hermes","source_event_type":"pre_tool_call","source_payload":{"tool_name":"bash"},"hitch_client_version":"test"}`)
-	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", bytes.NewReader(body))
+	body := []byte(`{"mode":"sync","harness":"hermes","source_event_type":"pre_tool_call","source_payload":{"tool_name":"bash"},"hitch_client_version":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("dispatch code %d body %s", w.Code, w.Body.String())
 	}
-	var resp DispatchResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatal(err)
+	if strings.TrimSpace(w.Body.String()) != "{}" {
+		t.Fatalf("unexpected native response %s", w.Body.String())
 	}
-	if len(resp.NativeResponse) == 0 {
-		t.Fatalf("missing native response")
+	normalizedID := w.Header().Get("X-Hitch-Normalized-Event-ID")
+	if normalizedID == "" {
+		t.Fatal("missing normalized event header")
 	}
-	inspectReq := httptest.NewRequest(http.MethodGet, "/v1/events/"+resp.NormalizedEventID, nil)
+	inspectReq := httptest.NewRequest(http.MethodGet, "/v1/events/"+normalizedID, nil)
 	inspectW := httptest.NewRecorder()
 	s.Handler().ServeHTTP(inspectW, inspectReq)
 	if inspectW.Code != http.StatusOK {
@@ -101,6 +101,40 @@ func TestDispatchSync(t *testing.T) {
 	}
 }
 
+func TestEventRejectsInvalidMode(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	s := New(testConfig(), slog.Default(), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"later","harness":"codex","source_event_type":"PreToolUse","source_payload":{},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("invalid mode code %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestEventSyncModeRejectsObserverOnlySourceEvent(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	s := New(testConfig(), slog.Default(), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"sync","harness":"hermes","source_event_type":"on_session_end","source_payload":{},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("observer-only sync code %d body %s", w.Code, w.Body.String())
+	}
+}
+
 func TestDispatchSyncWithDefaultConfigRunsNoHandlersAndPassesThrough(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
@@ -110,24 +144,21 @@ func TestDispatchSyncWithDefaultConfigRunsNoHandlersAndPassesThrough(t *testing.
 	defer st.Close()
 
 	s := New(testConfig(), slog.Default(), st)
-	body := []byte(`{"harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash","session_id":"session_1","turn_id":"turn_1","cwd":"/tmp/hitch","model":"gpt-test"},"hitch_client_version":"test"}`)
-	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", bytes.NewReader(body))
+	body := []byte(`{"mode":"sync","harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash","session_id":"session_1","turn_id":"turn_1","cwd":"/tmp/hitch","model":"gpt-test"},"hitch_client_version":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("dispatch code %d body %s", w.Code, w.Body.String())
 	}
-	var resp DispatchResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatal(err)
+	if strings.TrimSpace(w.Body.String()) != "{}" {
+		t.Fatalf("default sync dispatch should pass through, got %s", w.Body.String())
 	}
-	if string(resp.NativeResponse) != "{}" {
-		t.Fatalf("default sync dispatch should pass through, got %s", resp.NativeResponse)
+	normalizedID := w.Header().Get("X-Hitch-Normalized-Event-ID")
+	if normalizedID == "" {
+		t.Fatal("missing normalized event header")
 	}
-	if resp.Aggregate.Decision.Behavior != protocol.BehaviorNone {
-		t.Fatalf("default sync dispatch should aggregate to behavior none: %#v", resp.Aggregate)
-	}
-	inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+	inspection, err := st.InspectEvent(ctx, normalizedID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +182,7 @@ func TestDispatchSyncAlsoRunsAsyncObservers(t *testing.T) {
 		"async_noop": {
 			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"none"}}'`},
 			Events:    []string{"*"},
-			Mode:      "async",
+			Kind:      "observer",
 			TimeoutMS: 1000,
 			OnError:   "fail_open",
 			OnTimeout: "fail_open",
@@ -159,40 +190,40 @@ func TestDispatchSyncAlsoRunsAsyncObservers(t *testing.T) {
 		"sync_noop": {
 			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"none"}}'`},
 			Events:    []string{"*"},
-			Mode:      "sync",
+			Kind:      "control",
 			TimeoutMS: 1000,
 			OnError:   "fail_open",
 			OnTimeout: "fail_open",
 		},
 	}
 	s := New(cfg, slog.Default(), st)
-	body := []byte(`{"harness":"omp","source_event_type":"tool_call","source_payload":{"event":{"name":"bash","input":{"command":"pwd"}}},"hitch_client_version":"test"}`)
-	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", bytes.NewReader(body))
+	body := []byte(`{"mode":"sync","harness":"omp","source_event_type":"tool_call","source_payload":{"event":{"name":"bash","input":{"command":"pwd"}}},"hitch_client_version":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("dispatch code %d body %s", w.Code, w.Body.String())
 	}
-	var resp DispatchResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatal(err)
+	normalizedID := w.Header().Get("X-Hitch-Normalized-Event-ID")
+	if normalizedID == "" {
+		t.Fatal("missing normalized event header")
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+		inspection, err := st.InspectEvent(ctx, normalizedID)
 		if err != nil {
 			t.Fatal(err)
 		}
 		seen := map[string]string{}
 		for _, inv := range inspection.HandlerInvocations {
-			seen[inv.HandlerName] = inv.Mode
+			seen[inv.HandlerName] = inv.Kind
 		}
-		if seen["sync_noop"] == "sync" && seen["async_noop"] == "async" {
+		if seen["sync_noop"] == "control" && seen["async_noop"] == "observer" {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("dispatch-sync did not persist both sync and async handler invocations: %#v", inspection.HandlerInvocations)
+			t.Fatalf("sync dispatch did not persist both control and observer handler invocations: %#v", inspection.HandlerInvocations)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -210,14 +241,14 @@ func TestDispatchSyncLogsHandlerInvocationDetails(t *testing.T) {
 		"logger_check": {
 			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"allow"}}'`},
 			Events:    []string{string(protocol.EventToolRequested)},
-			Mode:      "sync",
+			Kind:      "control",
 			TimeoutMS: 1000,
 		},
 	}
 	var logs bytes.Buffer
 	s := New(cfg, slog.New(slog.NewJSONHandler(&logs, nil)), st)
-	body := []byte(`{"harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash","session_id":"session_1","turn_id":"turn_1","cwd":"/tmp/hitch","model":"gpt-test"},"hitch_client_version":"test"}`)
-	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", bytes.NewReader(body))
+	body := []byte(`{"mode":"sync","harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash","session_id":"session_1","turn_id":"turn_1","cwd":"/tmp/hitch","model":"gpt-test"},"hitch_client_version":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -228,7 +259,7 @@ func TestDispatchSyncLogsHandlerInvocationDetails(t *testing.T) {
 		`"msg":"handler invocation starting"`,
 		`"msg":"handler invocation completed"`,
 		`"handler":"logger_check"`,
-		`"mode":"sync"`,
+		`"kind":"control"`,
 		`"harness":"codex"`,
 		`"source_event_type":"PreToolUse"`,
 		`"hitch_event_type":"tool.requested"`,
@@ -259,26 +290,22 @@ func TestDispatchSyncOpenCodeToolBeforeDenyTranslatesToThrow(t *testing.T) {
 		"deny": {
 			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"deny","reason":"no"}}'`},
 			Events:    []string{string(protocol.EventToolRequested)},
-			Mode:      "sync",
+			Kind:      "control",
 			TimeoutMS: 1000,
 			OnError:   "fail_open",
 			OnTimeout: "fail_open",
 		},
 	}
 	server := New(cfg, slog.Default(), st)
-	body := `{"harness":"opencode","source_event_type":"tool.execute.before","source_payload":{"event":{"input":{"tool":"bash","sessionID":"s1","callID":"c1"},"output":{"args":{"command":"pwd"}}},"metadata":{"session_id":"s1"}},"hitch_client_version":"test"}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", strings.NewReader(body))
+	body := `{"mode":"sync","harness":"opencode","source_event_type":"tool.execute.before","source_payload":{"event":{"input":{"tool":"bash","sessionID":"s1","callID":"c1"},"output":{"args":{"command":"pwd"}}},"metadata":{"session_id":"s1"}},"hitch_client_version":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	server.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 	}
-	var got DispatchResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
 	var native map[string]interface{}
-	if err := json.Unmarshal(got.NativeResponse, &native); err != nil {
+	if err := json.Unmarshal(rec.Body.Bytes(), &native); err != nil {
 		t.Fatal(err)
 	}
 	if native["adapter_action"] != "throw" || native["message"] != "no" {
@@ -300,17 +327,17 @@ func TestEventMapOverrideAndAddition(t *testing.T) {
 	}
 	s := New(cfg, slog.Default(), st)
 
-	overrideReq := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", strings.NewReader(`{"harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash"},"hitch_client_version":"test"}`))
+	overrideReq := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"sync","harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash"},"hitch_client_version":"test"}`))
 	overrideW := httptest.NewRecorder()
 	s.Handler().ServeHTTP(overrideW, overrideReq)
 	if overrideW.Code != http.StatusOK {
 		t.Fatalf("override dispatch code %d body %s", overrideW.Code, overrideW.Body.String())
 	}
-	var overrideResp DispatchResponse
-	if err := json.Unmarshal(overrideW.Body.Bytes(), &overrideResp); err != nil {
-		t.Fatal(err)
+	normalizedID := overrideW.Header().Get("X-Hitch-Normalized-Event-ID")
+	if normalizedID == "" {
+		t.Fatal("missing normalized event header")
 	}
-	inspection, err := st.InspectEvent(ctx, overrideResp.NormalizedEventID)
+	inspection, err := st.InspectEvent(ctx, normalizedID)
 	if err != nil {
 		t.Fatal(err)
 	}

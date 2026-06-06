@@ -34,8 +34,15 @@ path = "tmp/hitch-test-drive/events.sqlite"
 [harness.codex]
 enabled = true
 
+[harness.codex.event_map]
+UserPromptSubmit = "turn.user_prompt"
+PreToolUse = "tool.requested"
+
 [harness.hermes]
 enabled = true
+
+[harness.hermes.event_map]
+pre_gateway_dispatch = "turn.user_prompt"
 
 [harness.pi]
 enabled = true
@@ -46,7 +53,7 @@ enabled = true
 [handlers.example_policy]
 command = ["python3", "examples/handlers/policy_handler.py"]
 events = ["turn.user_prompt", "tool.requested", "tool.completed", "turn.completed"]
-mode = "sync"
+kind = "control"
 timeout_ms = 1000
 on_error = "fail_closed"
 on_timeout = "fail_closed"

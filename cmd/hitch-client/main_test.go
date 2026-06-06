@@ -76,13 +76,13 @@ func TestRunUninstallSubcommandDryRun(t *testing.T) {
 func TestRunDispatchesSyncResponse(t *testing.T) {
 	var got map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/dispatch-sync" {
+		if r.URL.Path != "/v1/events" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
-		_, _ = w.Write([]byte(`{"event_id":"evt","normalized_event_id":"norm","aggregate":{"decision":{"behavior":"allow"}},"native_response":{"permissionDecision":"allow"}}`))
+		_, _ = w.Write([]byte(`{"permissionDecision":"allow"}`))
 	}))
 	defer server.Close()
 
@@ -93,6 +93,9 @@ func TestRunDispatchesSyncResponse(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout.String()) != `{"permissionDecision":"allow"}` {
 		t.Fatalf("unexpected stdout: %q", stdout.String())
+	}
+	if got["mode"] != "sync" {
+		t.Fatalf("sync request mode not set: %#v", got)
 	}
 	if got["harness"] != "codex" || got["source_event_type"] != "PreToolUse" || got["hitch_client_version"] == "" {
 		t.Fatalf("unexpected request metadata: %#v", got)

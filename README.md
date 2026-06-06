@@ -47,7 +47,6 @@ Verified API endpoints:
 
 - `GET /v1/health`
 - `POST /v1/events`
-- `POST /v1/dispatch-sync`
 - `GET /v1/events/<id>`
 
 ## Quick start

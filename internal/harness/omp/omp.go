@@ -1,6 +1,7 @@
 package omp
 
 import (
+	"github.com/sagebynature/hitch/internal/harness"
 	piharness "github.com/sagebynature/hitch/internal/harness/pi"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
@@ -13,4 +14,8 @@ func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, 
 
 func (Mapper) Translate(sourceEventType string, aggregate protocol.AggregateDecision) (protocol.RawJSON, error) {
 	return piharness.TranslateForHarness(sourceEventType, aggregate)
+}
+
+func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
+	return piharness.CapabilityForHarness(sourceEventType)
 }

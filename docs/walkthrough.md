@@ -232,12 +232,13 @@ Expected stdout:
 
 ## Run an API example with an inspectable event ID
 
-The adapter prints only the native harness response. To get the Hitch IDs for inspection, call the sync dispatch API directly:
+The adapter prints only the native harness response. To get the Hitch IDs for inspection, call the sync API with `-i` and read the response headers:
 
 ```sh
-curl -sS -X POST http://127.0.0.1:8799/v1/dispatch-sync \
+curl -i -sS -X POST http://127.0.0.1:8799/v1/events \
   -H 'content-type: application/json' \
   -d '{
+    "mode": "sync",
     "harness": "codex",
     "source_event_type": "PreToolUse",
     "source_payload": {
@@ -260,21 +261,16 @@ curl -sS -X POST http://127.0.0.1:8799/v1/dispatch-sync \
 
 Expected response shape:
 
-```json
-{
-  "event_id": "evt_...",
-  "normalized_event_id": "norm_...",
-  "aggregate": {
-    "decision": {
-      "behavior": "none"
-    },
-    "handler_results": []
-  },
-  "native_response": {}
-}
+```text
+HTTP/1.1 200 OK
+X-Hitch-Event-ID: evt_...
+X-Hitch-Normalized-Event-ID: norm_...
+Content-Type: application/json
+
+{}
 ```
 
-Copy `normalized_event_id`, then inspect the persisted records with the same config path used by the server.
+Copy `X-Hitch-Normalized-Event-ID`, then inspect the persisted records with the same config path used by the server.
 
 For a `scripts/install.sh` setup:
 

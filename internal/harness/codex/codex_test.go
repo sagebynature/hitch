@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/sagebynature/hitch/internal/harness"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -44,5 +45,14 @@ func TestTranslatePermissionDeny(t *testing.T) {
 	}
 	if got["hookSpecificOutput"] == nil {
 		t.Fatalf("missing hookSpecificOutput: %s", string(out))
+	}
+}
+
+func TestCapabilityClassifiesSourceEvents(t *testing.T) {
+	if got := (Mapper{}).Capability("PreToolUse"); got != harness.CapabilityControlCapable {
+		t.Fatalf("PreToolUse capability = %s", got)
+	}
+	if got := (Mapper{}).Capability("CustomObserver"); got != harness.CapabilityObserverOnly {
+		t.Fatalf("CustomObserver capability = %s", got)
 	}
 }

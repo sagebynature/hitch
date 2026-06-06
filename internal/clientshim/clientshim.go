@@ -20,6 +20,7 @@ import (
 )
 
 type eventRequest struct {
+	Mode               string           `json:"mode"`
 	Harness            string           `json:"harness"`
 	SourceEventType    string           `json:"source_event_type"`
 	SourcePayload      protocol.RawJSON `json:"source_payload"`
@@ -29,12 +30,6 @@ type eventRequest struct {
 type eventResponse struct {
 	EventID           string `json:"event_id"`
 	NormalizedEventID string `json:"normalized_event_id"`
-}
-
-type dispatchResponse struct {
-	eventResponse
-	Aggregate      protocol.AggregateDecision `json:"aggregate"`
-	NativeResponse protocol.RawJSON           `json:"native_response"`
 }
 
 type Options struct {
@@ -80,17 +75,19 @@ func Run(ctx context.Context, opts Options) error {
 		baseURL = DefaultURL()
 	}
 	client := httpClient{baseURL: baseURL}
-	req := eventRequest{Harness: opts.Harness, SourceEventType: opts.Event, SourcePayload: protocol.RawJSON(payload), HitchClientVersion: protocol.Version}
+	mode := "async"
+	if opts.Sync {
+		mode = "sync"
+	}
+	req := eventRequest{Mode: mode, Harness: opts.Harness, SourceEventType: opts.Event, SourcePayload: protocol.RawJSON(payload), HitchClientVersion: protocol.Version}
 	if !opts.Sync {
 		var resp eventResponse
 		_ = client.post(ctx, "/v1/events", req, &resp)
 		return nil
 	}
 
-	var resp dispatchResponse
-	err = client.post(ctx, "/v1/dispatch-sync", req, &resp)
-	native := resp.NativeResponse
-	if err != nil || len(native) == 0 {
+	native, err := client.postRaw(ctx, "/v1/events", req)
+	if err != nil || len(bytes.TrimSpace(native)) == 0 || !json.Valid(native) {
 		native = NativeNoop(opts.Harness, opts.Event)
 	}
 	if len(native) == 0 {
@@ -132,6 +129,32 @@ func (c httpClient) post(ctx context.Context, path string, req eventRequest, out
 		return fmt.Errorf("hitch API %s: %s", resp.Status, string(body))
 	}
 	return json.Unmarshal(body, out)
+}
+
+func (c httpClient) postRaw(ctx context.Context, path string, req eventRequest) ([]byte, error) {
+	h := c.http
+	if h == nil {
+		h = &http.Client{Timeout: 2 * time.Second}
+	}
+	b, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := h.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("hitch API %s: %s", resp.Status, string(body))
+	}
+	return body, nil
 }
 
 // DefaultURL resolves the API endpoint used by hook shims.

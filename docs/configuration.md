@@ -23,7 +23,7 @@ Strict validation rejects unknown config keys and invalid values for:
 - log level and format (`debug`, `info`, `warn`, `error`; `json`, `console`)
 - audit backend
 - handler event names
-- handler mode (`async` or `sync`)
+- handler kind (`observer` or `control`)
 - handler error/timeout policy (`fail_open`, `fail_closed`, `native_default`)
 - harness event-map values
 

@@ -66,7 +66,7 @@ Installer behavior verified by tests:
 - OpenCode plugin installation covers OpenCode typed plugin hooks and SDK lifecycle events and is idempotent.
 - Installed clients know about the full source-event catalog where the harness exposes it, but the seeded server config only persists the recommended low-noise subset. Add opt-in `[harness.<name>.event_map]` rows from `docs/events.md` to capture excluded source events.
 - Generated Codex and Hermes hook commands omit `-url` by default, resolve the Hitch API URL at runtime, and use `hitch-client` when it is available.
-- Generated Pi and OMP extensions route observer callbacks to `/v1/events`, route return-capable control callbacks to `/v1/dispatch-sync`, resolve the Hitch API URL at runtime unless `--url` pins one, promote adapter metadata into Hitch envelope fields when available, and fail open if Hitch is unavailable. The generated OpenCode plugin also resolves the API URL at runtime and fails open.
+- Generated Pi and OMP extensions post observer callbacks with `mode:"async"` and return-capable control callbacks with `mode:"sync"` to `/v1/events`, resolve the Hitch API URL at runtime unless `--url` pins one, promote adapter metadata into Hitch envelope fields when available, and fail open if Hitch is unavailable. The generated OpenCode plugin also resolves the API URL at runtime and fails open.
 - Existing Codex, Hermes, Pi, OMP, and OpenCode hook configuration is backed up before Hitch modifies it.
 - Unknown harness names are rejected.
 - Uninstall removes only Hitch-managed Codex, Hermes, Pi, OMP, or OpenCode hooks and leaves user config in place.

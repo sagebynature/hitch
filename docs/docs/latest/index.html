@@ -93,7 +93,7 @@ hitch-client uninstall --only hermes --yes --json
 hitch-client uninstall --only pi --yes --json
 hitch-client uninstall --only omp --yes --json
 hitch-client uninstall --only opencode --yes --json</code></pre>
-          <p>The source installer seeds <code>~/.config/hitch/config.toml</code> when missing, adds missing managed default sections to existing valid config, prompts for a Hitch server URL through <code>/dev/tty</code>, and can persist <code>HITCH_URL</code> for remote servers. <code>hitch-client install</code> installs managed Codex, Hermes, Pi, OMP, and OpenCode adapters. Generated Pi and OMP extensions route observer callbacks to <code>/v1/events</code>, route return-capable control callbacks to <code>/v1/dispatch-sync</code>, promote adapter metadata into Hitch envelope fields, and fail open if Hitch is unavailable.</p>
+          <p>The source installer seeds <code>~/.config/hitch/config.toml</code> when missing, adds missing managed default sections to existing valid config, prompts for a Hitch server URL through <code>/dev/tty</code>, and can persist <code>HITCH_URL</code> for remote servers. <code>hitch-client install</code> installs managed Codex, Hermes, Pi, OMP, and OpenCode adapters. Generated Pi and OMP extensions post observer callbacks with <code>mode:"async"</code> and return-capable control callbacks with <code>mode:"sync"</code> to <code>/v1/events</code>, promote adapter metadata into Hitch envelope fields, and fail open if Hitch is unavailable.</p>
         </section>
 
         <section id="configuration">
@@ -110,7 +110,7 @@ hitch-client uninstall --only opencode --yes --json</code></pre>
               <tr><td><code>[harness.&lt;name&gt;]</code></td><td>Per-harness enable flags and source-event mappings.</td></tr>
             </tbody>
           </table>
-          <p>Strict validation rejects unknown config keys and invalid server ports, request sizes, log values, audit backends, handler event names, handler modes, handler error or timeout policies, and harness event-map values. Optional handler <code>working_dir</code> values run commands from a stable directory; relative values resolve from the config file directory. The default config enables harness event maps and audit storage, but no handlers; add <code>[handlers.&lt;name&gt;]</code> entries explicitly before Hitch executes subprocesses.</p>
+          <p>Strict validation rejects unknown config keys and invalid server ports, request sizes, log values, audit backends, handler event names, handler kinds, handler error or timeout policies, and harness event-map values. Optional handler <code>working_dir</code> values run commands from a stable directory; relative values resolve from the config file directory. The default config enables harness event maps and audit storage, but no handlers; add <code>[handlers.&lt;name&gt;]</code> entries explicitly before Hitch executes subprocesses.</p>
         </section>
 
         <section id="handler-protocol">
@@ -147,19 +147,19 @@ hitch-client uninstall --only opencode --yes --json</code></pre>
 command = ["python3", "examples/handlers/policy_handler.py"]
 working_dir = "."
 events = ["turn.user_prompt", "tool.requested", "tool.completed", "turn.completed"]
-mode = "sync"
+kind = "control"
 timeout_ms = 1000
 on_error = "fail_closed"
 on_timeout = "fail_closed"</code></pre>
           <p><code>turn.assistant_completed</code> is the consistent assistant-output-complete audit signal. Hitch stores it directly for OMP <code>message_end</code> and as a configured secondary row for Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, Pi <code>turn_end</code>, and OpenCode <code>session.idle</code>. Secondary audit rows are not used for sync native-response translation or live handler dispatch.</p>
           <h3>Payload logger for every harness</h3>
           <p><code>examples/handlers/payload_logger.py</code> appends each event payload to a JSONL log and returns <code>behavior:"none"</code>. Configure one sync handler and one async handler with <code>events = ["*"]</code> to observe Codex, Hermes, Pi, OMP, and OpenCode without changing control flow.</p>
-          <p>Async handlers also run after a sync dispatch for the same normalized event, so passive observers can subscribe with <code>mode = "async"</code> without affecting the harness-native sync response.</p>
+          <p>Async handlers also run after a sync dispatch for the same normalized event, so passive observers can subscribe with <code>kind = "observer"</code> without affecting the harness-native sync response.</p>
           <pre class="code-block"><code>[handlers.payload_logger_sync]
 command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
 working_dir = ".."
 events = ["*"]
-mode = "sync"
+kind = "control"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"
@@ -168,14 +168,14 @@ on_timeout = "fail_open"
 command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
 working_dir = ".."
 events = ["*"]
-mode = "async"
+kind = "observer"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"</code></pre>
           <p>Run <code>python3 examples/test_payload_logger.py</code> from the repository root. The script starts Hitch on <code>127.0.0.1:8797</code>, sends events through all five harness mappers, sends one async observer event, and verifies <code>tmp/hitch-payload-logger/payloads.jsonl</code>. If port <code>8797</code> is already in use, run with <code>HITCH_PAYLOAD_LOGGER_PORT=8796 python3 examples/test_payload_logger.py</code>. If you install real Hermes hooks against this example server, use <code>hitch-client install --only hermes --url http://127.0.0.1:8797 --yes --json</code>. Handler config changes affect <code>hitch serve</code>; the hook shim only reads stdin, resolves the API URL, and dispatches to the local Hitch API.</p>
           <p>Matching handlers run in lexicographic handler-name order. Higher-precedence decisions win; blocking decisions outrank transforms, context injection, and allow decisions. Multiple context injections concatenate, but multiple transform or replace-result decisions are rejected.</p>
           <div class="docs-index">
-            <a class="doc-card" href="../../handler-development.md"><small>Guide</small><h3>Building handlers</h3><p>Detailed handler modes, config mapping, decision behavior reference, test-drive commands, inspection, replay, and troubleshooting.</p></a>
+            <a class="doc-card" href="../../handler-development.md"><small>Guide</small><h3>Building handlers</h3><p>Detailed handler kinds, config mapping, decision behavior reference, test-drive commands, inspection, replay, and troubleshooting.</p></a>
             <a class="doc-card" href="https://github.com/sagebynature/hitch/tree/main/examples"><small>Examples</small><h3>Runnable handler test drives</h3><p>Policy and payload-logger examples that exercise the Hitch HTTP API end to end.</p></a>
           </div>
         </section>
@@ -315,11 +315,11 @@ on_timeout = "fail_open"</code></pre>
             <tbody>
               <tr><td><code>GET /v1/health</code></td><td>Return server health status.</td></tr>
               <tr><td><code>POST /v1/events</code></td><td>Ingest async observer events.</td></tr>
-              <tr><td><code>POST /v1/dispatch-sync</code></td><td>Run sync handlers and return a harness-native response.</td></tr>
+              
               <tr><td><code>GET /v1/events/&lt;id&gt;</code></td><td>Inspect stored inbound, normalized, handler, and native response records.</td></tr>
             </tbody>
           </table>
-          <pre class="code-block"><code>curl -sS -X POST http://127.0.0.1:8799/v1/dispatch-sync \
+          <pre class="code-block"><code>curl -sS -X POST http://127.0.0.1:8799/v1/events \
   -H 'content-type: application/json' \
   -d '{
     "harness": "codex",
@@ -335,13 +335,13 @@ on_timeout = "fail_open"</code></pre>
 
         <section id="harness-contracts">
           <h2>Harness contracts</h2>
-          <p>Hitch supports two dispatch modes: async observer events use <code>POST /v1/events</code>, and sync control events use <code>POST /v1/dispatch-sync</code> and return a native response.</p>
+          <p>Hitch supports two dispatch modes: all events use <code>POST /v1/events</code>; request <code>mode</code> selects async observer ingestion or sync control dispatch.</p>
           <table>
             <thead><tr><th>Harness</th><th>Current contract</th></tr></thead>
             <tbody>
               <tr><td>Codex</td><td>Maps native command hook payloads and translates decisions to Codex stdout JSON. The verified path covers every supported Codex lifecycle event and <code>PreToolUse</code> deny translation.</td></tr>
               <tr><td>Hermes</td><td>Maps shell hook payloads and translates decisions to Hermes stdout JSON. The verified <code>pre_tool_call</code> block response is <code>{"action":"block","message":"..."}</code>.</td></tr>
-              <tr><td>Pi / OMP</td><td>Maps extension callback events in Go and installs managed TypeScript extensions that post observer callbacks plus extension <code>ctx</code> metadata to <code>/v1/events</code>, post return-capable control callbacks to <code>/v1/dispatch-sync</code>, apply adapter-response return values or mutations only for sync responses, and fail open when Hitch is unavailable.</td></tr>
+              <tr><td>Pi / OMP</td><td>Maps extension callback events in Go and installs managed TypeScript extensions that post observer callbacks plus extension <code>ctx</code> metadata to <code>/v1/events</code>, post return-capable control callbacks to <code>/v1/events</code>, apply adapter-response return values or mutations only for sync responses, and fail open when Hitch is unavailable.</td></tr>
             </tbody>
           </table>
           <p>Async adapter calls print nothing and ignore Hitch network failure. Sync adapter calls emit a harness-native no-op response when Hitch is unreachable or returns no native response.</p>

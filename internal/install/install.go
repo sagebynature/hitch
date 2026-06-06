@@ -44,6 +44,15 @@ var hermesHookEvents = []string{
 	"pre_gateway_dispatch",
 }
 
+var hermesHookSyncEvents = map[string]struct{}{
+	"pre_tool_call":             {},
+	"pre_llm_call":              {},
+	"transform_tool_result":     {},
+	"transform_terminal_output": {},
+	"transform_llm_output":      {},
+	"pre_gateway_dispatch":      {},
+}
+
 var piExtensionEvents = []string{
 	"input",
 	"before_agent_start",
@@ -73,6 +82,7 @@ var piExtensionSyncEvents = []string{
 	"session_before_switch",
 	"session_before_fork",
 	"session_before_compact",
+	"user_bash",
 }
 
 var ompExtensionEvents = []string{
@@ -125,6 +135,8 @@ var ompExtensionSyncEvents = []string{
 	"session_before_branch",
 	"session_before_compact",
 	"session.compacting",
+	"user_bash",
+	"user_python",
 	"session_before_tree",
 }
 
@@ -950,12 +962,13 @@ async function dispatchToHitch(sourceEventType, event, ctx) {
     return undefined;
   }
 
-  const endpoint = HITCH_SYNC_EVENT_SET.has(sourceEventType) ? "/v1/dispatch-sync" : "/v1/events";
+  const sync = HITCH_SYNC_EVENT_SET.has(sourceEventType);
   try {
-    const response = await fetch(hitchAPIURL() + endpoint, {
+    const response = await fetch(hitchAPIURL() + "/v1/events", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        mode: sync ? "sync" : "async",
         harness: `)
 	b.WriteString(harnessLiteral)
 	b.WriteString(`,
@@ -966,10 +979,9 @@ async function dispatchToHitch(sourceEventType, event, ctx) {
 	b.WriteString(`
       })
     });
-    if (!response.ok) return undefined;
-    if (!HITCH_SYNC_EVENT_SET.has(sourceEventType)) return undefined;
+    if (!response.ok || !sync) return undefined;
     const payload = await response.json();
-    return applyAdapterResponse(payload.native_response, event);
+    return applyAdapterResponse(payload, event);
   } catch {
     return undefined;
   }
@@ -1127,10 +1139,11 @@ async function postToHitch(endpoint, sourceEventType, input, output, ctx) {
     metadata: collectMetadata(input, event, ctx)
   };
   try {
-    const response = await fetch(hitchAPIURL() + endpoint, {
+    const response = await fetch(hitchAPIURL() + "/v1/events", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        mode: endpoint,
         harness: `)
 	b.WriteString(harnessLiteral)
 	b.WriteString(`,
@@ -1141,16 +1154,16 @@ async function postToHitch(endpoint, sourceEventType, input, output, ctx) {
 	b.WriteString(`
       })
     });
-    if (!response.ok || endpoint !== "/v1/dispatch-sync") return;
+    if (!response.ok || endpoint !== "sync") return;
     const payload = await response.json();
-    await applyAdapterResponse(payload.native_response, output, input, ctx);
+    await applyAdapterResponse(payload, output, input, ctx);
   } catch (err) {
     if (err && err.hitchAdapterThrow) throw err;
   }
 }
 
 async function dispatchToHitch(sourceEventType, input, output, ctx) {
-  await postToHitch("/v1/dispatch-sync", sourceEventType, input, output, ctx);
+  await postToHitch("sync", sourceEventType, input, output, ctx);
 }
 
 async function observeWithHitch(sourceEventType, event, ctx) {
@@ -1163,6 +1176,7 @@ async function observeWithHitch(sourceEventType, event, ctx) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        mode: "async",
         harness: `)
 	b.WriteString(harnessLiteral)
 	b.WriteString(`,
@@ -1255,7 +1269,10 @@ func ensureDocumentMapping(doc *yaml.Node) *yaml.Node {
 }
 
 func hermesAdapterCommand(commandBase, event string) string {
-	return commandBase + " -harness hermes -event " + event + " -sync"
+	if _, ok := hermesHookSyncEvents[event]; ok {
+		return commandBase + " -harness hermes -event " + event + " -sync"
+	}
+	return commandBase + " -harness hermes -event " + event
 }
 
 func upsertHermesHook(doc *yaml.Node, event, command string) bool {

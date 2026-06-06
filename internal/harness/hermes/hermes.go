@@ -9,6 +9,19 @@ import (
 
 type Mapper struct{}
 
+var controlCapableEvents = map[string]struct{}{
+	"pre_tool_call":             {},
+	"pre_llm_call":              {},
+	"transform_tool_result":     {},
+	"transform_terminal_output": {},
+	"transform_llm_output":      {},
+	"pre_gateway_dispatch":      {},
+}
+
+func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
+	return harness.CapabilityFromSet(sourceEventType, controlCapableEvents)
+}
+
 func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
 	env := harness.NewEnvelope(protocol.HarnessHermes, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
 	harness.ApplySourceMetadata(&env, sourcePayload)

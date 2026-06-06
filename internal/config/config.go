@@ -101,7 +101,7 @@ type HandlerConfig struct {
 	Command    []string `toml:"command"`
 	WorkingDir string   `toml:"working_dir"`
 	Events     []string `toml:"events"`
-	Mode       string   `toml:"mode"`
+	Kind       string   `toml:"kind"`
 	TimeoutMS  int      `toml:"timeout_ms"`
 	OnError    string   `toml:"on_error"`
 	OnTimeout  string   `toml:"on_timeout"`
@@ -280,10 +280,10 @@ func (c Config) Validate() error {
 				return fmt.Errorf("handlers.%s references unknown event %q", name, e)
 			}
 		}
-		switch h.Mode {
-		case "async", "sync":
+		switch h.Kind {
+		case "observer", "control":
 		default:
-			return fmt.Errorf("handlers.%s.mode must be async or sync", name)
+			return fmt.Errorf("handlers.%s.kind must be observer or control", name)
 		}
 		if h.TimeoutMS <= 0 {
 			return fmt.Errorf("handlers.%s.timeout_ms must be positive", name)

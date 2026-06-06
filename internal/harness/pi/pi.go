@@ -9,6 +9,30 @@ import (
 
 type Mapper struct{}
 
+var controlCapableEvents = map[string]struct{}{
+	"input":                   {},
+	"tool_call":               {},
+	"tool_result":             {},
+	"context":                 {},
+	"before_provider_request": {},
+	"user_bash":               {},
+	"user_python":             {},
+	"session_before_switch":   {},
+	"session_before_fork":     {},
+	"session_before_branch":   {},
+	"session_before_compact":  {},
+	"session_before_tree":     {},
+	"session.compacting":      {},
+}
+
+func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
+	return CapabilityForHarness(sourceEventType)
+}
+
+func CapabilityForHarness(sourceEventType string) harness.SourceEventCapability {
+	return harness.CapabilityFromSet(sourceEventType, controlCapableEvents)
+}
+
 type nativePayloadEnvelope struct {
 	Event  protocol.RawJSON `json:"event"`
 	Meta   nativeMetadata   `json:"metadata"`
@@ -91,7 +115,7 @@ func TranslateForHarness(sourceEventType string, aggregate protocol.AggregateDec
 			resp.AdapterAction = "return"
 			resp.ReturnValue = map[string]interface{}{"action": "continue"}
 		}
-	case "tool_call":
+	case "tool_call", "user_bash", "user_python":
 		if d.Behavior == protocol.BehaviorBlock || d.Behavior == protocol.BehaviorDeny || d.Behavior == protocol.BehaviorStop {
 			resp.AdapterAction = "return"
 			resp.ReturnValue = map[string]interface{}{"block": true, "reason": d.Reason}

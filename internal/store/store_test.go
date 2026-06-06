@@ -25,7 +25,7 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err := s.InsertNormalized(ctx, NormalizedEvent{ID: "norm_1", InboundEventID: "in_1", HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: "test"}); err != nil {
 		t.Fatalf("insert normalized: %v", err)
 	}
-	if err := s.InsertHandlerInvocation(ctx, HandlerInvocation{ID: "handler_1", NormalizedEventID: "norm_1", HandlerName: "h", Mode: "sync", StartedAt: now, CompletedAt: now, Status: protocol.StatusOK, Output: protocol.Raw(map[string]interface{}{"status": "ok"}), Decision: protocol.Raw(map[string]interface{}{"behavior": "none"})}); err != nil {
+	if err := s.InsertHandlerInvocation(ctx, HandlerInvocation{ID: "handler_1", NormalizedEventID: "norm_1", HandlerName: "h", Kind: "control", StartedAt: now, CompletedAt: now, Status: protocol.StatusOK, Output: protocol.Raw(map[string]interface{}{"status": "ok"}), Decision: protocol.Raw(map[string]interface{}{"behavior": "none"})}); err != nil {
 		t.Fatalf("insert handler: %v", err)
 	}
 	if err := s.InsertNativeResponse(ctx, NativeResponse{ID: "resp_1", NormalizedEventID: "norm_1", Response: protocol.Raw(map[string]interface{}{"ok": true}), EmittedAt: now}); err != nil {

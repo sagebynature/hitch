@@ -16,14 +16,14 @@ Handlers can be shell scripts, Python programs, Node scripts, Go binaries, or an
 
 ## Handler types
 
-Hitch has two handler modes. Choose the mode based on whether the source harness is waiting for a decision.
+Hitch separates request mode, handler kind, and source event capability. Request `mode` is a top-level HTTP field (`async` or `sync`, default `async`). Handler `kind` is a config field (`observer` or `control`). Source event capability is the harness contract: some source events are observer-only, while others can consume a native response.
 
-| Handler mode | Configure with | Triggered by | Use for | Response path |
+| Handler kind | Configure with | Triggered by | Use for | Response path |
 | --- | --- | --- | --- | --- |
-| Async observer | `mode = "async"` | `POST /v1/events`, and after `POST /v1/dispatch-sync` for the same normalized event | Audit, metrics, passive logging, background indexing | Hitch ignores native responses. |
-| Sync control | `mode = "sync"` | `POST /v1/dispatch-sync` | Blocking tools, allowing tools, adding prompt context, rewriting input, replacing output | Hitch aggregates sync decisions and translates them to harness-native JSON. |
+| Observer | `kind = "observer"` | Async requests, and after sync control dispatch for the same normalized event | Audit, metrics, passive logging, background indexing | Hitch ignores handler decisions for native response purposes. |
+| Control | `kind = "control"` | Sync requests for control-capable source events | Blocking tools, allowing tools, adding prompt context, rewriting input, replacing output | Hitch aggregates decisions and returns harness-native JSON. |
 
-Use async handlers when the harness should continue regardless of handler output. Use sync handlers when the harness needs a decision before it proceeds.
+Observer handlers may subscribe to control-capable events, such as logging a tool request while a separate control handler decides allow/deny. Control handlers never run during async requests, and sync requests for observer-only source events are rejected.
 
 ## Step 1: Pick the Hitch event to handle
 
@@ -55,7 +55,7 @@ Add a `[handlers.<name>]` table to your Hitch config.
 command = ["python3", "examples/handlers/policy_handler.py"]
 working_dir = "."
 events = ["tool.requested"]
-mode = "sync"
+kind = "control"
 timeout_ms = 1000
 on_error = "fail_closed"
 on_timeout = "fail_closed"
@@ -68,7 +68,7 @@ Fields:
 | `command` | Yes | Command and arguments passed to `exec`. Hitch writes the envelope to stdin. |
 | `working_dir` | No | Directory Hitch runs the command from. Relative values in loaded config files resolve from the config file directory. |
 | `events` | Yes | Normalized Hitch events to match. Use `"*"` to match all events. |
-| `mode` | Yes | `"sync"` or `"async"`. Must match the dispatch path. |
+| `kind` | Yes | `"control"` or `"observer"`. Control handlers may affect sync native responses; observer handlers never do. |
 | `timeout_ms` | Yes | Per-handler timeout. Hitch records `timeout` if exceeded. |
 | `on_error` | No | `fail_open`, `fail_closed`, or `native_default`. Current dispatch treats `fail_closed` as a blocking aggregate decision; other values continue. |
 | `on_timeout` | No | Same policy values as `on_error`, applied to timeout results. |
@@ -194,7 +194,7 @@ Run it from the repository root:
 python3 examples/test_drive.py
 ```
 
-The script starts `go run ./cmd/hitch serve --config examples/test-drive.config.toml`, sends real `POST /v1/dispatch-sync` requests, verifies native responses, inspects the persisted audit record, and stops the server.
+The script starts `go run ./cmd/hitch serve --config examples/test-drive.config.toml`, sends real `POST /v1/events` requests with `mode:"sync"`, verifies native responses, inspects the persisted audit record, and stops the server.
 
 Expected output shape:
 
@@ -242,21 +242,21 @@ Example log record:
 }
 ```
 
-Use both sync and async handler entries when you want to observe both Hitch dispatch paths:
+Use both control and observer entries when you deliberately want to log both stages of sync requests during development:
 
 ```toml
-[handlers.payload_logger_sync]
+[handlers.payload_logger_control]
 command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
 events = ["*"]
-mode = "sync"
+kind = "control"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"
 
-[handlers.payload_logger_async]
+[handlers.payload_logger_observer]
 command = ["python3", "examples/handlers/payload_logger.py", "--log", "tmp/hitch-payload-logger/payloads.jsonl"]
 events = ["*"]
-mode = "async"
+kind = "observer"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"
@@ -366,7 +366,7 @@ Use dry-run first when you only want to verify the stored event. Non-dry-run rep
 
 Check all of these:
 
-- The request path can reach the handler mode: `/v1/events` for async observers, `/v1/dispatch-sync` for sync handlers; async observers also run after sync dispatch for the same normalized event.
+- The request `mode` and source event capability can reach the handler kind: async requests run observer handlers; sync requests for control-capable source events run control handlers first and observer handlers afterward.
 - `events` contains the normalized Hitch event, not the source event.
 - The source event maps to the Hitch event you expect. See [`events.md`](events.md).
 - The command path is correct relative to the Hitch server working directory.

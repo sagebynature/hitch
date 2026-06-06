@@ -46,13 +46,13 @@ path = "~/.local/share/hitch/events.sqlite"
 [handlers.audit]
 command = ["hitch-handler-audit"]
 events = ["*"]
-mode = "async"
+kind = "observer"
 timeout_ms = 1000
 
 [handlers.security_gate]
 command = ["hitch-handler-security"]
 events = ["tool.requested", "tool.permission_requested"]
-mode = "sync"
+kind = "control"
 timeout_ms = 750
 on_error = "fail_open"
 on_timeout = "fail_open"
@@ -75,8 +75,8 @@ func TestParseValidConfig(t *testing.T) {
 	if c.Server.Port != 8799 {
 		t.Fatalf("wrong port: %d", c.Server.Port)
 	}
-	if got := c.Handlers["security_gate"].Mode; got != "sync" {
-		t.Fatalf("wrong mode: %s", got)
+	if got := c.Handlers["security_gate"].Kind; got != "control" {
+		t.Fatalf("wrong kind: %s", got)
 	}
 }
 
@@ -382,7 +382,7 @@ func TestParseRejectsInvalidEvent(t *testing.T) {
 [handlers.bad]
 command = ["x"]
 events = ["not.real"]
-mode = "async"
+kind = "observer"
 timeout_ms = 1
 `
 	_, err := Parse([]byte(bad))

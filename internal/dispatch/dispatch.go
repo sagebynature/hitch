@@ -18,7 +18,7 @@ import (
 
 type Invocation struct {
 	HandlerName string
-	Mode        string
+	Kind        string
 	StartedAt   time.Time
 	CompletedAt time.Time
 	Status      protocol.HandlerStatus
@@ -46,8 +46,8 @@ func NewRunnerWithLogger(handlers map[string]config.HandlerConfig, log *slog.Log
 	return Runner{Handlers: handlers, Log: log}
 }
 
-func (r Runner) Dispatch(ctx context.Context, env protocol.EventEnvelope, mode string, totalDeadline time.Duration) Result {
-	selected := r.matchHandlers(env.HitchEventType, mode)
+func (r Runner) Dispatch(ctx context.Context, env protocol.EventEnvelope, kind string, totalDeadline time.Duration) Result {
+	selected := r.matchHandlers(env.HitchEventType, kind)
 	if len(selected) == 0 {
 		return Result{Aggregate: protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorNone}}}
 	}
@@ -75,10 +75,10 @@ func (r Runner) Dispatch(ctx context.Context, env protocol.EventEnvelope, mode s
 	return Result{Invocations: inv, Aggregate: aggregate(inv, selected, r.Handlers)}
 }
 
-func (r Runner) matchHandlers(event protocol.EventType, mode string) []string {
+func (r Runner) matchHandlers(event protocol.EventType, kind string) []string {
 	names := make([]string, 0, len(r.Handlers))
 	for name, h := range r.Handlers {
-		if h.Mode != mode {
+		if h.Kind != kind {
 			continue
 		}
 		for _, e := range h.Events {
@@ -94,7 +94,7 @@ func (r Runner) matchHandlers(event protocol.EventType, mode string) []string {
 
 func runHandler(parent context.Context, log *slog.Logger, name string, cfg config.HandlerConfig, env protocol.EventEnvelope) Invocation {
 	started := time.Now().UTC()
-	inv := Invocation{HandlerName: name, Mode: cfg.Mode, StartedAt: started, Status: protocol.StatusOK}
+	inv := Invocation{HandlerName: name, Kind: cfg.Kind, StartedAt: started, Status: protocol.StatusOK}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(cfg.TimeoutMS)*time.Millisecond)
 	defer cancel()
 	stdin, err := json.Marshal(env)
@@ -184,7 +184,7 @@ func logHandlerInvocationCompleted(log *slog.Logger, inv Invocation, env protoco
 func handlerLogAttrs(inv Invocation, env protocol.EventEnvelope, extra ...any) []any {
 	attrs := []any{
 		"handler", inv.HandlerName,
-		"mode", inv.Mode,
+		"kind", inv.Kind,
 		"harness", env.Harness,
 		"source_event_type", env.SourceEventType,
 		"hitch_event_type", env.HitchEventType,

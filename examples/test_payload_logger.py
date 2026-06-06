@@ -97,8 +97,9 @@ def wait_for_log_count(count: int) -> list[dict[str, Any]]:
 def dispatch_sync(harness: str, source_event_type: str, source_payload: dict[str, Any]) -> None:
     request(
         "POST",
-        "/v1/dispatch-sync",
+        "/v1/events",
         {
+            "mode": "sync",
             "harness": harness,
             "harness_version": "",
             "source_event_type": source_event_type,
@@ -113,6 +114,7 @@ def dispatch_async(harness: str, source_event_type: str, source_payload: dict[st
         "POST",
         "/v1/events",
         {
+            "mode": "async",
             "harness": harness,
             "harness_version": "",
             "source_event_type": source_event_type,

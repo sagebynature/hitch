@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/sagebynature/hitch/internal/harness"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -60,5 +61,31 @@ func TestToolCallMutate(t *testing.T) {
 	}
 	if got.AdapterAction != "mutate_and_return" || len(got.Mutations) != 1 {
 		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestUserCommandUsesToolControlTranslation(t *testing.T) {
+	out, err := (Mapper{}).Translate("user_bash", protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorDeny, Reason: "no"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got AdapterResponse
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.AdapterAction != "return" {
+		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestCapabilityClassifiesSourceEvents(t *testing.T) {
+	if got := (Mapper{}).Capability("user_bash"); got != harness.CapabilityControlCapable {
+		t.Fatalf("user_bash capability = %s", got)
+	}
+	if got := (Mapper{}).Capability("tool_call"); got != harness.CapabilityControlCapable {
+		t.Fatalf("tool_call capability = %s", got)
+	}
+	if got := (Mapper{}).Capability("turn_end"); got != harness.CapabilityObserverOnly {
+		t.Fatalf("turn_end capability = %s", got)
 	}
 }

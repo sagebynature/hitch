@@ -338,7 +338,7 @@ func seedReplayFixture(t *testing.T, ctx context.Context, handlerJSON string) (s
 	if err := st.InsertNormalized(ctx, store.NormalizedEvent{ID: normalizedID, InboundEventID: "in_replay", HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: "test"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: "handler_original", NormalizedEventID: normalizedID, HandlerName: "original", Mode: "sync", StartedAt: now, CompletedAt: now, Status: protocol.StatusOK, Output: protocol.Raw(map[string]interface{}{"status": "ok"}), Decision: protocol.Raw(map[string]interface{}{"behavior": "none"})}); err != nil {
+	if err := st.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: "handler_original", NormalizedEventID: normalizedID, HandlerName: "original", Kind: "control", StartedAt: now, CompletedAt: now, Status: protocol.StatusOK, Output: protocol.Raw(map[string]interface{}{"status": "ok"}), Decision: protocol.Raw(map[string]interface{}{"behavior": "none"})}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.InsertNativeResponse(ctx, store.NativeResponse{ID: "native_original", NormalizedEventID: normalizedID, Response: protocol.Raw(map[string]interface{}{}), EmittedAt: now}); err != nil {
@@ -352,7 +352,7 @@ func seedReplayFixture(t *testing.T, ctx context.Context, handlerJSON string) (s
 [handlers.replay]
 command = ["/bin/sh", "-c", "printf '%s' \"$HANDLER_JSON\""]
 events = ["tool.requested"]
-mode = "sync"
+kind = "control"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"
@@ -437,17 +437,14 @@ func TestE2ECodexLifecycleHooksDispatchToObserverHandler(t *testing.T) {
 		{"Stop", protocol.EventTurnCompleted},
 	}
 	for _, event := range events {
-		resp, err := client.Dispatch(api.NewEventRequest("codex", event.native, codexLifecyclePayload(event.native)))
+		native, err := client.Dispatch(api.NewEventRequest("codex", event.native, codexLifecyclePayload(event.native)))
 		if err != nil {
 			t.Fatalf("%s dispatch failed: %v", event.native, err)
 		}
-		if string(resp.NativeResponse) != "{}" {
-			t.Fatalf("%s observer handler should produce empty native response, got %s", event.native, string(resp.NativeResponse))
+		if strings.TrimSpace(string(native)) != "{}" {
+			t.Fatalf("%s observer handler should produce empty native response, got %s", event.native, string(native))
 		}
-		inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
-		if err != nil {
-			t.Fatalf("%s inspection failed: %v", event.native, err)
-		}
+		inspection := waitInspectionWithHandlers(t, ctx, st, event.hitch, 1)
 		if inspection.Inbound.SourceEventType != event.native || inspection.Normalized.HitchEventType != event.hitch {
 			t.Fatalf("%s was not persisted with expected mapping: %#v", event.native, inspection)
 		}
@@ -510,14 +507,11 @@ func TestE2EOpenCodeLifecycleHooksDispatchToObserverHandler(t *testing.T) {
 
 	for _, tc := range events {
 		payload := protocol.RawJSON(`{"event":{"input":{"sessionID":"sess"},"output":{}},"metadata":{"session_id":"sess","cwd":"/tmp"}}`)
-		resp, err := client.Dispatch(api.NewEventRequest("opencode", tc.native, payload))
+		resp, err := client.Event(api.NewEventRequest("opencode", tc.native, payload))
 		if err != nil {
-			t.Fatalf("%s dispatch failed: %v", tc.native, err)
+			t.Fatalf("%s event failed: %v", tc.native, err)
 		}
-		inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
-		if err != nil {
-			t.Fatalf("%s inspection failed: %v", tc.native, err)
-		}
+		inspection := waitInspectionByIDWithHandlers(t, ctx, st, resp.NormalizedEventID, 1)
 		if inspection.Inbound.SourceEventType != tc.native || inspection.Normalized.HitchEventType != tc.hitch {
 			t.Fatalf("%s was not persisted with expected mapping: %#v", tc.native, inspection)
 		}
@@ -578,7 +572,7 @@ enabled = true
 [handlers.policy]
 command = ["/bin/sh", "-c", "printf '%s' \"$HANDLER_JSON\""]
 events = ["tool.requested"]
-mode = "sync"
+kind = "control"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"
@@ -602,7 +596,7 @@ func e2eObserverConfig(t *testing.T, dbPath string) config.Config {
 		"observer": {
 			Command:   []string{"/bin/sh", "-c", command},
 			Events:    []string{"*"},
-			Mode:      "sync",
+			Kind:      "observer",
 			TimeoutMS: 5000,
 			OnError:   "fail_open",
 			OnTimeout: "fail_open",
@@ -649,4 +643,37 @@ func onlyInspection(t *testing.T, ctx context.Context, st *store.Store, eventTyp
 		t.Fatal(err)
 	}
 	return inspection
+}
+
+func waitInspectionWithHandlers(t *testing.T, ctx context.Context, st *store.Store, eventType protocol.EventType, handlers int) store.EventInspection {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		inspection := onlyInspection(t, ctx, st, eventType)
+		if len(inspection.HandlerInvocations) >= handlers {
+			return inspection
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %d handler invocations on %s: %#v", handlers, eventType, inspection.HandlerInvocations)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func waitInspectionByIDWithHandlers(t *testing.T, ctx context.Context, st *store.Store, id string, handlers int) store.EventInspection {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		inspection, err := st.InspectEvent(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(inspection.HandlerInvocations) >= handlers {
+			return inspection
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %d handler invocations on %s: %#v", handlers, id, inspection.HandlerInvocations)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
