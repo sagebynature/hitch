@@ -1,4 +1,4 @@
-.PHONY: help build test test-go test-adapters run serve status doctor install-dry-run clean
+.PHONY: help build test test-go test-adapters run serve status doctor install-dry-run clean preview-pages
 
 BINARY ?= bin/hitch
 CLIENT_BINARY ?= bin/hitch-client
@@ -15,7 +15,8 @@ help:
 		'  make status          Print CLI status as JSON' \
 		'  make doctor          Run CLI doctor as JSON' \
 		'  make install-dry-run Preview integration placeholder install' \
-		'  make clean           Remove build outputs'
+		'  make clean           Remove build outputs' \
+		'  make preview-pages   Preview the Hitch documentation pages'
 
 build:
 	@mkdir -p $(dir $(BINARY)) $(dir $(CLIENT_BINARY))
@@ -42,3 +43,6 @@ install-dry-run:
 
 clean:
 	rm -rf bin
+
+preview-pages:
+	python3 -m http.server 8770 --directory docs
