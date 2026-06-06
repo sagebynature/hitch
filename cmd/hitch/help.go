@@ -14,8 +14,6 @@ func printHitchHelp(w io.Writer, topics ...string) {
 		switch topics[0] {
 		case "serve":
 			printServeHelp(w)
-		case "handler":
-			printHandlerHelp(w)
 		case "status":
 			printStatusHelp(w)
 		case "doctor":
@@ -47,7 +45,6 @@ Usage:
 
 Commands:
   serve           Run the local Hitch API server
-  handler         Run a bundled handler
   status          Print runtime/config status
   doctor          Run basic diagnostics
   config          Manage Hitch server configuration
@@ -80,20 +77,6 @@ Options:
 Examples:
   hitch serve
   hitch serve --config ~/.config/hitch/config.toml
-`)
-}
-
-func printHandlerHelp(w io.Writer) {
-	fmt.Fprint(w, `Run a bundled Hitch handler.
-
-Usage:
-  hitch handler <name>
-
-Bundled handlers:
-  noop-observer   Read one Hitch envelope from stdin and return behavior:none
-
-Examples:
-  hitch handler noop-observer < envelope.json
 `)
 }
 

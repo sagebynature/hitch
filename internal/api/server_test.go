@@ -101,6 +101,44 @@ func TestDispatchSync(t *testing.T) {
 	}
 }
 
+func TestDispatchSyncWithDefaultConfigRunsNoHandlersAndPassesThrough(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	s := New(testConfig(), slog.Default(), st)
+	body := []byte(`{"harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash","session_id":"session_1","turn_id":"turn_1","cwd":"/tmp/hitch","model":"gpt-test"},"hitch_client_version":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("dispatch code %d body %s", w.Code, w.Body.String())
+	}
+	var resp DispatchResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if string(resp.NativeResponse) != "{}" {
+		t.Fatalf("default sync dispatch should pass through, got %s", resp.NativeResponse)
+	}
+	if resp.Aggregate.Decision.Behavior != protocol.BehaviorNone {
+		t.Fatalf("default sync dispatch should aggregate to behavior none: %#v", resp.Aggregate)
+	}
+	inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inspection.HandlerInvocations) != 0 {
+		t.Fatalf("default config should not run handlers: %#v", inspection.HandlerInvocations)
+	}
+	if len(inspection.NativeResponses) != 1 {
+		t.Fatalf("native pass-through response was not persisted: %#v", inspection.NativeResponses)
+	}
+}
+
 func TestDispatchSyncAlsoRunsAsyncObservers(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))

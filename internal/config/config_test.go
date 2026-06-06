@@ -247,6 +247,9 @@ func TestDefaultConfigTOMLMatchesEmbeddedConfigFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("embedded default config is invalid: %v", err)
 	}
+	if len(cfg.Handlers) != 0 {
+		t.Fatalf("default config should not enable handlers: %#v", cfg.Handlers)
+	}
 	if got := cfg.Harness.Codex.EventMap["PreToolUse"]; len(got) != 1 || got[0] != "tool.requested" {
 		t.Fatalf("default config omitted source event mappings: %#v", cfg.Harness)
 	}

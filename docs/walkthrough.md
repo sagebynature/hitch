@@ -5,22 +5,11 @@ This walkthrough gets Hitch from a fresh checkout to a working Codex proof of co
 1. install or build `hitch`
 2. start the local Hitch server
 3. install Codex lifecycle hooks
-4. run a no-op observer handler against a sample Codex event
+4. send a sample Codex event through sync pass-through
 5. inspect the persisted audit record
 
-The proof uses the built-in sample handler:
+The default config enables harness mappings and audit storage, but no handlers. With no matching sync handlers, Hitch records the event and returns the harness-native pass-through response.
 
-```sh
-hitch handler noop-observer
-```
-
-That handler reads the normalized Hitch event envelope from stdin and returns:
-
-```json
-{"status":"ok","decision":{"behavior":"none"}}
-```
-
-It observes the payload and does not change Codex behavior.
 
 ## Prerequisites
 
@@ -91,7 +80,7 @@ export PATH="$PWD/bin:$PATH"
 hitch --version
 ```
 
-The default sample handler config uses `hitch handler noop-observer`, so `hitch` must be resolvable on `PATH` when the server runs.
+No handler is enabled by default, so starting the server does not require `hitch` to be resolvable by subprocess handlers.
 
 ## Start the Hitch server
 
@@ -123,17 +112,7 @@ The default config stores audit records at:
 ~/.local/share/hitch/events.sqlite
 ```
 
-The default config also includes the no-op observer handler:
-
-```toml
-[handlers.noop_observer]
-command = ["hitch", "handler", "noop-observer"]
-events = ["*"]
-mode = "sync"
-timeout_ms = 1000
-on_error = "fail_open"
-on_timeout = "fail_open"
-```
+The default config does not enable any handlers. Add `[handlers.<name>]` entries explicitly if you want Hitch to execute subprocesses for matching events.
 
 Keep this server running while you run the remaining commands in another shell.
 
@@ -226,7 +205,7 @@ Use the normal `/hooks` review flow for routine setup.
 This example sends a fake Codex `SessionStart` payload through Hitch. It exercises the same path that an installed Codex hook uses:
 
 ```text
-Codex hook JSON -> hitch-client -> Hitch API -> normalized event -> noop_observer handler -> Codex-native response -> audit store
+Codex hook JSON -> hitch-client -> Hitch API -> normalized event -> Codex-native response -> audit store
 ```
 
 Run:
@@ -249,7 +228,7 @@ Expected stdout:
 {}
 ```
 
-`{}` means the no-op observer returned no Codex control decision, so Codex should continue normally.
+`{}` means Hitch produced no Codex control decision, so Codex should continue normally.
 
 ## Run an API example with an inspectable event ID
 
@@ -289,14 +268,7 @@ Expected response shape:
     "decision": {
       "behavior": "none"
     },
-    "handler_results": [
-      {
-        "status": "ok",
-        "decision": {
-          "behavior": "none"
-        }
-      }
-    ]
+    "handler_results": []
   },
   "native_response": {}
 }
@@ -320,7 +292,7 @@ Expected inspection includes:
 
 - one inbound Codex event
 - one normalized Hitch event
-- one `noop_observer` handler invocation
+- no handler invocation records
 - one native response record
 
 The normalized event should have:
@@ -329,17 +301,6 @@ The normalized event should have:
 "hitch_event_type": "tool.requested"
 ```
 
-The handler invocation should have:
-
-```json
-"handler_name": "noop_observer"
-```
-
-and a persisted decision like:
-
-```json
-{"behavior":"none"}
-```
 
 ## Run the example from Codex itself
 
@@ -358,7 +319,7 @@ The installed hooks should observe lifecycle events such as:
 - `PostToolUse`
 - `Stop`
 
-Because the default handler is a no-op observer, Codex behavior should not change.
+Because no handler is configured by default, Codex behavior should not change.
 
 ## Troubleshooting
 
@@ -400,27 +361,9 @@ Check the server:
 curl -sS http://127.0.0.1:8799/v1/health
 ```
 
-### Handler invocation is missing from inspection
+### Add a handler for smoke testing
 
-Common causes:
-
-- The server was not running when the hook fired.
-- The config used to start the server did not include `handlers.noop_observer`.
-- `hitch` was not on `PATH` for the server process.
-
-Check the config passed to `hitch serve` and verify:
-
-```sh
-hitch handler noop-observer <<'JSON'
-{"hitch_version":"0.1.0","event_id":"evt_demo","received_at":"2026-06-04T00:00:00Z","harness":"codex","source_event_type":"SessionStart","source_payload":{},"hitch_event_type":"session.started","payload":{}}
-JSON
-```
-
-Expected output:
-
-```json
-{"status":"ok","decision":{"behavior":"none"}}
-```
+If you want inspection output to include handler invocation records, add a handler command to the config used by `hitch serve`. Keep handler examples in separate scripts or binaries and wire them through `[handlers.<name>]`.
 
 ### Remove Hitch Codex hooks
 

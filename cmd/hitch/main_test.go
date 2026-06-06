@@ -21,47 +21,6 @@ import (
 	"github.com/sagebynature/hitch/internal/store"
 )
 
-func init() {
-	if os.Getenv("HITCH_TEST_NOOP_HANDLER") == "1" {
-		noopObserverHandler()
-		os.Exit(0)
-	}
-}
-
-func runNoopObserverForTest(t *testing.T, input string) string {
-	t.Helper()
-
-	oldStdin := os.Stdin
-	oldStdout := os.Stdout
-	inR, inW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	outR, outW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, _ = inW.WriteString(input)
-	_ = inW.Close()
-	os.Stdin = inR
-	os.Stdout = outW
-	defer func() {
-		os.Stdin = oldStdin
-		os.Stdout = oldStdout
-		_ = inR.Close()
-		_ = outR.Close()
-	}()
-
-	noopObserverHandler()
-	_ = outW.Close()
-	out, err := io.ReadAll(outR)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(out)
-}
-
 func captureStdoutForTest(t *testing.T, fn func()) string {
 	t.Helper()
 
@@ -89,9 +48,14 @@ func TestRootHelpListsCommandsWithoutAdapter(t *testing.T) {
 	var out strings.Builder
 	printHitchHelp(&out)
 	text := out.String()
-	for _, want := range []string{"hitch <command>", "serve", "handler", "config", "inspect-event", "Use hitch-client"} {
+	for _, want := range []string{"hitch <command>", "serve", "config", "inspect-event", "Use hitch-client"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("help missing %q:\n%s", want, text)
+		}
+	}
+	for _, removed := range []string{"  handler", "hitch handler"} {
+		if strings.Contains(text, removed) {
+			t.Fatalf("hitch help should not mention removed handler command:\n%s", text)
 		}
 	}
 	if strings.Contains(text, "adapter") {
@@ -256,21 +220,6 @@ func freePort(t *testing.T) string {
 	return strings.TrimPrefix(ln.Addr().String(), "127.0.0.1:")
 }
 
-func TestNoopObserverHandlerConsumesEnvelopeAndReturnsNone(t *testing.T) {
-	out := runNoopObserverForTest(t, `{"hitch_version":"0.1.0","event_id":"evt","received_at":"2026-06-04T00:00:00Z","harness":"codex","source_event_type":"SessionStart","source_payload":{},"hitch_event_type":"session.started","payload":{}}`)
-
-	var result protocol.HandlerResult
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
-		t.Fatalf("noop observer stdout is not handler JSON: %v; stdout=%q", err, out)
-	}
-	if result.Status != protocol.StatusOK {
-		t.Fatalf("noop observer returned non-ok status: %#v", result)
-	}
-	if result.Decision == nil || result.Decision.Behavior != protocol.BehaviorNone {
-		t.Fatalf("noop observer should not alter control flow: %#v", result.Decision)
-	}
-}
-
 func TestHitchInstallSubcommandIsRejected(t *testing.T) {
 	cmd := exec.Command("go", "run", ".", "install", "--dry-run", "--json")
 	out, err := cmd.CombinedOutput()
@@ -290,6 +239,17 @@ func TestHitchAdapterSubcommandIsRejected(t *testing.T) {
 	}
 	if strings.Contains(string(out), "Dispatch one source event") {
 		t.Fatalf("hitch adapter exposed dispatch help after removal: %s", out)
+	}
+}
+
+func TestHitchHandlerSubcommandIsRejected(t *testing.T) {
+	cmd := exec.Command("go", "run", ".", "handler", "noop-observer")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("hitch handler unexpectedly succeeded: %s", out)
+	}
+	if strings.Contains(string(out), "noop-observer") || strings.Contains(string(out), "Run a bundled Hitch handler") {
+		t.Fatalf("hitch handler exposed removed bundled handler help: %s", out)
 	}
 }
 
@@ -449,7 +409,7 @@ enabled = true
 	return dbPath, cfgPath, normalizedID
 }
 
-func TestE2ECodexLifecycleHooksDispatchToNoopObserver(t *testing.T) {
+func TestE2ECodexLifecycleHooksDispatchToObserverHandler(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
 	st, err := store.Open(ctx, dbPath)
@@ -457,7 +417,7 @@ func TestE2ECodexLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	server := httptest.NewServer(api.New(e2eNoopConfig(t, dbPath), slog.Default(), st).Handler())
+	server := httptest.NewServer(api.New(e2eObserverConfig(t, dbPath), slog.Default(), st).Handler())
 	defer server.Close()
 	client := api.Client{BaseURL: server.URL}
 
@@ -482,7 +442,7 @@ func TestE2ECodexLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 			t.Fatalf("%s dispatch failed: %v", event.native, err)
 		}
 		if string(resp.NativeResponse) != "{}" {
-			t.Fatalf("%s noop observer should produce empty native response, got %s", event.native, string(resp.NativeResponse))
+			t.Fatalf("%s observer handler should produce empty native response, got %s", event.native, string(resp.NativeResponse))
 		}
 		inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
 		if err != nil {
@@ -491,15 +451,15 @@ func TestE2ECodexLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 		if inspection.Inbound.SourceEventType != event.native || inspection.Normalized.HitchEventType != event.hitch {
 			t.Fatalf("%s was not persisted with expected mapping: %#v", event.native, inspection)
 		}
-		if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].HandlerName != "noop_observer" || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
-			t.Fatalf("%s noop observer invocation was not persisted: %#v", event.native, inspection.HandlerInvocations)
+		if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].HandlerName != "observer" || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
+			t.Fatalf("%s observer invocation was not persisted: %#v", event.native, inspection.HandlerInvocations)
 		}
 		var decision protocol.Decision
 		if err := json.Unmarshal(inspection.HandlerInvocations[0].Decision, &decision); err != nil {
 			t.Fatalf("%s decision JSON was not persisted: %v", event.native, err)
 		}
 		if decision.Behavior != protocol.BehaviorNone {
-			t.Fatalf("%s noop observer changed control flow: %#v", event.native, decision)
+			t.Fatalf("%s observer changed control flow: %#v", event.native, decision)
 		}
 		if len(inspection.NativeResponses) != 1 {
 			t.Fatalf("%s native response was not persisted: %#v", event.native, inspection.NativeResponses)
@@ -507,7 +467,7 @@ func TestE2ECodexLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 	}
 }
 
-func TestE2EOpenCodeLifecycleHooksDispatchToNoopObserver(t *testing.T) {
+func TestE2EOpenCodeLifecycleHooksDispatchToObserverHandler(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
 	st, err := store.Open(ctx, dbPath)
@@ -516,7 +476,7 @@ func TestE2EOpenCodeLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 	}
 	defer st.Close()
 
-	cfg := e2eNoopConfig(t, dbPath)
+	cfg := e2eObserverConfig(t, dbPath)
 	cfg.Harness.OpenCode.EventMap = map[string]config.EventTypes{
 		"chat.message":                    {protocol.EventTurnUserPrompt},
 		"tool.execute.before":             {protocol.EventToolRequested},
@@ -561,8 +521,8 @@ func TestE2EOpenCodeLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 		if inspection.Inbound.SourceEventType != tc.native || inspection.Normalized.HitchEventType != tc.hitch {
 			t.Fatalf("%s was not persisted with expected mapping: %#v", tc.native, inspection)
 		}
-		if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].HandlerName != "noop_observer" || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
-			t.Fatalf("%s noop observer invocation was not persisted: %#v", tc.native, inspection.HandlerInvocations)
+		if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].HandlerName != "observer" || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
+			t.Fatalf("%s observer invocation was not persisted: %#v", tc.native, inspection.HandlerInvocations)
 		}
 	}
 	assistantCompleted := onlyInspection(t, ctx, st, protocol.EventTurnAssistantCompleted)
@@ -629,13 +589,9 @@ on_timeout = "fail_open"
 	return cfg
 }
 
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
-}
-
-func e2eNoopConfig(t *testing.T, dbPath string) config.Config {
+func e2eObserverConfig(t *testing.T, dbPath string) config.Config {
 	t.Helper()
-	command := "HITCH_TEST_NOOP_HANDLER=1 " + shellQuote(os.Args[0])
+	command := `printf '%s' '{"status":"ok","decision":{"behavior":"none"}}'`
 	cfg, err := config.Parse([]byte(config.DefaultConfigTOML))
 	if err != nil {
 		t.Fatal(err)
@@ -643,7 +599,7 @@ func e2eNoopConfig(t *testing.T, dbPath string) config.Config {
 	cfg.Audit.SQLite.Path = dbPath
 	cfg.Log.File.Path = filepath.ToSlash(filepath.Join(filepath.Dir(dbPath), "hitch.log"))
 	cfg.Handlers = map[string]config.HandlerConfig{
-		"noop_observer": {
+		"observer": {
 			Command:   []string{"/bin/sh", "-c", command},
 			Events:    []string{"*"},
 			Mode:      "sync",

@@ -367,6 +367,9 @@ func TestPiOMPExtensionsRouteObserverEventsAsync(t *testing.T) {
 				`const endpoint = HITCH_SYNC_EVENT_SET.has(sourceEventType) ? "/v1/dispatch-sync" : "/v1/events";`,
 				`if (!HITCH_SYNC_EVENT_SET.has(sourceEventType)) return undefined;`,
 				`fetch(hitchAPIURL() + endpoint`,
+				`if (!response.ok) return undefined;`,
+				`} catch {`,
+				`return undefined;`,
 			} {
 				if !strings.Contains(content, want) {
 					t.Fatalf("%s extension missing %q:\n%s", name, want, content)
@@ -537,7 +540,7 @@ func TestOpenCodePluginContentAppliesThrowSetAppendAndInjectContext(t *testing.T
 		t.Fatal(err)
 	}
 	content := string(contentBytes)
-	for _, want := range []string{"function applyAdapterResponse", "async function postToHitch", "async function observeWithHitch", `hitchAPIURL() + "/v1/events"`, `postToHitch("/v1/dispatch-sync"`, `adapter_action === "throw"`, `adapter_action === "set"`, `adapter_action === "append"`, `adapter_action === "inject_context"`, "client.session.prompt", "HITCH_DEFAULT_API_URL"} {
+	for _, want := range []string{"function applyAdapterResponse", "async function postToHitch", "async function observeWithHitch", `hitchAPIURL() + "/v1/events"`, `postToHitch("/v1/dispatch-sync"`, `if (!response.ok || endpoint !== "/v1/dispatch-sync") return;`, `catch (err)`, `if (err && err.hitchAdapterThrow) throw err;`, `adapter_action === "throw"`, `adapter_action === "set"`, `adapter_action === "append"`, `adapter_action === "inject_context"`, "client.session.prompt", "HITCH_DEFAULT_API_URL"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("generated plugin missing %q:\n%s", want, content)
 		}

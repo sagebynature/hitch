@@ -126,10 +126,3 @@ enabled = true
 "session.error" = "error.reported"
 # Full source-event catalog and opt-in mappings are documented in docs/events.md.
 
-[handlers.noop_observer]
-command = ["hitch", "handler", "noop-observer"]
-events = ["*"]
-mode = "async"
-timeout_ms = 1000
-on_error = "fail_open"
-on_timeout = "fail_open"

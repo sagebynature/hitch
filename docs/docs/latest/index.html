@@ -110,15 +110,7 @@ hitch-client uninstall --only opencode --yes --json</code></pre>
               <tr><td><code>[harness.&lt;name&gt;]</code></td><td>Per-harness enable flags and source-event mappings.</td></tr>
             </tbody>
           </table>
-          <p>Strict validation rejects unknown config keys and invalid server ports, request sizes, log values, audit backends, handler event names, handler modes, handler error or timeout policies, and harness event-map values. Optional handler <code>working_dir</code> values run commands from a stable directory; relative values resolve from the config file directory.</p>
-          <pre class="code-block"><code>[handlers.noop_observer]
-command = ["hitch", "handler", "noop-observer"]
-working_dir = "."
-events = ["*"]
-mode = "sync"
-timeout_ms = 1000
-on_error = "fail_open"
-on_timeout = "fail_open"</code></pre>
+          <p>Strict validation rejects unknown config keys and invalid server ports, request sizes, log values, audit backends, handler event names, handler modes, handler error or timeout policies, and harness event-map values. Optional handler <code>working_dir</code> values run commands from a stable directory; relative values resolve from the config file directory. The default config enables harness event maps and audit storage, but no handlers; add <code>[handlers.&lt;name&gt;]</code> entries explicitly before Hitch executes subprocesses.</p>
         </section>
 
         <section id="handler-protocol">

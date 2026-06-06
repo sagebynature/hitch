@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,9 +27,6 @@ func main() {
 		switch os.Args[1] {
 		case "serve":
 			serve(os.Args[2:])
-			return
-		case "handler":
-			handler(os.Args[2:])
 			return
 		case "status":
 			status(os.Args[2:])
@@ -111,29 +106,6 @@ func serve(args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
-}
-
-func handler(args []string) {
-	if isHelp(args) {
-		printHandlerHelp(os.Stdout)
-		return
-	}
-	if len(args) != 1 || args[0] != "noop-observer" {
-		fatal(fmt.Errorf("usage: hitch handler noop-observer"))
-	}
-	noopObserverHandler()
-}
-
-func noopObserverHandler() {
-	payload, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		fatal(err)
-	}
-	if len(bytes.TrimSpace(payload)) == 0 || !json.Valid(payload) {
-		_, _ = os.Stdout.Write([]byte(`{"status":"error","decision":{"behavior":"none"}}` + "\n"))
-		return
-	}
-	_, _ = os.Stdout.Write([]byte(`{"status":"ok","decision":{"behavior":"none"}}` + "\n"))
 }
 
 func status(args []string) {

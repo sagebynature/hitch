@@ -120,6 +120,38 @@ func TestRunSyncFailureReturnsNativeNoop(t *testing.T) {
 	}
 }
 
+func TestRunSyncInvalidOrEmptyResponseReturnsNativeNoop(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{name: "server error", status: http.StatusInternalServerError, body: `{"error":"boom"}`},
+		{name: "missing native response", status: http.StatusOK, body: `{"event_id":"evt","normalized_event_id":"norm","aggregate":{"decision":{"behavior":"none"}}}`},
+		{name: "invalid JSON", status: http.StatusOK, body: `{`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/dispatch-sync" {
+					t.Fatalf("unexpected path %s", r.URL.Path)
+				}
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer server.Close()
+
+			var stdout bytes.Buffer
+			if err := Run(context.Background(), Options{Harness: "codex", Event: "PreToolUse", Sync: true, URL: server.URL, Stdin: strings.NewReader(`{"name":"Bash"}`), Stdout: &stdout}); err != nil {
+				t.Fatal(err)
+			}
+			if strings.TrimSpace(stdout.String()) != `{}` {
+				t.Fatalf("unexpected no-op stdout: %q", stdout.String())
+			}
+		})
+	}
+}
+
 func TestRunHonorsURL(t *testing.T) {
 	called := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

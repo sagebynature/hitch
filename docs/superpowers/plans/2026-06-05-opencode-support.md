@@ -992,10 +992,10 @@ git commit -m "feat: install opencode plugin"
 
 - [ ] **Step 1: Write OpenCode lifecycle E2E test**
 
-Add a test in `cmd/hitch/main_test.go` next to `TestE2ECodexLifecycleHooksDispatchToNoopObserver`:
+Add a test in `cmd/hitch/main_test.go` next to `TestE2ECodexLifecycleHooksDispatchToObserverHandler`:
 
 ```go
-func TestE2EOpenCodeLifecycleHooksDispatchToNoopObserver(t *testing.T) {
+func TestE2EOpenCodeLifecycleHooksDispatchToObserverHandler(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "events.sqlite")
 	st, err := store.Open(ctx, dbPath)
@@ -1004,7 +1004,7 @@ func TestE2EOpenCodeLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 	}
 	defer st.Close()
 
-	cfg := e2eNoopConfig(t, dbPath)
+	cfg := e2eObserverConfig(t, dbPath)
 	cfg.Harness.OpenCode.EventMap = map[string]config.EventTypes{
 		"chat.message":                    {protocol.EventTurnUserPrompt},
 		"tool.execute.before":             {protocol.EventToolRequested},
@@ -1049,8 +1049,8 @@ func TestE2EOpenCodeLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 		if inspection.Inbound.SourceEventType != tc.native || inspection.Normalized.HitchEventType != tc.hitch {
 			t.Fatalf("%s was not persisted with expected mapping: %#v", tc.native, inspection)
 		}
-		if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].HandlerName != "noop_observer" || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
-			t.Fatalf("%s noop observer invocation was not persisted: %#v", tc.native, inspection.HandlerInvocations)
+		if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].HandlerName != "observer" || inspection.HandlerInvocations[0].Status != protocol.StatusOK {
+			t.Fatalf("%s observer invocation was not persisted: %#v", tc.native, inspection.HandlerInvocations)
 		}
 	}
 	assistantCompleted := onlyInspection(t, ctx, st, protocol.EventTurnAssistantCompleted)
@@ -1066,7 +1066,7 @@ func TestE2EOpenCodeLifecycleHooksDispatchToNoopObserver(t *testing.T) {
 Run:
 
 ```sh
-go test ./cmd/hitch -run TestE2EOpenCodeLifecycleHooksDispatchToNoopObserver -count=1
+go test ./cmd/hitch -run TestE2EOpenCodeLifecycleHooksDispatchToObserverHandler -count=1
 ```
 
 Expected after Tasks 1-4: PASS. If it fails, fix the OpenCode runtime path rather than weakening assertions.

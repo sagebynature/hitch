@@ -85,17 +85,7 @@ hitch-client uninstall --only codex --yes --json
 hitch-client uninstall --only hermes --yes --json
 ```
 
-The seeded config includes a sync `noop_observer` handler:
-
-```toml
-[handlers.noop_observer]
-command = ["hitch", "handler", "noop-observer"]
-events = ["*"]
-mode = "sync"
-timeout_ms = 1000
-on_error = "fail_open"
-on_timeout = "fail_open"
-```
+The seeded config enables harness event maps and audit storage, but no handlers. Add `[handlers.<name>]` entries explicitly before Hitch executes subprocesses.
 
 Shell hook shim entrypoints can be used directly by harness hook configuration once installed manually. Use `hitch-client` for hook dispatch:
 
