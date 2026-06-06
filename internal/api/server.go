@@ -55,7 +55,7 @@ type DispatchResponse struct {
 }
 
 func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
-	s := &Server{cfg: cfg, log: log, store: st, runner: dispatch.NewRunner(cfg.Handlers), harnesses: buildHarnessRuntimes(cfg)}
+	s := &Server{cfg: cfg, log: log, store: st, runner: dispatch.NewRunnerWithLogger(cfg.Handlers, log), harnesses: buildHarnessRuntimes(cfg)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", s.handleHealth)
 	mux.HandleFunc("POST /v1/events", s.handleEvent)

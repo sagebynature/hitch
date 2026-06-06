@@ -11,7 +11,7 @@ hitch config init
 Key sections:
 
 - `[server]`: local API bind address and request size limit.
-- `[log]`: operational logging. Native payloads are not included by default.
+- `[log]`: operational logging. Native payloads are not included by default. `log.level` and `log.format` are fallbacks for enabled sinks; `log.stdout.level`, `log.stdout.format`, `log.file.level`, and `log.file.format` may override them per sink.
 - `[audit]`: event journal persistence. SQLite is the verified backend.
 - `[handlers.<name>]`: external command handlers.
 - `[harness.<name>]`: per-harness enable flags and source-event mappings.
@@ -20,7 +20,7 @@ Strict validation rejects unknown config keys and invalid values for:
 
 - server port
 - request size limit
-- log level and format
+- log level and format (`debug`, `info`, `warn`, `error`; `json`, `console`)
 - audit backend
 - handler event names
 - handler mode (`async` or `sync`)

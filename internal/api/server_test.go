@@ -100,6 +100,53 @@ func TestDispatchSync(t *testing.T) {
 	}
 }
 
+func TestDispatchSyncLogsHandlerInvocationDetails(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := testConfig()
+	cfg.Handlers = map[string]config.HandlerConfig{
+		"logger_check": {
+			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"allow"}}'`},
+			Events:    []string{string(protocol.EventToolRequested)},
+			Mode:      "sync",
+			TimeoutMS: 1000,
+		},
+	}
+	var logs bytes.Buffer
+	s := New(cfg, slog.New(slog.NewJSONHandler(&logs, nil)), st)
+	body := []byte(`{"harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash","session_id":"session_1","turn_id":"turn_1","cwd":"/tmp/hitch","model":"gpt-test"},"hitch_client_version":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/dispatch-sync", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("dispatch code %d body %s", w.Code, w.Body.String())
+	}
+	text := logs.String()
+	for _, want := range []string{
+		`"msg":"handler invocation starting"`,
+		`"msg":"handler invocation completed"`,
+		`"handler":"logger_check"`,
+		`"mode":"sync"`,
+		`"harness":"codex"`,
+		`"source_event_type":"PreToolUse"`,
+		`"hitch_event_type":"tool.requested"`,
+		`"session_id":"session_1"`,
+		`"turn_id":"turn_1"`,
+		`"cwd":"/tmp/hitch"`,
+		`"model":"gpt-test"`,
+		`"status":"ok"`,
+		`"duration_ms":`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("handler invocation logs missing %s:\n%s", want, text)
+		}
+	}
+}
+
 func TestDispatchSyncOpenCodeToolBeforeDenyTranslatesToThrow(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))

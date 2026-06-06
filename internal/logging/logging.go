@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -12,11 +13,11 @@ import (
 )
 
 func New(cfg config.LogConfig) (*slog.Logger, io.Closer, error) {
-	var writers []io.Writer
+	var handlers []slog.Handler
 	var closers []io.Closer
 
 	if cfg.Stdout.Enabled {
-		writers = append(writers, os.Stdout)
+		handlers = append(handlers, newHandler(os.Stdout, sinkLevel(cfg.Level, cfg.Stdout.Level), sinkFormat(cfg.Format, cfg.Stdout.Format)))
 	}
 	if cfg.File.Enabled {
 		path := config.ExpandHome(cfg.File.Path)
@@ -30,15 +31,33 @@ func New(cfg config.LogConfig) (*slog.Logger, io.Closer, error) {
 			MaxAge:     cfg.File.MaxAgeDays,
 			Compress:   cfg.File.Compress,
 		}
-		writers = append(writers, lj)
+		handlers = append(handlers, newHandler(lj, sinkLevel(cfg.Level, cfg.File.Level), sinkFormat(cfg.Format, cfg.File.Format)))
 		closers = append(closers, lj)
 	}
-	if len(writers) == 0 {
+	if len(handlers) == 0 {
 		return nil, nil, errors.New("at least one log sink must be enabled")
 	}
 
+	return slog.New(fanoutHandler(handlers)), multiCloser(closers), nil
+}
+
+func sinkLevel(fallback, override string) string {
+	if override != "" {
+		return override
+	}
+	return fallback
+}
+
+func sinkFormat(fallback, override string) string {
+	if override != "" {
+		return override
+	}
+	return fallback
+}
+
+func newHandler(out io.Writer, levelName, format string) slog.Handler {
 	level := slog.LevelInfo
-	switch cfg.Level {
+	switch levelName {
 	case "debug":
 		level = slog.LevelDebug
 	case "info":
@@ -49,14 +68,50 @@ func New(cfg config.LogConfig) (*slog.Logger, io.Closer, error) {
 		level = slog.LevelError
 	}
 	opts := &slog.HandlerOptions{Level: level}
-	out := io.MultiWriter(writers...)
-	var handler slog.Handler
-	if cfg.Format == "console" {
-		handler = slog.NewTextHandler(out, opts)
-	} else {
-		handler = slog.NewJSONHandler(out, opts)
+	if format == "console" {
+		return slog.NewTextHandler(out, opts)
 	}
-	return slog.New(handler), multiCloser(closers), nil
+	return slog.NewJSONHandler(out, opts)
+}
+
+type fanoutHandler []slog.Handler
+
+func (h fanoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	for _, handler := range h {
+		if handler.Enabled(ctx, level) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h fanoutHandler) Handle(ctx context.Context, record slog.Record) error {
+	var first error
+	for _, handler := range h {
+		if !handler.Enabled(ctx, record.Level) {
+			continue
+		}
+		if err := handler.Handle(ctx, record.Clone()); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
+}
+
+func (h fanoutHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	out := make(fanoutHandler, 0, len(h))
+	for _, handler := range h {
+		out = append(out, handler.WithAttrs(attrs))
+	}
+	return out
+}
+
+func (h fanoutHandler) WithGroup(name string) slog.Handler {
+	out := make(fanoutHandler, 0, len(h))
+	for _, handler := range h {
+		out = append(out, handler.WithGroup(name))
+	}
+	return out
 }
 
 type multiCloser []io.Closer

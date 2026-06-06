@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"sort"
 	"strings"
@@ -36,9 +37,14 @@ type Result struct {
 
 type Runner struct {
 	Handlers map[string]config.HandlerConfig
+	Log      *slog.Logger
 }
 
 func NewRunner(handlers map[string]config.HandlerConfig) Runner { return Runner{Handlers: handlers} }
+
+func NewRunnerWithLogger(handlers map[string]config.HandlerConfig, log *slog.Logger) Runner {
+	return Runner{Handlers: handlers, Log: log}
+}
 
 func (r Runner) Dispatch(ctx context.Context, env protocol.EventEnvelope, mode string, totalDeadline time.Duration) Result {
 	selected := r.matchHandlers(env.HitchEventType, mode)
@@ -57,7 +63,9 @@ func (r Runner) Dispatch(ctx context.Context, env protocol.EventEnvelope, mode s
 	ch := make(chan pair, len(selected))
 	for i, name := range selected {
 		cfg := r.Handlers[name]
-		go func(idx int, n string, c config.HandlerConfig) { ch <- pair{idx: idx, inv: runHandler(ctx, n, c, env)} }(i, name, cfg)
+		go func(idx int, n string, c config.HandlerConfig) {
+			ch <- pair{idx: idx, inv: runHandler(ctx, r.Log, n, c, env)}
+		}(i, name, cfg)
 	}
 	inv := make([]Invocation, len(selected))
 	for range selected {
@@ -84,7 +92,7 @@ func (r Runner) matchHandlers(event protocol.EventType, mode string) []string {
 	return names
 }
 
-func runHandler(parent context.Context, name string, cfg config.HandlerConfig, env protocol.EventEnvelope) Invocation {
+func runHandler(parent context.Context, log *slog.Logger, name string, cfg config.HandlerConfig, env protocol.EventEnvelope) Invocation {
 	started := time.Now().UTC()
 	inv := Invocation{HandlerName: name, Mode: cfg.Mode, StartedAt: started, Status: protocol.StatusOK}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(cfg.TimeoutMS)*time.Millisecond)
@@ -102,6 +110,7 @@ func runHandler(parent context.Context, name string, cfg config.HandlerConfig, e
 	}
 	cmd.Stdin = bytes.NewReader(stdin)
 	cmd.Env = append(cmd.Environ(), "HITCH_CHILD=1")
+	logHandlerInvocationStarted(log, inv, env, cfg.TimeoutMS)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -109,6 +118,7 @@ func runHandler(parent context.Context, name string, cfg config.HandlerConfig, e
 	inv.CompletedAt = time.Now().UTC()
 	inv.Stdout = stdout.String()
 	inv.Stderr = stderr.String()
+	defer func() { logHandlerInvocationCompleted(log, inv, env) }()
 	if ctx.Err() != nil {
 		inv.Status = protocol.StatusTimeout
 		inv.Error = ctx.Err().Error()
@@ -151,6 +161,48 @@ func runHandler(parent context.Context, name string, cfg config.HandlerConfig, e
 	inv.Output = protocol.Raw(hr)
 	inv.Decision = protocol.Raw(hr.Decision)
 	return inv
+}
+
+func logHandlerInvocationStarted(log *slog.Logger, inv Invocation, env protocol.EventEnvelope, timeoutMS int) {
+	if log == nil {
+		return
+	}
+	log.Info("handler invocation starting", handlerLogAttrs(inv, env, "timeout_ms", timeoutMS)...)
+}
+
+func logHandlerInvocationCompleted(log *slog.Logger, inv Invocation, env protocol.EventEnvelope) {
+	if log == nil {
+		return
+	}
+	attrs := handlerLogAttrs(inv, env, "status", inv.Status, "duration_ms", inv.CompletedAt.Sub(inv.StartedAt).Milliseconds())
+	if inv.Error != "" {
+		attrs = append(attrs, "error", inv.Error)
+	}
+	log.Info("handler invocation completed", attrs...)
+}
+
+func handlerLogAttrs(inv Invocation, env protocol.EventEnvelope, extra ...any) []any {
+	attrs := []any{
+		"handler", inv.HandlerName,
+		"mode", inv.Mode,
+		"harness", env.Harness,
+		"source_event_type", env.SourceEventType,
+		"hitch_event_type", env.HitchEventType,
+		"event_id", env.EventID,
+	}
+	if env.SessionID != "" {
+		attrs = append(attrs, "session_id", env.SessionID)
+	}
+	if env.TurnID != "" {
+		attrs = append(attrs, "turn_id", env.TurnID)
+	}
+	if env.CWD != "" {
+		attrs = append(attrs, "cwd", env.CWD)
+	}
+	if env.Model != "" {
+		attrs = append(attrs, "model", env.Model)
+	}
+	return append(attrs, extra...)
 }
 
 func aggregate(inv []Invocation, order []string, handlers map[string]config.HandlerConfig) protocol.AggregateDecision {

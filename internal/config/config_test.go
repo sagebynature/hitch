@@ -80,6 +80,71 @@ func TestParseValidConfig(t *testing.T) {
 	}
 }
 
+func TestParseAllowsPerSinkLogLevelAndFormat(t *testing.T) {
+	text := strings.Replace(baseConfig, `[log.stdout]
+enabled = true`, `[log.stdout]
+enabled = true
+level = "warn"
+format = "console"`, 1)
+	text = strings.Replace(text, `[log.file]
+enabled = false`, `[log.file]
+enabled = true
+level = "debug"
+format = "json"`, 1)
+	cfg, err := Parse([]byte(text))
+	if err != nil {
+		t.Fatalf("per-sink log config rejected: %v", err)
+	}
+	if cfg.Log.Stdout.Level != "warn" || cfg.Log.Stdout.Format != "console" {
+		t.Fatalf("per-sink stdout log config not parsed: %#v", cfg.Log.Stdout)
+	}
+	if cfg.Log.File.Level != "debug" || cfg.Log.File.Format != "json" {
+		t.Fatalf("per-sink file log config not parsed: %#v", cfg.Log.File)
+	}
+}
+
+func TestParseRejectsInvalidPerSinkLogLevelAndFormat(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		text string
+	}{
+		{
+			name: "stdout level",
+			text: strings.Replace(baseConfig, `[log.stdout]
+enabled = true`, `[log.stdout]
+enabled = true
+level = "trace"`, 1),
+		},
+		{
+			name: "stdout format",
+			text: strings.Replace(baseConfig, `[log.stdout]
+enabled = true`, `[log.stdout]
+enabled = true
+format = "pretty"`, 1),
+		},
+		{
+			name: "file level",
+			text: strings.Replace(baseConfig, `[log.file]
+enabled = false`, `[log.file]
+enabled = true
+level = "trace"`, 1),
+		},
+		{
+			name: "file format",
+			text: strings.Replace(baseConfig, `[log.file]
+enabled = false`, `[log.file]
+enabled = true
+format = "pretty"`, 1),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Parse([]byte(tc.text)); err == nil {
+				t.Fatal("invalid per-sink log config accepted")
+			}
+		})
+	}
+}
+
 func TestParseHarnessEventMap(t *testing.T) {
 	cfg, err := Parse([]byte(baseConfig + `
 [harness.codex.event_map]

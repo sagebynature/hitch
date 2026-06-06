@@ -61,11 +61,15 @@ type LogConfig struct {
 }
 
 type LogStdout struct {
-	Enabled bool `toml:"enabled"`
+	Enabled bool   `toml:"enabled"`
+	Level   string `toml:"level"`
+	Format  string `toml:"format"`
 }
 
 type LogFile struct {
 	Enabled    bool   `toml:"enabled"`
+	Level      string `toml:"level"`
+	Format     string `toml:"format"`
 	Path       string `toml:"path"`
 	MaxSizeMB  int    `toml:"max_size_mb"`
 	MaxBackups int    `toml:"max_backups"`
@@ -189,17 +193,27 @@ func (c Config) Validate() error {
 	if c.Log.Level == "" {
 		return errors.New("log.level is required")
 	}
-	switch c.Log.Level {
-	case "debug", "info", "warn", "error":
-	default:
-		return fmt.Errorf("invalid log.level %q", c.Log.Level)
+	if err := validateLogLevel("log.level", c.Log.Level); err != nil {
+		return err
 	}
-	switch c.Log.Format {
-	case "json", "console":
-	default:
-		return fmt.Errorf("invalid log.format %q", c.Log.Format)
+	if err := validateLogFormat("log.format", c.Log.Format); err != nil {
+		return err
+	}
+	if c.Log.Stdout.Enabled {
+		if err := validateOptionalLogLevel("log.stdout.level", c.Log.Stdout.Level); err != nil {
+			return err
+		}
+		if err := validateOptionalLogFormat("log.stdout.format", c.Log.Stdout.Format); err != nil {
+			return err
+		}
 	}
 	if c.Log.File.Enabled {
+		if err := validateOptionalLogLevel("log.file.level", c.Log.File.Level); err != nil {
+			return err
+		}
+		if err := validateOptionalLogFormat("log.file.format", c.Log.File.Format); err != nil {
+			return err
+		}
 		if c.Log.File.Path == "" {
 			return errors.New("log.file.path is required when file logging is enabled")
 		}
@@ -304,6 +318,38 @@ func validateHarnessEventMap(harnessName string, eventMap map[string]EventTypes)
 		}
 	}
 	return nil
+}
+
+func validateOptionalLogLevel(key, value string) error {
+	if value == "" {
+		return nil
+	}
+	return validateLogLevel(key, value)
+}
+
+func validateLogLevel(key, value string) error {
+	switch value {
+	case "debug", "info", "warn", "error":
+		return nil
+	default:
+		return fmt.Errorf("invalid %s %q", key, value)
+	}
+}
+
+func validateOptionalLogFormat(key, value string) error {
+	if value == "" {
+		return nil
+	}
+	return validateLogFormat(key, value)
+}
+
+func validateLogFormat(key, value string) error {
+	switch value {
+	case "json", "console":
+		return nil
+	default:
+		return fmt.Errorf("invalid %s %q", key, value)
+	}
 }
 
 func validatePolicy(handler, key, value string) error {

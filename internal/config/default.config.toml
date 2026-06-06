@@ -10,9 +10,13 @@ include_native_payload = false
 
 [log.stdout]
 enabled = true
+level = "info"
+format = "console"
 
 [log.file]
 enabled = true
+level = "info"
+format = "json"
 path = "~/.config/hitch/hitch.log"
 max_size_mb = 100
 max_backups = 10
@@ -125,7 +129,7 @@ enabled = true
 [handlers.noop_observer]
 command = ["hitch", "handler", "noop-observer"]
 events = ["*"]
-mode = "sync"
+mode = "async"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"
