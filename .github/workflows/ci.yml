@@ -33,11 +33,8 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
-      - name: Run Go tests
-        run: make test-go
-
-      - name: Build CLI
-        run: make build
+      - name: Run Go checks
+        run: make check
 
       - name: Run install dry-run smoke test
         run: make install-dry-run

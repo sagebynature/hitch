@@ -1,4 +1,4 @@
-.PHONY: help build test test-go test-adapters run serve status doctor install-dry-run clean preview-pages
+.PHONY: help build test test-go vet check run serve status doctor install-dry-run clean preview-pages
 
 BINARY ?= bin/hitch
 CLIENT_BINARY ?= bin/hitch-client
@@ -25,6 +25,13 @@ build:
 
 test:
 	go test $(GO_PACKAGES)
+
+test-go: test
+
+vet:
+	go vet $(GO_PACKAGES)
+
+check: vet test-go build
 
 run:
 	go run ./cmd/hitch
