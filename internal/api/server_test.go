@@ -19,6 +19,8 @@ import (
 	"github.com/sagebynature/hitch/internal/store"
 )
 
+var _ eventStore = (*store.Store)(nil)
+
 type lockedBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer

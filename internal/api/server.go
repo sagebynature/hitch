@@ -20,10 +20,19 @@ import (
 type Server struct {
 	cfg       config.Config
 	log       *slog.Logger
-	store     *store.Store
+	store     eventStore
 	runner    dispatch.Runner
 	mux       *http.ServeMux
 	harnesses map[protocol.Harness]harnessRuntime
+}
+
+type eventStore interface {
+	InsertInbound(context.Context, store.InboundEvent) error
+	InsertNormalized(context.Context, store.NormalizedEvent) error
+	InsertHandlerInvocation(context.Context, store.HandlerInvocation) error
+	InsertNativeResponse(context.Context, store.NativeResponse) error
+	GetEvent(context.Context, string) (protocol.EventEnvelope, error)
+	InspectEvent(context.Context, string) (store.EventInspection, error)
 }
 
 type harnessRuntime struct {
