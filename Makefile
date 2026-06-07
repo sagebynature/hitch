@@ -1,4 +1,4 @@
-.PHONY: help build test test-go vet check run serve status doctor install-dry-run clean preview-pages
+.PHONY: help build test test-go vet lint check run serve status doctor install-dry-run clean preview-pages
 
 BINARY ?= bin/hitch
 CLIENT_BINARY ?= bin/hitch-client
@@ -31,7 +31,14 @@ test-go: test
 vet:
 	go vet $(GO_PACKAGES)
 
-check: vet test-go build
+lint:
+	@if command -v golangci-lint >/dev/null; then \
+		golangci-lint run; \
+	else \
+		printf '%s\n' 'golangci-lint not installed; skipping local lint'; \
+	fi
+
+check: lint vet test-go build
 
 run:
 	go run ./cmd/hitch
