@@ -282,8 +282,11 @@ func TestDefaultConfigTOMLMatchesEmbeddedConfigFile(t *testing.T) {
 	if got := cfg.Harness.Hermes.EventMap["transform_llm_output"]; len(got) != 2 || got[0] != "llm.completed" || got[1] != "turn.assistant_completed" {
 		t.Fatalf("default config should map Hermes transform_llm_output to LLM and assistant completion events: %#v", got)
 	}
-	if got := cfg.Harness.Pi.EventMap["turn_end"]; len(got) != 2 || got[0] != "turn.completed" || got[1] != "turn.assistant_completed" {
-		t.Fatalf("default config should map Pi turn_end to primary and assistant completion events: %#v", got)
+	if got := cfg.Harness.Pi.EventMap["turn_end"]; len(got) != 3 || got[0] != "turn.completed" || got[1] != "turn.assistant_completed" || got[2] != "llm.completed" {
+		t.Fatalf("default config should map Pi turn_end to turn and LLM completion events: %#v", got)
+	}
+	if got := cfg.Harness.OMP.EventMap["turn_end"]; len(got) != 3 || got[0] != "turn.completed" || got[1] != "turn.assistant_completed" || got[2] != "llm.completed" {
+		t.Fatalf("default config should map OMP turn_end to turn and LLM completion events: %#v", got)
 	}
 	for _, excluded := range []string{"post_tool_call", "post_llm_call"} {
 		if _, ok := cfg.Harness.Hermes.EventMap[excluded]; ok {
@@ -322,7 +325,8 @@ func TestDefaultConfigIncludesOpenCodeHarness(t *testing.T) {
 		"session.compacted":               protocol.EventSessionCompacted,
 		"experimental.session.compacting": protocol.EventSessionCompacted,
 		"session.error":                   protocol.EventErrorReported,
-		"message.part.updated":            protocol.EventLLMCompleted,
+		"message.part.step-finish":        protocol.EventLLMCompleted,
+		"message.part.text":               protocol.EventTurnAssistantCompleted,
 	}
 	for source, want := range cases {
 		got := cfg.Harness.OpenCode.EventMap[source]
@@ -331,8 +335,11 @@ func TestDefaultConfigIncludesOpenCodeHarness(t *testing.T) {
 		}
 	}
 	idle := cfg.Harness.OpenCode.EventMap["session.idle"]
-	if len(idle) != 2 || idle[0] != protocol.EventTurnCompleted || idle[1] != protocol.EventTurnAssistantCompleted {
+	if len(idle) != 1 || idle[0] != protocol.EventTurnCompleted {
 		t.Fatalf("session.idle mapped to %#v", idle)
+	}
+	if _, ok := cfg.Harness.OpenCode.EventMap["message.part.updated"]; ok {
+		t.Fatalf("message.part.updated should be split by the OpenCode plugin before dispatch: %#v", cfg.Harness.OpenCode.EventMap)
 	}
 }
 

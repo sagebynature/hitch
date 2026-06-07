@@ -39,7 +39,7 @@ Common mappings:
 | Inspect or augment an LLM request | `llm.requested` | Hermes `pre_llm_call`; Pi/OMP `before_provider_request`; OpenCode `chat.params` or `chat.headers` when opted in |
 | Run at model or agent turn start | `turn.started` | Pi `turn_start`, OMP `turn_start` |
 | Run after model or agent turn completion | `turn.completed` | Codex `Stop`, Pi/OMP `turn_end`, OpenCode `session.idle` |
-| Query assistant output completion consistently | `turn.assistant_completed` | OMP `message_end`; secondary audit rows configured for Codex `Stop`, Hermes `transform_llm_output`, Pi `turn_end`, and OpenCode `session.idle` |
+| Query assistant output completion consistently | `turn.assistant_completed` | Codex `Stop`, Hermes `transform_llm_output`, Pi/OMP `turn_end`, OpenCode managed-plugin `message.part.text` |
 | Handle compaction lifecycle | `session.compacted` | Codex `PreCompact`, Pi `session_before_compact`, OMP `auto_compaction_start`, OpenCode `experimental.session.compacting` |
 
 Secondary audit rows from multi-event source mappings are not used for sync native-response translation or live handler dispatch. If a handler must block, transform, replace, or observe a live source event, register for the primary Hitch event. Query secondary events such as `turn.assistant_completed` when you need a consistent audit signal across harnesses.
@@ -103,7 +103,7 @@ The handler receives the normalized envelope on stdin.
 }
 ```
 
-`payload` is the Hitch-normalized handler contract for the event type. Use `payload.tool`, `payload.turn`, or `payload.llm` for common fields; inspect `source_payload`, `harness`, and `source_event_type` only when a harness-specific field is required or the typed payload is marked `{"unparsed": true}`.
+`payload` is the Hitch-normalized handler contract for the event type. Use `payload.tool`, `payload.turn`, or `payload.llm` for common fields; inspect `source_payload`, `harness`, and `source_event_type` only when a harness-specific field is required or the typed payload is marked `{"unparsed": true}`. Final assistant text is exposed as `payload.turn.assistant.text` on `turn.assistant_completed`; token and cost metrics are exposed under `payload.llm.usage` on `llm.completed` when the harness provides them.
 
 ## Step 4: Return a handler result
 

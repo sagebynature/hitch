@@ -52,6 +52,8 @@ var knownSourceEvents = core.SourceEventSet(
 	"message.updated",
 	"message.removed",
 	"message.part.updated",
+	"message.part.step-finish",
+	"message.part.text",
 	"message.part.removed",
 	"file.edited",
 	"file.watcher.updated",

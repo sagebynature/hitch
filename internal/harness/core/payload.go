@@ -23,6 +23,10 @@ func ParseTypedPayload(h protocol.Harness, sourceEventType string, sourcePayload
 		return protocol.Raw(map[string]interface{}{"tool": parseCompletedTool(h, sourceEventType, src)})
 	case protocol.EventTurnUserPrompt:
 		return protocol.Raw(map[string]interface{}{"turn": parseUserPrompt(src)})
+	case protocol.EventTurnAssistantCompleted:
+		return protocol.Raw(map[string]interface{}{"turn": map[string]interface{}{"assistant": parseAssistantCompleted(h, sourceEventType, src)}})
+	case protocol.EventTurnCompleted:
+		return protocol.Raw(map[string]interface{}{"turn": parseTurnCompleted(h, sourceEventType, src)})
 	case protocol.EventLLMCompleted:
 		return protocol.Raw(map[string]interface{}{"llm": parseLLMCompleted(h, sourceEventType, src)})
 	default:
@@ -123,65 +127,103 @@ func parseUserPrompt(src map[string]interface{}) map[string]interface{} {
 	return turn
 }
 
+func parseTurnCompleted(h protocol.Harness, sourceEventType string, src map[string]interface{}) map[string]interface{} {
+	turn := map[string]interface{}{}
+	setIfValue(turn, "index", firstNumber(src, []string{"turnIndex"}, []string{"turn_index"}))
+	assistant := parseAssistantCompleted(h, sourceEventType, src)
+	if firstString(valueAt(assistant, []string{"text"})) != "" || valueAt(assistant, []string{"content"}) != nil {
+		turn["assistant"] = assistant
+	}
+	return turn
+}
+
+func parseAssistantCompleted(h protocol.Harness, sourceEventType string, src map[string]interface{}) map[string]interface{} {
+	message := firstMap(src, []string{"message"}, []string{"event", "message"})
+	part := firstMap(src, []string{"part"}, []string{"properties", "part"}, []string{"event", "properties", "part"})
+	content := firstSlice(src, []string{"content"}, []string{"message", "content"}, []string{"event", "message", "content"})
+	usageSource := firstMap(src, []string{"usage"}, []string{"message", "usage"}, []string{"event", "message", "usage"}, []string{"extra", "usage"})
+
+	text := firstString(
+		valueAt(src, []string{"last_assistant_message"}),
+		valueAt(src, []string{"extra", "response_text"}),
+		valueAt(src, []string{"response_text"}),
+		valueAt(src, []string{"output", "text"}),
+		valueAt(src, []string{"text"}),
+		valueAt(part, []string{"text"}),
+	)
+	if text == "" {
+		text = textFromParts(content)
+	}
+
+	assistant := map[string]interface{}{
+		"usage": normalizeUsage(usageSource, h, sourceEventType, nil),
+	}
+	setIfString(assistant, "text", text)
+	setIfValue(assistant, "content", content)
+	setIfString(assistant, "finish_reason", firstString(
+		valueAt(message, []string{"stopReason"}),
+		valueAt(message, []string{"finish_reason"}),
+		valueAt(message, []string{"finishReason"}),
+		valueAt(src, []string{"stopReason"}),
+		valueAt(src, []string{"finish_reason"}),
+		valueAt(src, []string{"finishReason"}),
+		valueAt(part, []string{"reason"}),
+	))
+	setIfString(assistant, "response_id", firstString(valueAt(message, []string{"responseId"}), valueAt(message, []string{"response_id"}), valueAt(src, []string{"responseId"}), valueAt(src, []string{"response_id"})))
+	setIfString(assistant, "provider", firstString(valueAt(message, []string{"provider"}), valueAt(src, []string{"provider"}), valueAt(src, []string{"extra", "provider"})))
+	setIfString(assistant, "model", firstString(valueAt(message, []string{"model"}), valueAt(src, []string{"model"}), valueAt(src, []string{"extra", "model"})))
+	return assistant
+}
+
 func parseLLMCompleted(h protocol.Harness, sourceEventType string, src map[string]interface{}) map[string]interface{} {
-	part := firstMap(src, []string{"part"}, []string{"properties", "part"}, []string{"event", "part"})
+	part := firstMap(src, []string{"part"}, []string{"properties", "part"}, []string{"event", "properties", "part"})
 	usage := firstMap(src,
 		[]string{"usage"},
 		[]string{"message", "usage"},
 		[]string{"properties", "message", "usage"},
 		[]string{"output", "usage"},
 		[]string{"response", "usage"},
+		[]string{"extra", "usage"},
 	)
-	tokensSource := firstMap(src,
-		[]string{"tokens"},
-		[]string{"usage", "tokens"},
-		[]string{"message", "tokens"},
-		[]string{"message", "usage", "tokens"},
-		[]string{"properties", "message", "tokens"},
-		[]string{"properties", "message", "usage", "tokens"},
-		[]string{"output", "tokens"},
-	)
-	if len(part) != 0 {
-		usage = firstNonEmptyMap(usage, firstMap(part, []string{"usage"}))
-		tokensSource = firstNonEmptyMap(tokensSource, firstMap(part, []string{"tokens"}, []string{"usage", "tokens"}))
-	}
-	if len(tokensSource) == 0 {
-		tokensSource = usage
-	}
 
-	amount, amountOK := firstPresent(src,
-		[]string{"cost"},
-		[]string{"usage", "cost"},
-		[]string{"message", "cost"},
-		[]string{"message", "usage", "cost"},
-		[]string{"properties", "message", "cost"},
-		[]string{"properties", "message", "usage", "cost"},
-		[]string{"output", "cost"},
-	)
+	llm := map[string]interface{}{
+		"usage": normalizeUsage(usage, h, sourceEventType, part),
+	}
+	setIfString(llm, "provider", firstString(valueAt(src, []string{"provider"}), valueAt(src, []string{"providerID"}), valueAt(src, []string{"message", "provider"}), valueAt(src, []string{"model", "providerID"}), valueAt(src, []string{"model", "provider"}), valueAt(src, []string{"extra", "provider"})))
+	setIfString(llm, "model", firstString(valueAt(src, []string{"model"}), valueAt(src, []string{"message", "model"}), valueAt(src, []string{"model", "id"}), valueAt(src, []string{"model", "modelID"}), valueAt(src, []string{"extra", "model"})))
+	setIfString(llm, "finish_reason", firstString(valueAt(part, []string{"reason"}), valueAt(src, []string{"reason"}), valueAt(src, []string{"finish_reason"}), valueAt(src, []string{"finishReason"}), valueAt(src, []string{"message", "stopReason"})))
+	output := firstValue(src, []string{"output"}, []string{"result"}, []string{"response"}, []string{"text"}, []string{"extra", "response_text"}, []string{"properties", "part", "text"})
+	if output == nil {
+		if outputText := textFromParts(firstSlice(src, []string{"message", "content"}, []string{"event", "message", "content"})); outputText != "" {
+			output = outputText
+		}
+	}
+	setIfValue(llm, "output", output)
+	setIfValue(llm, "duration_ms", firstNumber(src, []string{"duration_ms"}, []string{"durationMs"}, []string{"latency_ms"}, []string{"latencyMs"}))
+	setIfString(llm, "request_id", firstString(valueAt(src, []string{"request_id"}), valueAt(src, []string{"requestId"}), valueAt(src, []string{"message", "responseId"}), valueAt(src, []string{"headers", "x-request-id"}), valueAt(src, []string{"headers", "request-id"})))
+	return llm
+}
+
+func normalizeUsage(usage map[string]interface{}, h protocol.Harness, sourceEventType string, part map[string]interface{}) map[string]interface{} {
+	tokensSource := firstNonEmptyMap(firstMap(usage, []string{"tokens"}), usage)
 	if len(part) != 0 {
-		if v, ok := firstPresent(part, []string{"cost"}, []string{"usage", "cost"}); ok {
+		tokensSource = firstNonEmptyMap(firstMap(part, []string{"tokens"}, []string{"usage", "tokens"}), tokensSource)
+	}
+	amount, amountOK := firstPresent(usage, []string{"cost"}, []string{"cost", "total"})
+	if len(part) != 0 {
+		if v, ok := firstPresent(part, []string{"cost"}, []string{"usage", "cost"}, []string{"usage", "cost", "total"}); ok {
 			amount, amountOK = v, true
 		}
 	}
-
-	llm := map[string]interface{}{
-		"usage": map[string]interface{}{
-			"tokens": normalizeTokens(tokensSource),
-			"cost": map[string]interface{}{
-				"amount":    numberOrNil(amount, amountOK),
-				"currency":  firstString(valueAt(usage, []string{"currency"}), valueAt(src, []string{"currency"}), "USD"),
-				"source":    costSource(h, sourceEventType, part, amountOK),
-				"estimated": false,
-			},
+	return map[string]interface{}{
+		"tokens": normalizeTokens(tokensSource),
+		"cost": map[string]interface{}{
+			"amount":    costAmountOrNil(amount, amountOK),
+			"currency":  firstString(valueAt(usage, []string{"currency"}), "USD"),
+			"source":    costSource(h, sourceEventType, part, amountOK),
+			"estimated": false,
 		},
 	}
-	setIfString(llm, "provider", firstString(valueAt(src, []string{"provider"}), valueAt(src, []string{"providerID"}), valueAt(src, []string{"model", "providerID"}), valueAt(src, []string{"model", "provider"})))
-	setIfString(llm, "model", firstString(valueAt(src, []string{"model"}), valueAt(src, []string{"model", "id"}), valueAt(src, []string{"model", "modelID"})))
-	setIfString(llm, "finish_reason", firstString(valueAt(part, []string{"reason"}), valueAt(src, []string{"reason"}), valueAt(src, []string{"finish_reason"}), valueAt(src, []string{"finishReason"})))
-	setIfValue(llm, "output", firstValue(src, []string{"output"}, []string{"result"}, []string{"response"}, []string{"text"}, []string{"message"}))
-	setIfValue(llm, "duration_ms", firstNumber(src, []string{"duration_ms"}, []string{"durationMs"}, []string{"latency_ms"}, []string{"latencyMs"}))
-	setIfString(llm, "request_id", firstString(valueAt(src, []string{"request_id"}), valueAt(src, []string{"requestId"}), valueAt(src, []string{"headers", "x-request-id"}), valueAt(src, []string{"headers", "request-id"})))
-	return llm
 }
 
 func normalizeTokens(src map[string]interface{}) map[string]interface{} {
@@ -332,9 +374,19 @@ func setIfString(dst map[string]interface{}, key, value string) {
 }
 
 func setIfValue(dst map[string]interface{}, key string, value interface{}) {
-	if value != nil {
-		dst[key] = value
+	switch v := value.(type) {
+	case nil:
+		return
+	case []interface{}:
+		if v == nil {
+			return
+		}
+	case map[string]interface{}:
+		if v == nil {
+			return
+		}
 	}
+	dst[key] = value
 }
 
 func numberOrNil(args ...interface{}) interface{} {
@@ -364,6 +416,19 @@ func numberOrNil(args ...interface{}) interface{} {
 	return nil
 }
 
+func costAmountOrNil(v interface{}, ok bool) interface{} {
+	if !ok {
+		return nil
+	}
+	if n := numberOrNil(v, true); n != nil {
+		return n
+	}
+	if m, ok := v.(map[string]interface{}); ok {
+		return numberOrNil(firstPresent(m, []string{"total"}, []string{"amount"}))
+	}
+	return nil
+}
+
 func boolish(v interface{}) bool {
 	switch b := v.(type) {
 	case bool:
@@ -376,6 +441,7 @@ func boolish(v interface{}) bool {
 }
 
 func textFromParts(parts []interface{}) string {
+
 	if len(parts) == 0 {
 		return ""
 	}

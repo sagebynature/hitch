@@ -979,6 +979,14 @@ func TestIngestPersistsDerivedAssistantCompletionEvent(t *testing.T) {
 	if derived.Normalized.Envelope.SessionID != "session_1" || derived.Normalized.Envelope.TurnID != "turn_3" || derived.Normalized.Envelope.Model != "gpt-test" {
 		t.Fatalf("derived event lost metadata: %#v", derived.Normalized.Envelope)
 	}
+	var assistantPayload map[string]interface{}
+	if err := json.Unmarshal(derived.Normalized.Envelope.Payload, &assistantPayload); err != nil {
+		t.Fatal(err)
+	}
+	assistant, ok := assistantPayload["turn"].(map[string]interface{})["assistant"].(map[string]interface{})
+	if !ok || assistant["text"] != "done" {
+		t.Fatalf("derived assistant payload missed final text: %s", derived.Normalized.Envelope.Payload)
+	}
 }
 
 func TestIngestPersistsConfiguredSecondaryEvent(t *testing.T) {
@@ -1044,7 +1052,7 @@ func TestIngestOpenCodeStepFinishPersistsLLMUsagePayload(t *testing.T) {
 	defer st.Close()
 	s := New(testConfig(), slog.Default(), st)
 
-	body := `{"harness":"opencode","source_event_type":"message.part.updated","source_payload":{"event":{"type":"message.part.updated","properties":{"sessionID":"sess_1","messageID":"msg_1","part":{"type":"step-finish","reason":"stop","tokens":{"input":10,"output":4,"reasoning":1,"cache":{"read":2,"write":3},"total":20},"cost":0.0025}}},"metadata":{"session_id":"sess_1","turn_id":"msg_1","cwd":"/tmp/hitch","model":"anthropic/claude-sonnet-4"}},"hitch_client_version":"test"}`
+	body := `{"harness":"opencode","source_event_type":"message.part.step-finish","source_payload":{"event":{"type":"message.part.updated","properties":{"sessionID":"sess_1","messageID":"msg_1","part":{"type":"step-finish","reason":"stop","tokens":{"input":10,"output":4,"reasoning":1,"cache":{"read":2,"write":3},"total":20},"cost":0.0025}}},"metadata":{"session_id":"sess_1","turn_id":"msg_1","cwd":"/tmp/hitch","model":"anthropic/claude-sonnet-4"}},"hitch_client_version":"test"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)

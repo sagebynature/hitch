@@ -196,7 +196,19 @@ async function dispatchToHitch(sourceEventType, input, output, ctx) {
   await postToHitch("sync", sourceEventType, input, output, ctx);
 }
 
+function observedSourceEventType(event) {
+  if (!event || !HITCH_EVENTS.includes(event.type)) return undefined;
+  if (event.type !== "message.part.updated") return event.type;
+  const part = event?.properties?.part;
+  if (part?.type === "step-finish") return "message.part.step-finish";
+  if (part?.type === "text" && part?.metadata?.openai?.phase === "final_answer" && typeof part.text === "string" && part.text.length > 0) {
+    return "message.part.text";
+  }
+  return undefined;
+}
+
 async function observeWithHitch(sourceEventType, event, ctx) {
+  if (!sourceEventType) return;
   const sourcePayload = {
     event: safeClone(event),
     metadata: collectMetadata(event, event, ctx)
@@ -224,9 +236,7 @@ async function observeWithHitch(sourceEventType, event, ctx) {
 export const HitchPlugin = async (ctx) => {
   return {
     event: async ({ event }) => {
-      if (event && HITCH_EVENTS.includes(event.type)) {
-        await observeWithHitch(event.type, event, ctx);
-      }
+      await observeWithHitch(observedSourceEventType(event), event, ctx);
     },
     "chat.message": async (input, output) => dispatchToHitch("chat.message", input, output, ctx),
     "chat.params": async (input, output) => dispatchToHitch("chat.params", input, output, ctx),

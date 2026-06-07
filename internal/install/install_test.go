@@ -586,7 +586,7 @@ func TestOpenCodePluginContentAppliesThrowSetAppendAndInjectContext(t *testing.T
 		t.Fatal(err)
 	}
 	content := string(contentBytes)
-	for _, want := range []string{"function applyAdapterResponse", "async function postToHitch", "async function observeWithHitch", `hitchAPIURL() + "/v1/events"`, `postToHitch("sync"`, `if (!response.ok || endpoint !== "sync") return;`, `mode: endpoint`, `mode: "async"`, `catch (err)`, `if (err && err.hitchAdapterThrow) throw err;`, `adapter_action === "throw"`, `adapter_action === "set"`, `adapter_action === "append"`, `adapter_action === "inject_context"`, "client.session.prompt", "HITCH_DEFAULT_API_URL"} {
+	for _, want := range []string{"function applyAdapterResponse", "async function postToHitch", "function observedSourceEventType", "async function observeWithHitch", `"message.part.step-finish"`, `"message.part.text"`, `part?.metadata?.openai?.phase === "final_answer"`, `hitchAPIURL() + "/v1/events"`, `postToHitch("sync"`, `if (!response.ok || endpoint !== "sync") return;`, `mode: endpoint`, `mode: "async"`, `catch (err)`, `if (err && err.hitchAdapterThrow) throw err;`, `adapter_action === "throw"`, `adapter_action === "set"`, `adapter_action === "append"`, `adapter_action === "inject_context"`, "client.session.prompt", "HITCH_DEFAULT_API_URL"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("generated plugin missing %q:\n%s", want, content)
 		}

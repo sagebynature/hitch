@@ -76,10 +76,10 @@ Most source events produce one primary normalized event from `[harness.<name>.ev
 | Codex `Stop` | `["turn.completed", "turn.assistant_completed"]` |
 | Hermes `pre_llm_call` | `["llm.requested", "turn.user_prompt"]` |
 | Hermes `transform_llm_output` | `["llm.completed", "turn.assistant_completed"]` |
-| Pi `turn_end` | `["turn.completed", "turn.assistant_completed"]` |
-| OpenCode `session.idle` | `["turn.completed", "turn.assistant_completed"]` |
+| Pi `turn_end` | `["turn.completed", "turn.assistant_completed", "llm.completed"]` |
+| OMP `turn_end` | `["turn.completed", "turn.assistant_completed", "llm.completed"]` |
 
-Secondary rows share the same inbound event and payload as the primary row. They are for audit/query consistency and are not dispatched to live handlers; sync handler decisions and native responses are evaluated against the first configured event only.
+Secondary rows are parsed for their target Hitch event type and share the same inbound event. They are for audit/query consistency and are not dispatched to live handlers; sync handler decisions and native responses are evaluated against the first configured event only.
 
 ## Codex source events
 
@@ -144,7 +144,7 @@ Pi uses a TypeScript adapter response contract:
 | `before_provider_request` | `llm.requested` | No | Original Pi payload | Large provider request snapshot; configure explicitly for provider-request policy or rewrite handlers. `transform` returns `updated_input` as `return_value`. |
 | `tool_call` | `tool.requested` | Yes | Original Pi payload | `block`, `deny`, or `stop` returns `{block:true, reason}`; `transform` mutates the source event at path `input` to `updated_input`. |
 | `tool_result` | `tool.completed` | Yes | Original Pi payload | `replace_result` or `transform` returns `updated_output` as `return_value`. |
-| `turn_end` | `turn.completed`, `turn.assistant_completed` | Yes | Original Pi payload | Primary `turn.completed` has no special translation; secondary `turn.assistant_completed` is audit-only. |
+| `turn_end` | `turn.completed`, `turn.assistant_completed`, `llm.completed` | Yes | Typed `turn.assistant.text` and `llm.usage` are extracted from `message.content` and `message.usage` when present. | Primary `turn.completed` has no special translation; secondary completion rows are audit-only. |
 | `agent_end` | `turn.completed` | No | Original Pi payload | Large final message snapshot; configure explicitly when full agent-end transcript capture is needed. |
 | `session_start` | `session.started` | Yes | Original Pi payload | No special translation; `adapter_action:"noop"`. |
 | `session_shutdown` | `session.ended` | Yes | Original Pi payload | No special translation; `adapter_action:"noop"`. |
@@ -167,7 +167,7 @@ OMP reuses the Pi adapter response contract for translated native responses.
 | `agent_start` | `turn.started` | No | OMP payload | Observer-only lifecycle marker. |
 | `agent_end` | `turn.completed` | No | OMP payload | Large final message snapshot; configure explicitly when full agent-end transcript capture is needed. |
 | `turn_start` | `turn.started` | Yes | OMP payload | No special translation; `adapter_action:"noop"`. |
-| `turn_end` | `turn.completed` | Yes | OMP payload | No special translation; `adapter_action:"noop"`. |
+| `turn_end` | `turn.completed`, `turn.assistant_completed`, `llm.completed` | Yes | Typed `turn.assistant.text` and `llm.usage` are extracted from `message.content` and `message.usage` when present. | No special translation; secondary completion rows are audit-only. |
 | `context` | `turn.started` | No | OMP payload | Large conversation context snapshot; configure explicitly for context-rewrite handlers. `transform` returns `updated_input` as `return_value`. |
 | `before_provider_request` | `llm.requested` | No | OMP payload | Large provider request snapshot; configure explicitly for provider-request policy or rewrite handlers. `transform` returns `updated_input` as `return_value`. |
 | `after_provider_response` | `llm.completed` | No | OMP payload | Provider response observer; configure explicitly when raw provider-response telemetry is needed. |
@@ -216,7 +216,7 @@ OpenCode adapter response shape:
 | `tool.execute.after` | `tool.completed` | Yes | Hook input/output | `replace_result` or `transform` replaces `output.output` from `updated_output`. |
 | `permission.ask` | `tool.permission_requested` | Yes | Hook input/output | `allow` sets `output.status` to `allow`; `deny`, `block`, or `stop` sets `output.status` to `deny`. |
 | `session.created` | `session.started` | Yes | SDK event payload | Observer lifecycle. |
-| `session.idle` | `turn.completed`, `turn.assistant_completed` | Yes | SDK event payload | Primary `turn.completed` is ingested asynchronously; secondary `turn.assistant_completed` is audit-only. |
+| `session.idle` | `turn.completed` | Yes | SDK event payload | Observer lifecycle boundary. Assistant text is captured from filtered final-answer `message.part.updated` text parts instead. |
 | `session.compacted` | `session.compacted` | Yes | SDK event payload | Observer-only post-compaction lifecycle. |
 | `experimental.session.compacting` | `session.compacted` | Yes | Hook input/output | `inject_context` appends to `output.context`; `transform` replaces `output.prompt` from `updated_input`. |
 | `session.error` | `error.reported` | Yes | SDK event payload | Observer error lifecycle. |
@@ -228,7 +228,8 @@ OpenCode adapter response shape:
 | `tool.definition` | `tool.requested` | No | Hook input/output | `transform` can replace hook output from `updated_input` or `native_response`. |
 | `permission.asked`, `permission.updated` | `tool.permission_requested` | No | SDK event payload | Observer-only compatibility names; use `permission.ask` for control. |
 | `permission.replied` | `tool.permission_requested` | No | SDK event payload | Observer-only permission response audit. |
-| `message.part.updated` | `llm.completed` | Yes | Typed `llm` payload for OpenCode `step-finish` parts, including `tokens` and `cost` when present | Observer-only usage/cost audit. Other message SDK telemetry remains opt-in. |
+| `message.part.step-finish` | `llm.completed` | Yes | Synthetic source event emitted by the managed plugin for OpenCode `message.part.updated` `step-finish` parts; includes `tokens` and `cost` when present. | Observer-only usage/cost audit. |
+| `message.part.text` | `turn.assistant_completed` | Yes | Synthetic source event emitted by the managed plugin for final-answer text parts. | Observer-only assistant final-answer audit. |
 | `file.edited` | `tool.completed` | No | SDK event payload | File mutation audit. |
 | `file.watcher.updated` | `tool.progress` | No | SDK event payload | File watcher telemetry. |
 | `todo.updated` | `turn.started` | No | SDK event payload | Task-state audit. |

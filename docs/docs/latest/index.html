@@ -151,7 +151,7 @@ kind = "control"
 timeout_ms = 1000
 on_error = "fail_closed"
 on_timeout = "fail_closed"</code></pre>
-          <p><code>turn.assistant_completed</code> is the consistent assistant-output-complete audit signal. Hitch stores it directly for OMP <code>message_end</code> and as a configured secondary row for Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, Pi <code>turn_end</code>, and OpenCode <code>session.idle</code>. Secondary audit rows are not used for sync native-response translation or live handler dispatch.</p>
+          <p><code>turn.assistant_completed</code> is the consistent assistant-output-complete audit signal. Hitch stores it for Codex <code>Stop</code>, Hermes <code>transform_llm_output</code>, Pi/OMP <code>turn_end</code>, and OpenCode final-answer <code>message.part.updated</code> text parts that the managed plugin forwards as <code>message.part.text</code>. Secondary audit rows are not used for sync native-response translation or live handler dispatch.</p>
           <h3>Payload logger for every harness</h3>
           <p><code>examples/handlers/payload_logger.py</code> appends each event payload to a JSONL log and returns <code>behavior:"none"</code>. Configure one sync handler and one async handler with <code>events = ["*"]</code> to observe Codex, Hermes, Pi, OMP, and OpenCode without changing control flow.</p>
           <p>Async handlers also run after a sync dispatch for the same normalized event, so passive observers can subscribe with <code>kind = "observer"</code> without affecting the harness-native sync response.</p>
@@ -212,7 +212,7 @@ on_timeout = "fail_open"</code></pre>
           </table>
 
           <h3>Secondary normalized events</h3>
-          <p>Most source events produce one primary normalized event from <code>[harness.&lt;name&gt;.event_map]</code>. When a source event maps to an ordered list, Hitch also persists secondary audit rows for the remaining configured events. Defaults use this for Codex <code>Stop</code>, Hermes <code>pre_llm_call</code>, Hermes <code>transform_llm_output</code>, and Pi <code>turn_end</code>. Secondary rows share the same inbound event and payload as the primary row and are for audit/query consistency; they are not dispatched to live handlers or used for sync native-response translation.</p>
+          <p>Most source events produce one primary normalized event from <code>[harness.&lt;name&gt;.event_map]</code>. When a source event maps to an ordered list, Hitch also persists secondary audit rows for the remaining configured events. Defaults use this for Codex <code>Stop</code>, Hermes <code>pre_llm_call</code>, Hermes <code>transform_llm_output</code>, and Pi/OMP <code>turn_end</code>. Secondary rows are parsed for their target Hitch event type, share the same inbound event, and are for audit/query consistency; they are not dispatched to live handlers or used for sync native-response translation.</p>
 
           <h3>Codex event mapping</h3>
           <table>
@@ -262,7 +262,7 @@ on_timeout = "fail_open"</code></pre>
               <tr><td><code>before_provider_request</code></td><td><code>llm.requested</code> <small>(opt-in)</small></td><td>Large provider request snapshot; <code>transform</code> returns <code>updated_input</code>.</td></tr>
               <tr><td><code>tool_call</code></td><td><code>tool.requested</code> <small>(default)</small></td><td><code>block</code>, <code>deny</code>, or <code>stop</code> returns a block object; <code>transform</code> mutates source path <code>input</code>.</td></tr>
               <tr><td><code>tool_result</code></td><td><code>tool.completed</code> <small>(default)</small></td><td><code>replace_result</code> or <code>transform</code> returns <code>updated_output</code>.</td></tr>
-              <tr><td><code>turn_end</code></td><td><code>turn.completed</code>, <code>turn.assistant_completed</code> <small>(default)</small></td><td>Primary <code>turn.completed</code> is <code>noop</code>; secondary <code>turn.assistant_completed</code> is audit-only.</td></tr>
+              <tr><td><code>turn_end</code></td><td><code>turn.completed</code>, <code>turn.assistant_completed</code>, <code>llm.completed</code> <small>(default)</small></td><td>Extracts final assistant text and usage/cost when present; secondary completion rows are audit-only.</td></tr>
               <tr><td><code>agent_end</code></td><td><code>turn.completed</code> <small>(opt-in)</small></td><td>Large final message snapshot.</td></tr>
               <tr><td><code>session_start</code></td><td><code>session.started</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
               <tr><td><code>session_shutdown</code></td><td><code>session.ended</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
@@ -282,7 +282,7 @@ on_timeout = "fail_open"</code></pre>
               <tr><td><code>agent_start</code></td><td><code>turn.started</code> <small>(opt-in)</small></td><td>Observer-only lifecycle marker.</td></tr>
               <tr><td><code>agent_end</code></td><td><code>turn.completed</code> <small>(opt-in)</small></td><td>Large final message snapshot.</td></tr>
               <tr><td><code>turn_start</code></td><td><code>turn.started</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
-              <tr><td><code>turn_end</code></td><td><code>turn.completed</code> <small>(default)</small></td><td><code>noop</code>.</td></tr>
+              <tr><td><code>turn_end</code></td><td><code>turn.completed</code>, <code>turn.assistant_completed</code>, <code>llm.completed</code> <small>(default)</small></td><td>Extracts final assistant text and usage/cost when present; secondary completion rows are audit-only.</td></tr>
               <tr><td><code>context</code></td><td><code>turn.started</code> <small>(opt-in)</small></td><td>Large context snapshot; <code>transform</code> returns <code>updated_input</code>.</td></tr>
               <tr><td><code>before_provider_request</code></td><td><code>llm.requested</code> <small>(opt-in)</small></td><td>Large provider request snapshot; <code>transform</code> returns <code>updated_input</code>.</td></tr>
               <tr><td><code>after_provider_response</code></td><td><code>llm.completed</code> <small>(opt-in)</small></td><td>Provider response observer.</td></tr>

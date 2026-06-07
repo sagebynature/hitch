@@ -133,7 +133,7 @@ func TestCapabilityClassifiesSourceEvents(t *testing.T) {
 
 func TestKnownSourceEventsIncludesOpenCodeSDKEvents(t *testing.T) {
 	known := Mapper{}.KnownSourceEvents()
-	for _, event := range []string{"session.updated", "session.deleted", "session.diff", "session.status", "permission.updated", "permission.replied", "message.updated", "message.part.updated", "file.edited", "server.connected", "pty.exited", "vcs.branch.updated"} {
+	for _, event := range []string{"session.updated", "session.deleted", "session.diff", "session.status", "permission.updated", "permission.replied", "message.updated", "message.part.updated", "message.part.step-finish", "message.part.text", "file.edited", "server.connected", "pty.exited", "vcs.branch.updated"} {
 		if _, ok := known[event]; !ok {
 			t.Fatalf("expected %s to be catalog-known", event)
 		}
