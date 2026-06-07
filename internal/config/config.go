@@ -174,10 +174,64 @@ func Parse(b []byte) (Config, error) {
 	if c.Handlers == nil {
 		c.Handlers = map[string]HandlerConfig{}
 	}
+	upgradeLegacyDefaultEventMaps(&c)
 	if err := c.Validate(); err != nil {
 		return Config{}, err
 	}
 	return c, nil
+}
+
+func upgradeLegacyDefaultEventMaps(c *Config) {
+	upgradeIfExact(&c.Harness.Pi.EventMap, "turn_end",
+		EventTypes{protocol.EventTurnCompleted, protocol.EventTurnAssistantCompleted},
+		EventTypes{protocol.EventTurnCompleted, protocol.EventTurnAssistantCompleted, protocol.EventLLMCompleted},
+	)
+	upgradeIfExact(&c.Harness.OMP.EventMap, "turn_end",
+		EventTypes{protocol.EventTurnCompleted},
+		EventTypes{protocol.EventTurnCompleted, protocol.EventTurnAssistantCompleted, protocol.EventLLMCompleted},
+	)
+	upgradeIfExact(&c.Harness.OpenCode.EventMap, "session.idle",
+		EventTypes{protocol.EventTurnCompleted, protocol.EventTurnAssistantCompleted},
+		EventTypes{protocol.EventTurnCompleted},
+	)
+	ensureEventMapEntry(&c.Harness.OpenCode.EventMap, "message.part.step-finish", EventTypes{protocol.EventLLMCompleted})
+	ensureEventMapEntry(&c.Harness.OpenCode.EventMap, "message.part.text", EventTypes{protocol.EventTurnAssistantCompleted})
+	if eventTypesEqual(c.Harness.OpenCode.EventMap["message.part.updated"], EventTypes{protocol.EventLLMCompleted}) {
+		delete(c.Harness.OpenCode.EventMap, "message.part.updated")
+	}
+}
+
+func upgradeIfExact(m *map[string]EventTypes, key string, oldValue, newValue EventTypes) {
+	if !eventTypesEqual((*m)[key], oldValue) {
+		return
+	}
+	ensureEventMap(m)
+	(*m)[key] = newValue
+}
+
+func ensureEventMapEntry(m *map[string]EventTypes, key string, value EventTypes) {
+	ensureEventMap(m)
+	if _, ok := (*m)[key]; !ok {
+		(*m)[key] = value
+	}
+}
+
+func ensureEventMap(m *map[string]EventTypes) {
+	if *m == nil {
+		*m = map[string]EventTypes{}
+	}
+}
+
+func eventTypesEqual(a, b EventTypes) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (c Config) Validate() error {

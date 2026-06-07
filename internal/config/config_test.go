@@ -354,6 +354,36 @@ func TestValidateRejectsInvalidOpenCodeEventMapValue(t *testing.T) {
 	}
 }
 
+func TestParseUpgradesLegacyDefaultEventMaps(t *testing.T) {
+	legacy := DefaultConfigTOML
+	legacy = strings.Replace(legacy, `turn_end = ["turn.completed", "turn.assistant_completed", "llm.completed"]`, `turn_end = ["turn.completed", "turn.assistant_completed"]`, 1)
+	legacy = strings.Replace(legacy, `turn_end = ["turn.completed", "turn.assistant_completed", "llm.completed"]`, `turn_end = "turn.completed"`, 1)
+	legacy = strings.Replace(legacy, `"session.idle" = "turn.completed"`, `"session.idle" = ["turn.completed", "turn.assistant_completed"]`, 1)
+	legacy = strings.Replace(legacy, `"message.part.step-finish" = "llm.completed"
+"message.part.text" = "turn.assistant_completed"
+`, ``, 1)
+
+	cfg, err := Parse([]byte(legacy))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Harness.Pi.EventMap["turn_end"]; len(got) != 3 || got[0] != protocol.EventTurnCompleted || got[1] != protocol.EventTurnAssistantCompleted || got[2] != protocol.EventLLMCompleted {
+		t.Fatalf("legacy Pi turn_end was not upgraded: %#v", got)
+	}
+	if got := cfg.Harness.OMP.EventMap["turn_end"]; len(got) != 3 || got[0] != protocol.EventTurnCompleted || got[1] != protocol.EventTurnAssistantCompleted || got[2] != protocol.EventLLMCompleted {
+		t.Fatalf("legacy OMP turn_end was not upgraded: %#v", got)
+	}
+	if got := cfg.Harness.OpenCode.EventMap["session.idle"]; len(got) != 1 || got[0] != protocol.EventTurnCompleted {
+		t.Fatalf("legacy OpenCode session.idle was not upgraded: %#v", got)
+	}
+	if got := cfg.Harness.OpenCode.EventMap["message.part.step-finish"]; len(got) != 1 || got[0] != protocol.EventLLMCompleted {
+		t.Fatalf("OpenCode step-finish synthetic mapping missing: %#v", got)
+	}
+	if got := cfg.Harness.OpenCode.EventMap["message.part.text"]; len(got) != 1 || got[0] != protocol.EventTurnAssistantCompleted {
+		t.Fatalf("OpenCode text synthetic mapping missing: %#v", got)
+	}
+}
+
 func TestSeedDefaultCreatesValidConfigWithoutOverwritingExistingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "config.toml")
 

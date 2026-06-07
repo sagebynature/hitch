@@ -48,7 +48,7 @@ Harness event maps live in config. The default config includes the recommended l
 [harness.omp.event_map]
 before_provider_request = "llm.requested"
 tool_execution_update = "tool.progress"
-turn_end = ["turn.completed", "turn.assistant_completed"]
+turn_end = ["turn.completed", "turn.assistant_completed", "llm.completed"]
 ```
 
 ```toml
@@ -58,6 +58,8 @@ turn_end = ["turn.completed", "turn.assistant_completed"]
 ```
 
 Keys are source hook/callback names. Values are normalized Hitch event names or ordered lists of normalized Hitch event names. The first event is primary for sync dispatch/native responses; additional events are secondary audit rows. Unknown source events are rejected unless configured here.
+
+Legacy default maps from older Hitch configs are upgraded in memory at load time for known completion events such as Pi/OMP `turn_end` and OpenCode `message.part.*`; restart `hitch serve` after installing a newer build so the loaded runtime map reflects those upgrades.
 
 
 Paths beginning with `~/` are expanded where config allows path values.
