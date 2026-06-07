@@ -18,6 +18,24 @@ var controlCapableEvents = map[string]struct{}{
 	"pre_gateway_dispatch":      {},
 }
 
+var knownSourceEvents = harness.SourceEventSet(
+	"pre_tool_call",
+	"post_tool_call",
+	"pre_llm_call",
+	"post_llm_call",
+	"on_session_start",
+	"on_session_end",
+	"subagent_stop",
+	"transform_tool_result",
+	"transform_terminal_output",
+	"transform_llm_output",
+	"pre_gateway_dispatch",
+)
+
+func (Mapper) KnownSourceEvents() map[string]struct{} {
+	return knownSourceEvents
+}
+
 func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
 	return harness.CapabilityFromSet(sourceEventType, controlCapableEvents)
 }

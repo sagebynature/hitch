@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"database/sql"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/sagebynature/hitch/internal/protocol"
@@ -75,8 +77,16 @@ CREATE TABLE IF NOT EXISTS native_responses (
 
 type Store struct{ db *sql.DB }
 
+func sqliteDSN(path string) string {
+	separator := "?"
+	if strings.Contains(path, "?") {
+		separator = "&"
+	}
+	return path + separator + "_pragma=" + url.QueryEscape("busy_timeout(5000)") + "&_pragma=" + url.QueryEscape("journal_mode(WAL)")
+}
+
 func Open(ctx context.Context, path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteDSN(path))
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +99,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 }
 
 func (s *Store) Close() error { return s.db.Close() }
+
+func (s *Store) RawConn(ctx context.Context) (*sql.Conn, error) {
+	return s.db.Conn(ctx)
+}
 
 func (s *Store) Migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, migrations[0]); err != nil {

@@ -184,6 +184,90 @@ func TestEventSyncSuccessLogsInfoSummary(t *testing.T) {
 	}
 }
 
+func TestSyncSuccessLogsPassthroughOutcomeWhenNoControlHandlersRun(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	var logs lockedBuffer
+	s := New(testConfig(), slog.New(slog.NewJSONHandler(&logs, nil)), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"sync","harness":"omp","source_event_type":"tool_result","source_payload":{"name":"bash"},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("sync code %d body %s", w.Code, w.Body.String())
+	}
+	text := logs.String()
+	if !strings.Contains(text, `"sync_outcome":"passthrough"`) {
+		t.Fatalf("missing passthrough sync outcome:\n%s", text)
+	}
+}
+
+func TestSyncSuccessLogsPassthroughOutcomeWhenControlHandlersReturnNone(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := testConfig()
+	cfg.Handlers = map[string]config.HandlerConfig{
+		"noop_policy": {
+			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"none"}}'`},
+			Events:    []string{string(protocol.EventToolRequested)},
+			Kind:      "control",
+			TimeoutMS: 1000,
+		},
+	}
+
+	var logs lockedBuffer
+	s := New(cfg, slog.New(slog.NewJSONHandler(&logs, nil)), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"sync","harness":"omp","source_event_type":"tool_call","source_payload":{"name":"bash"},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("sync code %d body %s", w.Code, w.Body.String())
+	}
+	text := logs.String()
+	if !strings.Contains(text, `"sync_outcome":"passthrough"`) {
+		t.Fatalf("missing passthrough sync outcome:\n%s", text)
+	}
+}
+
+func TestSyncSuccessLogsHandlerDecisionOutcomeWhenControlHandlersRun(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := testConfig()
+	cfg.Handlers = map[string]config.HandlerConfig{
+		"allow_policy": {
+			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"allow"}}'`},
+			Events:    []string{string(protocol.EventToolRequested)},
+			Kind:      "control",
+			TimeoutMS: 1000,
+		},
+	}
+
+	var logs lockedBuffer
+	s := New(cfg, slog.New(slog.NewJSONHandler(&logs, nil)), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"sync","harness":"omp","source_event_type":"tool_call","source_payload":{"name":"bash"},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("sync code %d body %s", w.Code, w.Body.String())
+	}
+	text := logs.String()
+	if !strings.Contains(text, `"sync_outcome":"handler_decision"`) {
+		t.Fatalf("missing handler_decision sync outcome:\n%s", text)
+	}
+}
+
 func TestEventFailureLogsInfoSummary(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
@@ -205,6 +289,87 @@ func TestEventFailureLogsInfoSummary(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Fatalf("event failure log missing %s:\n%s", want, text)
 		}
+	}
+}
+
+func TestKnownUnmappedSourceEventLogsDebugIgnored(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	var logs lockedBuffer
+	s := New(testConfig(), slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"async","harness":"omp","source_event_type":"message_start","source_payload":{},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("known-unmapped event should be ignored with 202, got %d body %s", w.Code, w.Body.String())
+	}
+	text := logs.String()
+	for _, want := range []string{`"level":"DEBUG"`, `"msg":"api request ignored"`, `"error_kind":"unmapped_source_event"`, `"harness":"omp"`, `"source_event_type":"message_start"`, `"status":202`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("known-unmapped log missing %s:\n%s", want, text)
+		}
+	}
+}
+
+func TestUnknownSourceEventLogsInfoFailure(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	var logs lockedBuffer
+	s := New(testConfig(), slog.New(slog.NewJSONHandler(&logs, nil)), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"async","harness":"omp","source_event_type":"surprise_new_event","source_payload":{},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("unknown event should remain 400, got %d body %s", w.Code, w.Body.String())
+	}
+	text := logs.String()
+	for _, want := range []string{`"level":"INFO"`, `"msg":"api request failed"`, `"error_kind":"unknown_source_event"`, `"harness":"omp"`, `"source_event_type":"surprise_new_event"`, `"status":400`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("unknown-event log missing %s:\n%s", want, text)
+		}
+	}
+}
+
+func TestStoreBusyFailuresLogErrorKind(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	var logs lockedBuffer
+	s := New(testConfig(), slog.New(slog.NewJSONHandler(&logs, nil)), st)
+
+	conn, err := st.RawConn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `BEGIN EXCLUSIVE`); err != nil {
+		t.Fatal(err)
+	}
+	defer conn.ExecContext(ctx, `ROLLBACK`)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"async","harness":"omp","source_event_type":"turn_start","source_payload":{},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected store busy 500, got %d body %s", w.Code, w.Body.String())
+	}
+	text := logs.String()
+	if !strings.Contains(text, `"error_kind":"store_busy"`) {
+		t.Fatalf("missing store_busy error kind:\n%s", text)
 	}
 }
 
@@ -642,7 +807,7 @@ func TestUnsupportedSourceEventRejected(t *testing.T) {
 	}
 }
 
-func TestDefaultConfigExcludesNoisySourceEventsButAllowsOptIn(t *testing.T) {
+func TestDefaultConfigIgnoresNoisySourceEventsButAllowsOptIn(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
 	if err != nil {
@@ -654,8 +819,15 @@ func TestDefaultConfigExcludesNoisySourceEventsButAllowsOptIn(t *testing.T) {
 	defaultReq := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"harness":"omp","source_event_type":"before_provider_request","source_payload":{"type":"before_provider_request","payload":{"model":"gpt-test"}},"hitch_client_version":"test"}`))
 	defaultW := httptest.NewRecorder()
 	defaultServer.Handler().ServeHTTP(defaultW, defaultReq)
-	if defaultW.Code != http.StatusBadRequest {
-		t.Fatalf("default config should reject excluded source event, got %d body %s", defaultW.Code, defaultW.Body.String())
+	if defaultW.Code != http.StatusAccepted {
+		t.Fatalf("default config should ignore excluded source event, got %d body %s", defaultW.Code, defaultW.Body.String())
+	}
+	var ignoredResp EventResponse
+	if err := json.Unmarshal(defaultW.Body.Bytes(), &ignoredResp); err != nil {
+		t.Fatal(err)
+	}
+	if ignoredResp.EventID != "" || ignoredResp.NormalizedEventID != "" {
+		t.Fatalf("ignored event should not persist IDs: %#v", ignoredResp)
 	}
 
 	cfg := testConfig()

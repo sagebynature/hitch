@@ -24,6 +24,58 @@ var controlCapableEvents = map[string]struct{}{
 	"experimental.text.complete":           {},
 }
 
+var knownSourceEvents = harness.SourceEventSet(
+	"chat.message",
+	"chat.params",
+	"chat.headers",
+	"command.execute.before",
+	"command.executed",
+	"permission.ask",
+	"permission.asked",
+	"permission.updated",
+	"permission.replied",
+	"tool.execute.before",
+	"tool.execute.after",
+	"tool.definition",
+	"shell.env",
+	"experimental.session.compacting",
+	"experimental.compaction.autocontinue",
+	"experimental.text.complete",
+	"session.created",
+	"session.updated",
+	"session.deleted",
+	"session.diff",
+	"session.error",
+	"session.idle",
+	"session.status",
+	"session.compacted",
+	"message.updated",
+	"message.removed",
+	"message.part.updated",
+	"message.part.removed",
+	"file.edited",
+	"file.watcher.updated",
+	"todo.updated",
+	"server.connected",
+	"server.instance.disposed",
+	"installation.updated",
+	"installation.update-available",
+	"lsp.client.diagnostics",
+	"lsp.updated",
+	"tui.prompt.append",
+	"tui.command.execute",
+	"tui.toast.show",
+	"pty.created",
+	"pty.updated",
+	"pty.exited",
+	"pty.deleted",
+	"vcs.branch.updated",
+)
+
+func (Mapper) KnownSourceEvents() map[string]struct{} {
+	return knownSourceEvents
+}
+
 func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
 	return harness.CapabilityFromSet(sourceEventType, controlCapableEvents)
 }

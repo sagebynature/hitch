@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +57,54 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 	if len(inspection.NativeResponses) != 1 || inspection.NativeResponses[0].ID != "resp_1" {
 		t.Fatalf("wrong native responses: %#v", inspection.NativeResponses)
+	}
+}
+
+func TestOpenConfiguresBusyTimeoutAndWAL(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	assertSQLitePragmas(t, ctx, st.db)
+
+	conn1, err := st.RawConn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn1.Close()
+	conn2, err := st.RawConn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn2.Close()
+	assertSQLitePragmas(t, ctx, conn1)
+	assertSQLitePragmas(t, ctx, conn2)
+}
+
+type sqlitePragmaQuerier interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func assertSQLitePragmas(t *testing.T, ctx context.Context, q sqlitePragmaQuerier) {
+	t.Helper()
+
+	var busyTimeout int
+	if err := q.QueryRowContext(ctx, `PRAGMA busy_timeout`).Scan(&busyTimeout); err != nil {
+		t.Fatal(err)
+	}
+	if busyTimeout < 5000 {
+		t.Fatalf("busy_timeout = %d, want at least 5000", busyTimeout)
+	}
+
+	var journalMode string
+	if err := q.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journalMode); err != nil {
+		t.Fatal(err)
+	}
+	if strings.ToLower(journalMode) != "wal" {
+		t.Fatalf("journal_mode = %q, want wal", journalMode)
 	}
 }
 

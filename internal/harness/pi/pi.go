@@ -25,6 +25,34 @@ var controlCapableEvents = map[string]struct{}{
 	"session.compacting":      {},
 }
 
+var knownSourceEvents = harness.SourceEventSet(
+	"input",
+	"before_agent_start",
+	"agent_start",
+	"turn_start",
+	"context",
+	"before_provider_request",
+	"tool_call",
+	"tool_result",
+	"turn_end",
+	"agent_end",
+	"session_start",
+	"session_shutdown",
+	"session_before_switch",
+	"session_before_fork",
+	"session_before_branch",
+	"session_before_compact",
+	"session.compacting",
+	"session_before_tree",
+	"session_compact",
+	"user_bash",
+	"user_python",
+)
+
+func (Mapper) KnownSourceEvents() map[string]struct{} {
+	return knownSourceEvents
+}
+
 func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
 	return CapabilityForHarness(sourceEventType)
 }

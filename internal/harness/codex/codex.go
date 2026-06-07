@@ -22,6 +22,23 @@ var controlCapableEvents = map[string]struct{}{
 	"Stop":              {},
 }
 
+var knownSourceEvents = harness.SourceEventSet(
+	"SessionStart",
+	"SubagentStart",
+	"UserPromptSubmit",
+	"PreToolUse",
+	"PermissionRequest",
+	"PostToolUse",
+	"PreCompact",
+	"PostCompact",
+	"SubagentStop",
+	"Stop",
+)
+
+func (Mapper) KnownSourceEvents() map[string]struct{} {
+	return knownSourceEvents
+}
+
 func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
 	return harness.CapabilityFromSet(sourceEventType, controlCapableEvents)
 }

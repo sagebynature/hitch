@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -522,6 +523,17 @@ func TestE2EOpenCodeLifecycleHooksDispatchToObserverHandler(t *testing.T) {
 	assistantCompleted := onlyInspection(t, ctx, st, protocol.EventTurnAssistantCompleted)
 	if assistantCompleted.Inbound.SourceEventType != "session.idle" {
 		t.Fatalf("session.idle did not produce secondary assistant-completed row: %#v", assistantCompleted)
+	}
+}
+
+func TestServerFailureLogAttrsIncludesBindHint(t *testing.T) {
+	err := fmt.Errorf("listen tcp 127.0.0.1:8799: bind: address already in use")
+	attrs := serverFailureLogAttrs("127.0.0.1:8799", err)
+	joined := fmt.Sprint(attrs)
+	for _, want := range []string{"addr", "127.0.0.1:8799", "hint", "another Hitch server may already be running"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q in attrs %#v", want, attrs)
+		}
 	}
 }
 

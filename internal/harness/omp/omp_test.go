@@ -90,3 +90,12 @@ func TestCapabilityClassifiesSourceEvents(t *testing.T) {
 		t.Fatalf("turn_end capability = %s", got)
 	}
 }
+
+func TestKnownSourceEventsIncludesUnmappedOMPAdapterEvents(t *testing.T) {
+	known := Mapper{}.KnownSourceEvents()
+	for _, event := range []string{"before_agent_start", "agent_start", "message_start", "tool_execution_start", "tool_execution_end", "agent_end"} {
+		if _, ok := known[event]; !ok {
+			t.Fatalf("expected %s to be catalog-known", event)
+		}
+	}
+}

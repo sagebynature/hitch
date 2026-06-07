@@ -124,6 +124,13 @@ func normalizeRequestMode(mode string) (string, error) {
 	}
 }
 
+func syncOutcome(behavior protocol.DecisionBehavior) string {
+	if behavior == protocol.BehaviorNone {
+		return "passthrough"
+	}
+	return "handler_decision"
+}
+
 func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
 	s := &Server{cfg: cfg, log: log, store: st, runner: dispatch.NewRunnerWithLogger(cfg.Handlers, log), harnesses: buildHarnessRuntimes(cfg)}
 	mux := http.NewServeMux()
@@ -150,7 +157,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	log := newAPIRequestLog(r)
 	if err := writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok"}); err != nil {
-		log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusOK, "error", err.Error())
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusOK, "error_kind", "response_write_failed", "error", err.Error())
 		return
 	}
 	log.emit(r.Context(), s.log, slog.LevelDebug, "api request completed", http.StatusOK)
@@ -164,17 +171,25 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		log.addEnvelope(env, resp.NormalizedEventID)
 	}
 	if err != nil {
+		var unmapped unmappedSourceEventError
+		if errors.As(err, &unmapped) {
+			log.emit(r.Context(), s.log, slog.LevelDebug, "api request ignored", http.StatusAccepted, "error_kind", errorKind(err), "reason", "source event is known but not mapped in config")
+			if writeErr := writeJSON(w, http.StatusAccepted, EventResponse{}); writeErr != nil {
+				log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusAccepted, "error_kind", "response_write_failed", "error", writeErr.Error())
+			}
+			return
+		}
 		status := statusForError(err)
-		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", status, "error", err.Error())
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", status, "error_kind", errorKind(err), "error", err.Error())
 		if writeErr := writeError(w, err); writeErr != nil {
-			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", status, "error", writeErr.Error())
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", status, "error_kind", "response_write_failed", "error", writeErr.Error())
 		}
 		return
 	}
 	if mode == requestModeAsync {
 		go s.dispatchObservers(context.Background(), resp.NormalizedEventID, env)
 		if err := writeJSON(w, http.StatusAccepted, resp); err != nil {
-			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusAccepted, "error", err.Error())
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusAccepted, "error_kind", "response_write_failed", "error", err.Error())
 			return
 		}
 		log.emit(r.Context(), s.log, slog.LevelDebug, "api request completed", http.StatusAccepted)
@@ -186,9 +201,9 @@ func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp Ev
 	result := s.runner.Dispatch(r.Context(), env, "control", 2*time.Second)
 	for _, inv := range result.Invocations {
 		if err := s.store.InsertHandlerInvocation(r.Context(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: resp.NormalizedEventID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error}); err != nil {
-			log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error", err.Error())
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error_kind", errorKind(err), "error", err.Error())
 			if writeErr := writeError(w, err); writeErr != nil {
-				log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error", writeErr.Error())
+				log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error_kind", "response_write_failed", "error", writeErr.Error())
 			}
 			return
 		}
@@ -196,16 +211,16 @@ func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp Ev
 	runtime := s.harnesses[env.Harness]
 	native, err := runtime.normalizer.Translate(env.SourceEventType, result.Aggregate)
 	if err != nil {
-		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error", err.Error())
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error_kind", errorKind(err), "error", err.Error())
 		if writeErr := writeError(w, err); writeErr != nil {
-			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error", writeErr.Error())
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error_kind", "response_write_failed", "error", writeErr.Error())
 		}
 		return
 	}
 	if err := s.store.InsertNativeResponse(r.Context(), store.NativeResponse{ID: harness.NewID("nresp"), NormalizedEventID: resp.NormalizedEventID, Response: native, EmittedAt: time.Now().UTC()}); err != nil {
-		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "error", err.Error())
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "error_kind", errorKind(err), "error", err.Error())
 		if writeErr := writeError(w, err); writeErr != nil {
-			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "error", writeErr.Error())
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "error_kind", "response_write_failed", "error", writeErr.Error())
 		}
 		return
 	}
@@ -215,10 +230,10 @@ func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp Ev
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(native); err != nil {
-		log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusOK, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "error", err.Error())
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusOK, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "error_kind", "response_write_failed", "error", err.Error())
 		return
 	}
-	log.emit(r.Context(), s.log, slog.LevelInfo, "api request completed", http.StatusOK, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native))
+	log.emit(r.Context(), s.log, slog.LevelInfo, "api request completed", http.StatusOK, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "sync_outcome", syncOutcome(result.Aggregate.Decision.Behavior))
 }
 func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, protocol.EventEnvelope, EventRequest, string, error) {
 	var req EventRequest
@@ -242,7 +257,10 @@ func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, pr
 	}
 	hitchEventTypes, ok := runtime.eventMap[req.SourceEventType]
 	if !ok {
-		return EventResponse{}, protocol.EventEnvelope{}, req, mode, badRequest("unsupported %s event %q", req.Harness, req.SourceEventType)
+		if _, known := runtime.normalizer.KnownSourceEvents()[req.SourceEventType]; known {
+			return EventResponse{}, protocol.EventEnvelope{}, req, mode, unmappedSourceEventError{harness: req.Harness, event: req.SourceEventType}
+		}
+		return EventResponse{}, protocol.EventEnvelope{}, req, mode, unknownSourceEventError{harness: req.Harness, event: req.SourceEventType}
 	}
 	if mode == requestModeSync && runtime.normalizer.Capability(req.SourceEventType) != harness.CapabilityControlCapable {
 		return EventResponse{}, protocol.EventEnvelope{}, req, mode, badRequest("%s event %q does not support sync dispatch", req.Harness, req.SourceEventType)
@@ -323,22 +341,22 @@ func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 	log.add("normalized_event_id", id)
 	if id == "" {
 		err := badRequest("missing id")
-		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusBadRequest, "error", err.Error())
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusBadRequest, "error_kind", errorKind(err), "error", err.Error())
 		if writeErr := writeError(w, err); writeErr != nil {
-			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusBadRequest, "error", writeErr.Error())
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusBadRequest, "error_kind", "response_write_failed", "error", writeErr.Error())
 		}
 		return
 	}
 	inspection, err := s.store.InspectEvent(r.Context(), id)
 	if err != nil {
-		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "error", err.Error())
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "error_kind", errorKind(err), "error", err.Error())
 		if writeErr := writeError(w, err); writeErr != nil {
-			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "error", writeErr.Error())
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "error_kind", "response_write_failed", "error", writeErr.Error())
 		}
 		return
 	}
 	if err := writeJSON(w, http.StatusOK, inspection); err != nil {
-		log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusOK, "error", err.Error())
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusOK, "error_kind", "response_write_failed", "error", err.Error())
 		return
 	}
 	log.emit(r.Context(), s.log, slog.LevelDebug, "api request completed", http.StatusOK)
@@ -350,6 +368,47 @@ func headers(r *http.Request) map[string][]string {
 		out[k] = v
 	}
 	return out
+}
+
+type unmappedSourceEventError struct {
+	harness string
+	event   string
+}
+
+func (e unmappedSourceEventError) Error() string {
+	return fmt.Sprintf("unmapped %s event %q", e.harness, e.event)
+}
+
+type unknownSourceEventError struct {
+	harness string
+	event   string
+}
+
+func (e unknownSourceEventError) Error() string {
+	return fmt.Sprintf("unknown %s event %q", e.harness, e.event)
+}
+
+func errorKind(err error) string {
+	var unmapped unmappedSourceEventError
+	if errors.As(err, &unmapped) {
+		return "unmapped_source_event"
+	}
+	var unknown unknownSourceEventError
+	if errors.As(err, &unknown) {
+		return "unknown_source_event"
+	}
+	if isSQLiteBusy(err) {
+		return "store_busy"
+	}
+	var he httpError
+	if errors.As(err, &he) {
+		return "bad_request"
+	}
+	return "internal_error"
+}
+
+func isSQLiteBusy(err error) bool {
+	return strings.Contains(err.Error(), "SQLITE_BUSY") || strings.Contains(err.Error(), "database is locked")
 }
 
 type httpError struct {
@@ -366,6 +425,14 @@ func statusForError(err error) int {
 	var he httpError
 	if errors.As(err, &he) {
 		return he.code
+	}
+	var unknown unknownSourceEventError
+	if errors.As(err, &unknown) {
+		return http.StatusBadRequest
+	}
+	var unmapped unmappedSourceEventError
+	if errors.As(err, &unmapped) {
+		return http.StatusBadRequest
 	}
 	return http.StatusInternalServerError
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -96,7 +97,7 @@ func serve(args []string) {
 	go func() {
 		logger.Info("hitch server starting", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("server failed", "error", err)
+			logger.Error("server failed", serverFailureLogAttrs(srv.Addr, err)...)
 			os.Exit(1)
 		}
 	}()
@@ -106,6 +107,14 @@ func serve(args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
+}
+
+func serverFailureLogAttrs(addr string, err error) []any {
+	attrs := []any{"addr", addr, "error", err.Error()}
+	if strings.Contains(err.Error(), "address already in use") || strings.Contains(err.Error(), "bind") {
+		attrs = append(attrs, "error_kind", "bind_failed", "hint", "another Hitch server may already be running; stop it or change server.port")
+	}
+	return attrs
 }
 
 func status(args []string) {
