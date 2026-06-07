@@ -49,6 +49,65 @@ type EventResponse struct {
 	NormalizedEventID string `json:"normalized_event_id"`
 }
 
+type apiRequestLog struct {
+	started time.Time
+	attrs   []any
+}
+
+func newAPIRequestLog(r *http.Request) apiRequestLog {
+	return apiRequestLog{
+		started: time.Now(),
+		attrs: []any{
+			"method", r.Method,
+			"path", r.URL.Path,
+		},
+	}
+}
+
+func (l *apiRequestLog) add(key string, value any) {
+	if value == nil {
+		return
+	}
+	if s, ok := value.(string); ok && s == "" {
+		return
+	}
+	l.attrs = append(l.attrs, key, value)
+}
+
+func (l *apiRequestLog) addEventRequest(mode string, req EventRequest) {
+	if mode == "" {
+		mode = strings.TrimSpace(req.Mode)
+	}
+	l.add("mode", mode)
+	l.add("harness", req.Harness)
+	l.add("source_event_type", req.SourceEventType)
+}
+
+func (l *apiRequestLog) addEnvelope(env protocol.EventEnvelope, normalizedID string) {
+	l.add("event_id", env.EventID)
+	l.add("normalized_event_id", normalizedID)
+	l.add("hitch_event_type", string(env.HitchEventType))
+	l.add("session_id", env.SessionID)
+	l.add("turn_id", env.TurnID)
+	l.add("cwd", env.CWD)
+	l.add("model", env.Model)
+}
+
+func (l *apiRequestLog) addEnvelopeMetadata(env protocol.EventEnvelope) {
+	l.add("hitch_event_type", string(env.HitchEventType))
+	l.add("session_id", env.SessionID)
+	l.add("turn_id", env.TurnID)
+	l.add("cwd", env.CWD)
+	l.add("model", env.Model)
+}
+
+func (l apiRequestLog) emit(ctx context.Context, logger *slog.Logger, level slog.Level, msg string, status int, extra ...any) {
+	attrs := append([]any{}, l.attrs...)
+	attrs = append(attrs, "status", status, "duration_ms", time.Since(l.started).Milliseconds())
+	attrs = append(attrs, extra...)
+	logger.Log(ctx, level, msg, attrs...)
+}
+
 const (
 	requestModeAsync = "async"
 	requestModeSync  = "sync"
@@ -89,112 +148,200 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok"})
+	log := newAPIRequestLog(r)
+	if err := writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok"}); err != nil {
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusOK, "error", err.Error())
+		return
+	}
+	log.emit(r.Context(), s.log, slog.LevelDebug, "api request completed", http.StatusOK)
 }
 
 func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
-	resp, env, mode, err := s.ingest(r.Context(), r)
+	log := newAPIRequestLog(r)
+	resp, env, req, mode, err := s.ingest(r.Context(), r)
+	log.addEventRequest(mode, req)
+	if env.EventID != "" {
+		log.addEnvelope(env, resp.NormalizedEventID)
+	}
 	if err != nil {
-		writeError(w, err)
+		status := statusForError(err)
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", status, "error", err.Error())
+		if writeErr := writeError(w, err); writeErr != nil {
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", status, "error", writeErr.Error())
+		}
 		return
 	}
 	if mode == requestModeAsync {
 		go s.dispatchObservers(context.Background(), resp.NormalizedEventID, env)
-		writeJSON(w, http.StatusAccepted, resp)
+		if err := writeJSON(w, http.StatusAccepted, resp); err != nil {
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusAccepted, "error", err.Error())
+			return
+		}
+		log.emit(r.Context(), s.log, slog.LevelDebug, "api request completed", http.StatusAccepted)
 		return
 	}
-	s.handleSyncEvent(w, r, resp, env)
+	s.handleSyncEvent(w, r, resp, env, log)
 }
-
-func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp EventResponse, env protocol.EventEnvelope) {
+func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp EventResponse, env protocol.EventEnvelope, log apiRequestLog) {
 	result := s.runner.Dispatch(r.Context(), env, "control", 2*time.Second)
 	for _, inv := range result.Invocations {
-		_ = s.store.InsertHandlerInvocation(r.Context(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: resp.NormalizedEventID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error})
+		if err := s.store.InsertHandlerInvocation(r.Context(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: resp.NormalizedEventID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error}); err != nil {
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error", err.Error())
+			if writeErr := writeError(w, err); writeErr != nil {
+				log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error", writeErr.Error())
+			}
+			return
+		}
 	}
-	go s.dispatchObservers(context.Background(), resp.NormalizedEventID, env)
 	runtime := s.harnesses[env.Harness]
 	native, err := runtime.normalizer.Translate(env.SourceEventType, result.Aggregate)
 	if err != nil {
-		writeError(w, err)
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error", err.Error())
+		if writeErr := writeError(w, err); writeErr != nil {
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error", writeErr.Error())
+		}
 		return
 	}
-	_ = s.store.InsertNativeResponse(r.Context(), store.NativeResponse{ID: harness.NewID("nresp"), NormalizedEventID: resp.NormalizedEventID, Response: native, EmittedAt: time.Now().UTC()})
+	if err := s.store.InsertNativeResponse(r.Context(), store.NativeResponse{ID: harness.NewID("nresp"), NormalizedEventID: resp.NormalizedEventID, Response: native, EmittedAt: time.Now().UTC()}); err != nil {
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "error", err.Error())
+		if writeErr := writeError(w, err); writeErr != nil {
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "error", writeErr.Error())
+		}
+		return
+	}
+	go s.dispatchObservers(context.Background(), resp.NormalizedEventID, env)
 	w.Header().Set("X-Hitch-Event-ID", resp.EventID)
 	w.Header().Set("X-Hitch-Normalized-Event-ID", resp.NormalizedEventID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(native)
+	if _, err := w.Write(native); err != nil {
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusOK, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "error", err.Error())
+		return
+	}
+	log.emit(r.Context(), s.log, slog.LevelInfo, "api request completed", http.StatusOK, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native))
 }
-
-func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, protocol.EventEnvelope, string, error) {
+func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, protocol.EventEnvelope, EventRequest, string, error) {
 	var req EventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("invalid JSON: %v", err)
+		return EventResponse{}, protocol.EventEnvelope{}, req, "", badRequest("invalid JSON: %v", err)
 	}
 	mode, err := normalizeRequestMode(req.Mode)
 	if err != nil {
-		return EventResponse{}, protocol.EventEnvelope{}, "", err
+		return EventResponse{}, protocol.EventEnvelope{}, req, strings.TrimSpace(req.Mode), err
 	}
 	h := protocol.Harness(req.Harness)
 	runtime := s.harnesses[h]
 	if runtime.normalizer == nil {
-		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("unsupported harness %q", req.Harness)
+		return EventResponse{}, protocol.EventEnvelope{}, req, mode, badRequest("unsupported harness %q", req.Harness)
 	}
 	if req.SourceEventType == "" {
-		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("source_event_type is required")
+		return EventResponse{}, protocol.EventEnvelope{}, req, mode, badRequest("source_event_type is required")
 	}
 	if len(req.SourcePayload) == 0 || !json.Valid(req.SourcePayload) {
-		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("source_payload must be valid JSON")
+		return EventResponse{}, protocol.EventEnvelope{}, req, mode, badRequest("source_payload must be valid JSON")
 	}
 	hitchEventTypes, ok := runtime.eventMap[req.SourceEventType]
 	if !ok {
-		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("unsupported %s event %q", req.Harness, req.SourceEventType)
+		return EventResponse{}, protocol.EventEnvelope{}, req, mode, badRequest("unsupported %s event %q", req.Harness, req.SourceEventType)
 	}
 	if mode == requestModeSync && runtime.normalizer.Capability(req.SourceEventType) != harness.CapabilityControlCapable {
-		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("%s event %q does not support sync dispatch", req.Harness, req.SourceEventType)
+		return EventResponse{}, protocol.EventEnvelope{}, req, mode, badRequest("%s event %q does not support sync dispatch", req.Harness, req.SourceEventType)
 	}
 	env, err := runtime.normalizer.Normalize(req.SourceEventType, req.SourcePayload, hitchEventTypes[0])
 	if err != nil {
-		return EventResponse{}, protocol.EventEnvelope{}, "", badRequest("%s", err.Error())
+		return EventResponse{}, protocol.EventEnvelope{}, req, mode, badRequest("%s", err.Error())
 	}
 	inboundID := harness.NewID("in")
 	normalizedID := harness.NewID("norm")
+	resp := EventResponse{EventID: env.EventID, NormalizedEventID: normalizedID}
 	if err := s.store.InsertInbound(ctx, store.InboundEvent{ID: inboundID, ReceivedAt: env.ReceivedAt, Harness: env.Harness, SourceEventType: env.SourceEventType, SourcePayload: env.SourcePayload, RequestHeaders: protocol.Raw(headers(r)), HitchClientVersion: req.HitchClientVersion}); err != nil {
-		return EventResponse{}, protocol.EventEnvelope{}, "", err
+		return resp, env, req, mode, err
 	}
 	if err := s.store.InsertNormalized(ctx, store.NormalizedEvent{ID: normalizedID, InboundEventID: inboundID, HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: protocol.Version}); err != nil {
-		return EventResponse{}, protocol.EventEnvelope{}, "", err
+		return resp, env, req, mode, err
 	}
 	for _, eventType := range hitchEventTypes[1:] {
 		derived := env
 		derived.EventID = harness.NewID("evt")
 		derived.HitchEventType = eventType
 		if err := s.store.InsertNormalized(ctx, store.NormalizedEvent{ID: harness.NewID("norm"), InboundEventID: inboundID, HitchEventType: derived.HitchEventType, Envelope: derived, MappingVersion: protocol.Version}); err != nil {
-			return EventResponse{}, protocol.EventEnvelope{}, "", err
+			return resp, env, req, mode, err
 		}
 	}
-	return EventResponse{EventID: env.EventID, NormalizedEventID: normalizedID}, env, mode, nil
+	return resp, env, req, mode, nil
 }
 
 func (s *Server) dispatchObservers(ctx context.Context, normalizedID string, env protocol.EventEnvelope) {
+	started := time.Now()
 	result := s.runner.Dispatch(ctx, env, "observer", 0)
-	for _, inv := range result.Invocations {
-		_ = s.store.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: normalizedID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error})
+	if len(result.Invocations) == 0 {
+		return
 	}
+	persisted := 0
+	for _, inv := range result.Invocations {
+		if err := s.store.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: normalizedID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error}); err != nil {
+			s.log.Log(ctx, slog.LevelInfo, "observer dispatch failed",
+				"normalized_event_id", normalizedID,
+				"harness", string(env.Harness),
+				"source_event_type", env.SourceEventType,
+				"hitch_event_type", string(env.HitchEventType),
+				"observer_handler_count", len(result.Invocations),
+				"observer_handler_persisted_count", persisted,
+				"duration_ms", time.Since(started).Milliseconds(),
+				"error", err.Error(),
+			)
+			return
+		}
+		persisted++
+	}
+	attrs := []any{
+		"normalized_event_id", normalizedID,
+		"harness", string(env.Harness),
+		"source_event_type", env.SourceEventType,
+		"hitch_event_type", string(env.HitchEventType),
+		"observer_handler_count", len(result.Invocations),
+		"duration_ms", time.Since(started).Milliseconds(),
+	}
+	if env.SessionID != "" {
+		attrs = append(attrs, "session_id", env.SessionID)
+	}
+	if env.TurnID != "" {
+		attrs = append(attrs, "turn_id", env.TurnID)
+	}
+	if env.CWD != "" {
+		attrs = append(attrs, "cwd", env.CWD)
+	}
+	if env.Model != "" {
+		attrs = append(attrs, "model", env.Model)
+	}
+	s.log.Log(ctx, slog.LevelDebug, "observer dispatch completed", attrs...)
 }
 
 func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
+	log := newAPIRequestLog(r)
 	id := strings.TrimPrefix(r.URL.Path, "/v1/events/")
+	log.add("normalized_event_id", id)
 	if id == "" {
-		writeError(w, badRequest("missing id"))
+		err := badRequest("missing id")
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusBadRequest, "error", err.Error())
+		if writeErr := writeError(w, err); writeErr != nil {
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusBadRequest, "error", writeErr.Error())
+		}
 		return
 	}
 	inspection, err := s.store.InspectEvent(r.Context(), id)
 	if err != nil {
-		writeError(w, err)
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "error", err.Error())
+		if writeErr := writeError(w, err); writeErr != nil {
+			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "error", writeErr.Error())
+		}
 		return
 	}
-	writeJSON(w, http.StatusOK, inspection)
+	if err := writeJSON(w, http.StatusOK, inspection); err != nil {
+		log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusOK, "error", err.Error())
+		return
+	}
+	log.emit(r.Context(), s.log, slog.LevelDebug, "api request completed", http.StatusOK)
 }
 
 func headers(r *http.Request) map[string][]string {
@@ -215,17 +362,20 @@ func badRequest(format string, args ...interface{}) error {
 	return httpError{code: http.StatusBadRequest, msg: fmt.Sprintf(format, args...)}
 }
 
-func writeError(w http.ResponseWriter, err error) {
+func statusForError(err error) int {
 	var he httpError
-	code := http.StatusInternalServerError
 	if errors.As(err, &he) {
-		code = he.code
+		return he.code
 	}
-	writeJSON(w, code, map[string]interface{}{"error": err.Error()})
+	return http.StatusInternalServerError
 }
 
-func writeJSON(w http.ResponseWriter, code int, v interface{}) {
+func writeError(w http.ResponseWriter, err error) error {
+	return writeJSON(w, statusForError(err), map[string]interface{}{"error": err.Error()})
+}
+
+func writeJSON(w http.ResponseWriter, code int, v interface{}) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	return json.NewEncoder(w).Encode(v)
 }

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +17,29 @@ import (
 	"github.com/sagebynature/hitch/internal/protocol"
 	"github.com/sagebynature/hitch/internal/store"
 )
+
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func (b *lockedBuffer) Reset() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.buf.Reset()
+}
 
 func testConfig() config.Config {
 	c, err := config.Parse([]byte(config.DefaultConfigTOML))
@@ -60,6 +84,244 @@ func TestHealthAndEvent(t *testing.T) {
 	}
 	if inspection.Normalized.Envelope.SessionID != "session_1" || inspection.Normalized.Envelope.TurnID != "turn_1" || inspection.Normalized.Envelope.CWD != "/tmp/hitch" || inspection.Normalized.Envelope.Model != "gpt-test" || inspection.Normalized.Envelope.TranscriptPath != "/tmp/transcript.jsonl" {
 		t.Fatalf("metadata not persisted: %#v", inspection.Normalized.Envelope)
+	}
+}
+
+func TestHealthLogsDebugSummary(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	var logs lockedBuffer
+	s := New(testConfig(), slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})), st)
+	req := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("health code %d body %s", w.Code, w.Body.String())
+	}
+	text := logs.String()
+	for _, want := range []string{`"level":"DEBUG"`, `"msg":"api request completed"`, `"method":"GET"`, `"path":"/v1/health"`, `"status":200`, `"duration_ms":`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("health log missing %s:\n%s", want, text)
+		}
+	}
+}
+
+func TestEventAsyncSuccessLogsDebugSummaryWithoutPayload(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	var logs lockedBuffer
+	s := New(testConfig(), slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})), st)
+	body := `{"harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"secret-command","session_id":"session_1","turn_id":"turn_1","cwd":"/tmp/hitch","model":"gpt-test"},"hitch_client_version":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("event code %d body %s", w.Code, w.Body.String())
+	}
+	var resp EventResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	text := logs.String()
+	for _, want := range []string{`"level":"DEBUG"`, `"msg":"api request completed"`, `"method":"POST"`, `"path":"/v1/events"`, `"mode":"async"`, `"harness":"codex"`, `"source_event_type":"PreToolUse"`, `"event_id":"` + resp.EventID + `"`, `"normalized_event_id":"` + resp.NormalizedEventID + `"`, `"hitch_event_type":"tool.requested"`, `"session_id":"session_1"`, `"turn_id":"turn_1"`, `"cwd":"/tmp/hitch"`, `"model":"gpt-test"`, `"status":202`, `"duration_ms":`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("async event log missing %s:\n%s", want, text)
+		}
+	}
+	for _, leaked := range []string{"secret-command", "source_payload"} {
+		if strings.Contains(text, leaked) {
+			t.Fatalf("async event log leaked payload %q: %s", leaked, text)
+		}
+	}
+}
+
+func TestEventSyncSuccessLogsInfoSummary(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := testConfig()
+	cfg.Handlers = map[string]config.HandlerConfig{
+		"allow_policy": {
+			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"allow"}}'`},
+			Events:    []string{string(protocol.EventToolRequested)},
+			Kind:      "control",
+			TimeoutMS: 1000,
+		},
+	}
+
+	var logs lockedBuffer
+	s := New(cfg, slog.New(slog.NewJSONHandler(&logs, nil)), st)
+	body := []byte(`{"mode":"sync","harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash","session_id":"session_1","turn_id":"turn_1","cwd":"/tmp/hitch","model":"gpt-test"},"hitch_client_version":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("sync event code %d body %s", w.Code, w.Body.String())
+	}
+	eventID := w.Header().Get("X-Hitch-Event-ID")
+	normalizedID := w.Header().Get("X-Hitch-Normalized-Event-ID")
+	if eventID == "" || normalizedID == "" {
+		t.Fatalf("missing sync response IDs: event=%q normalized=%q", eventID, normalizedID)
+	}
+	text := logs.String()
+	for _, want := range []string{`"level":"INFO"`, `"msg":"api request completed"`, `"method":"POST"`, `"path":"/v1/events"`, `"mode":"sync"`, `"harness":"codex"`, `"source_event_type":"PreToolUse"`, `"event_id":"` + eventID + `"`, `"normalized_event_id":"` + normalizedID + `"`, `"hitch_event_type":"tool.requested"`, `"session_id":"session_1"`, `"status":200`, `"control_handler_count":1`, `"native_response_bytes":`, `"duration_ms":`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("sync event log missing %s:\n%s", want, text)
+		}
+	}
+}
+
+func TestEventFailureLogsInfoSummary(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	var logs lockedBuffer
+	s := New(testConfig(), slog.New(slog.NewJSONHandler(&logs, nil)), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"later","harness":"codex","source_event_type":"PreToolUse","source_payload":{},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("invalid mode code %d body %s", w.Code, w.Body.String())
+	}
+	text := logs.String()
+	for _, want := range []string{`"level":"INFO"`, `"msg":"api request failed"`, `"method":"POST"`, `"path":"/v1/events"`, `"mode":"later"`, `"harness":"codex"`, `"source_event_type":"PreToolUse"`, `"status":400`, `"error":"mode must be async or sync"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("event failure log missing %s:\n%s", want, text)
+		}
+	}
+}
+
+func TestEventObserverOnlySyncFailureLogsInfoSummary(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	var logs lockedBuffer
+	s := New(testConfig(), slog.New(slog.NewJSONHandler(&logs, nil)), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"sync","harness":"hermes","source_event_type":"on_session_end","source_payload":{},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("observer-only sync code %d body %s", w.Code, w.Body.String())
+	}
+	text := logs.String()
+	for _, want := range []string{`"level":"INFO"`, `"msg":"api request failed"`, `"mode":"sync"`, `"harness":"hermes"`, `"source_event_type":"on_session_end"`, `"status":400`, `"error":"hermes event \"on_session_end\" does not support sync dispatch"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("observer-only sync log missing %s:\n%s", want, text)
+		}
+	}
+}
+
+func TestInspectEventLogsSuccessAndFailure(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	var logs lockedBuffer
+	s := New(testConfig(), slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})), st)
+
+	body := `{"harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash"},"hitch_client_version":"test"}`
+	postReq := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
+	postW := httptest.NewRecorder()
+	s.Handler().ServeHTTP(postW, postReq)
+	if postW.Code != http.StatusAccepted {
+		t.Fatalf("post code %d body %s", postW.Code, postW.Body.String())
+	}
+	var resp EventResponse
+	if err := json.Unmarshal(postW.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+
+	logs.Reset()
+	inspectReq := httptest.NewRequest(http.MethodGet, "/v1/events/"+resp.NormalizedEventID, nil)
+	inspectW := httptest.NewRecorder()
+	s.Handler().ServeHTTP(inspectW, inspectReq)
+	if inspectW.Code != http.StatusOK {
+		t.Fatalf("inspect code %d body %s", inspectW.Code, inspectW.Body.String())
+	}
+	text := logs.String()
+	for _, want := range []string{`"level":"DEBUG"`, `"msg":"api request completed"`, `"method":"GET"`, `"path":"/v1/events/` + resp.NormalizedEventID + `"`, `"normalized_event_id":"` + resp.NormalizedEventID + `"`, `"status":200`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("inspect success log missing %s:\n%s", want, text)
+		}
+	}
+
+	logs.Reset()
+	missingReq := httptest.NewRequest(http.MethodGet, "/v1/events/missing", nil)
+	missingW := httptest.NewRecorder()
+	s.Handler().ServeHTTP(missingW, missingReq)
+	if missingW.Code != http.StatusInternalServerError {
+		t.Fatalf("missing inspect code %d body %s", missingW.Code, missingW.Body.String())
+	}
+	text = logs.String()
+	for _, want := range []string{`"level":"INFO"`, `"msg":"api request failed"`, `"method":"GET"`, `"path":"/v1/events/missing"`, `"normalized_event_id":"missing"`, `"status":500`, `"error":`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("inspect failure log missing %s:\n%s", want, text)
+		}
+	}
+}
+
+func TestObserverDispatchLogsDebugSummary(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := testConfig()
+	cfg.Handlers = map[string]config.HandlerConfig{
+		"audit": {
+			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"behavior":"none"}}'`},
+			Events:    []string{string(protocol.EventToolRequested)},
+			Kind:      "observer",
+			TimeoutMS: 1000,
+		},
+	}
+
+	var logs lockedBuffer
+	s := New(cfg, slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})), st)
+	body := `{"harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash","session_id":"session_1"},"hitch_client_version":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("event code %d body %s", w.Code, w.Body.String())
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(logs.String(), `"msg":"observer dispatch completed"`) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	text := logs.String()
+	for _, want := range []string{`"level":"DEBUG"`, `"msg":"observer dispatch completed"`, `"observer_handler_count":1`, `"harness":"codex"`, `"source_event_type":"PreToolUse"`, `"hitch_event_type":"tool.requested"`, `"session_id":"session_1"`, `"duration_ms":`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("observer dispatch log missing %s:\n%s", want, text)
+		}
 	}
 }
 
@@ -245,7 +507,7 @@ func TestDispatchSyncLogsHandlerInvocationDetails(t *testing.T) {
 			TimeoutMS: 1000,
 		},
 	}
-	var logs bytes.Buffer
+	var logs lockedBuffer
 	s := New(cfg, slog.New(slog.NewJSONHandler(&logs, nil)), st)
 	body := []byte(`{"mode":"sync","harness":"codex","source_event_type":"PreToolUse","source_payload":{"tool":"bash","session_id":"session_1","turn_id":"turn_1","cwd":"/tmp/hitch","model":"gpt-test"},"hitch_client_version":"test"}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(body))
