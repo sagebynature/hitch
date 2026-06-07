@@ -206,6 +206,41 @@ func TestSyncSuccessLogsPassthroughOutcomeWhenNoControlHandlersRun(t *testing.T)
 	}
 }
 
+func TestOMPSyncNoControlDecisionReturnsEmptyPassThrough(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	s := New(testConfig(), slog.Default(), st)
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(`{"mode":"sync","harness":"omp","source_event_type":"input","source_payload":{"text":"hello"},"hitch_client_version":"test"}`))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("sync code %d body %s", w.Code, w.Body.String())
+	}
+	if strings.TrimSpace(w.Body.String()) != "{}" {
+		t.Fatalf("OMP no-control sync should return empty pass-through body, got %s", w.Body.String())
+	}
+
+	normalizedID := w.Header().Get("X-Hitch-Normalized-Event-ID")
+	if normalizedID == "" {
+		t.Fatal("missing normalized event header")
+	}
+	inspection, err := st.InspectEvent(ctx, normalizedID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inspection.HandlerInvocations) != 0 {
+		t.Fatalf("no-control sync should not run handlers: %#v", inspection.HandlerInvocations)
+	}
+	if len(inspection.NativeResponses) != 1 || strings.TrimSpace(string(inspection.NativeResponses[0].Response)) != "{}" {
+		t.Fatalf("native pass-through response should be empty object: %#v", inspection.NativeResponses)
+	}
+}
+
 func TestSyncSuccessLogsPassthroughOutcomeWhenControlHandlersReturnNone(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))

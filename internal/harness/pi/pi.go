@@ -76,7 +76,7 @@ type nativeMetadata struct {
 }
 
 type AdapterResponse struct {
-	AdapterAction string      `json:"adapter_action"`
+	AdapterAction string      `json:"adapter_action,omitempty"`
 	ReturnValue   interface{} `json:"return_value,omitempty"`
 	Mutations     []Mutation  `json:"mutations,omitempty"`
 }
@@ -127,7 +127,7 @@ func TranslateForHarness(sourceEventType string, aggregate protocol.AggregateDec
 	if len(d.NativeResponse) != 0 {
 		return d.NativeResponse, nil
 	}
-	resp := AdapterResponse{AdapterAction: "noop"}
+	resp := AdapterResponse{}
 	switch sourceEventType {
 	case "input":
 		switch d.Behavior {

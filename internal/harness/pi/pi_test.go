@@ -36,6 +36,15 @@ func TestNormalizeKeepsBarePiPayloadCompatible(t *testing.T) {
 	}
 }
 
+func TestTranslateNoneReturnsEmptyPassThrough(t *testing.T) {
+	out, err := (Mapper{}).Translate("input", protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorNone}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != "{}" {
+		t.Fatalf("none decision should produce empty pass-through payload, got %s", out)
+	}
+}
 func TestToolCallBlock(t *testing.T) {
 	out, err := (Mapper{}).Translate("tool_call", protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorBlock, Reason: "no"}})
 	if err != nil {
