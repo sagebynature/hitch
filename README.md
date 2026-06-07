@@ -121,7 +121,10 @@ See `docs/handler-protocol.md` for the full handler result contract.
 
 ```sh
 make test              # Run Go tests
-make build             # Build bin/hitch
+make test-go           # Alias for Go tests used by CI/release workflows
+make vet               # Run go vet
+make check             # Run lint when available, vet, tests, and builds
+make build             # Build bin/hitch and bin/hitch-client
 make serve             # Run the local Hitch server
 make install-dry-run   # Preview hook installation
 ```
