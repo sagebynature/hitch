@@ -40,7 +40,7 @@ Your team may use Codex, Hermes, Pi, OMP, OpenCode, or a new harness next month.
 - **Local-first, remote-ready REST API** for event ingestion, synchronous dispatch, health checks, event inspection, and replay.
 - **Central hook routing and execution** through server-side handler config.
 - **Observability layer for agent activity** across tool calls, prompts, lifecycle transitions, handler decisions, and native responses.
-- **SQLite audit backend today** for inbound events, normalized events, handler invocations, and native responses, with additional storage and observability backends planned.
+- **SQLite audit backend today** for inbound events, normalized events, handler invocations, and native responses. Enabled JSONL audit configs and `[log.otlp].enabled = true` are rejected until implemented.
 - **hitch-client hook shim** for shell-based harness integrations.
 
 Verified API endpoints:
@@ -76,7 +76,7 @@ In another shell, check the installation:
 ./bin/hitch status --json
 ```
 
-The default server listens on `127.0.0.1:8799` and stores audit and observability records in SQLite at `~/.local/share/hitch/events.sqlite`. SQLite is the current verified backend; additional storage and observability backends are planned.
+The default server listens on `127.0.0.1:8799` and stores audit and observability records in SQLite at `~/.local/share/hitch/events.sqlite`. SQLite is the current verified audit backend. Operational logs are supported on stdout and a rolling file sink; enabled JSONL audit configs and enabled OTLP log export configs are rejected until implemented.
 
 ## Agent observability
 

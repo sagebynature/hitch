@@ -222,14 +222,7 @@ func (c Config) Validate() error {
 		}
 	}
 	if c.Log.OTLP.Enabled {
-		if c.Log.OTLP.Endpoint == "" {
-			return errors.New("log.otlp.endpoint is required when OTLP is enabled")
-		}
-		switch c.Log.OTLP.Protocol {
-		case "http/protobuf", "grpc":
-		default:
-			return fmt.Errorf("invalid log.otlp.protocol %q", c.Log.OTLP.Protocol)
-		}
+		return errors.New("log.otlp is not implemented")
 	}
 	if c.Audit.Enabled {
 		if c.Audit.Backend == "" {
@@ -242,9 +235,7 @@ func (c Config) Validate() error {
 					return errors.New("audit.sqlite.path is required")
 				}
 			case "jsonl":
-				if c.Audit.JSONL.Path == "" {
-					return errors.New("audit.jsonl.path is required")
-				}
+				return errors.New(`audit.backend "jsonl" is not implemented`)
 			default:
 				return fmt.Errorf("invalid audit.backend %q", b)
 			}

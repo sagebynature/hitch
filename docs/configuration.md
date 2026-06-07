@@ -11,8 +11,8 @@ hitch config init
 Key sections:
 
 - `[server]`: local API bind address and request size limit.
-- `[log]`: operational logging. Native payloads are not included by default. `log.level` and `log.format` are fallbacks for enabled sinks; `log.stdout.level`, `log.stdout.format`, `log.file.level`, and `log.file.format` may override them per sink.
-- `[audit]`: event journal persistence. SQLite is the verified backend.
+- `[log]`: operational logging. Native payloads are not included by default. `log.level` and `log.format` are fallbacks for enabled stdout and rolling file sinks; `log.stdout.level`, `log.stdout.format`, `log.file.level`, and `log.file.format` may override them per sink. `[log.otlp].enabled = true` is rejected until OTLP export is implemented.
+- `[audit]`: event journal persistence. SQLite is the verified backend. Enabled configs with `audit.backend = "jsonl"` are rejected until the JSONL backend is implemented.
 - `[handlers.<name>]`: external command handlers.
 - `[harness.<name>]`: per-harness enable flags and source-event mappings.
 
@@ -26,6 +26,17 @@ Strict validation rejects unknown config keys and invalid values for:
 - handler kind (`observer` or `control`)
 - handler error/timeout policy (`fail_open`, `fail_closed`, `native_default`)
 - harness event-map values
+
+
+Supported today:
+
+- audit backend: `sqlite`
+- log sinks: stdout and rolling file
+
+Rejected until implemented:
+
+- enabled `audit.backend = "jsonl"` configs
+- `[log.otlp].enabled = true`
 
 Handler commands receive the normalized Hitch event envelope as JSON on stdin and may return a Hitch handler result as JSON on stdout.
 

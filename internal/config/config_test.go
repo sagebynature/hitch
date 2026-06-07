@@ -145,6 +145,23 @@ format = "pretty"`, 1),
 	}
 }
 
+func TestRejectsUnimplementedAuditJSONLBackend(t *testing.T) {
+	cfg := strings.Replace(baseConfig, `backend = "sqlite"`, `backend = "jsonl"`, 1)
+	_, err := Parse([]byte(cfg))
+	if err == nil || !strings.Contains(err.Error(), `audit.backend "jsonl" is not implemented`) {
+		t.Fatalf("expected jsonl implementation error, got %v", err)
+	}
+}
+
+func TestRejectsUnimplementedOTLPLogging(t *testing.T) {
+	cfg := strings.Replace(baseConfig, `enabled = false
+endpoint = "http://127.0.0.1:4318"`, `enabled = true
+endpoint = "http://127.0.0.1:4318"`, 1)
+	_, err := Parse([]byte(cfg))
+	if err == nil || !strings.Contains(err.Error(), `log.otlp is not implemented`) {
+		t.Fatalf("expected otlp implementation error, got %v", err)
+	}
+}
 func TestParseHarnessEventMap(t *testing.T) {
 	cfg, err := Parse([]byte(baseConfig + `
 [harness.codex.event_map]
