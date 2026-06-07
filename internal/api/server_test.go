@@ -740,6 +740,48 @@ func TestDispatchSyncOpenCodeToolBeforeDenyTranslatesToThrow(t *testing.T) {
 	}
 }
 
+func TestDispatchSyncNativeResponseOnlyPassesThrough(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := testConfig()
+	cfg.Harness.OpenCode.Enabled = true
+	cfg.Harness.OpenCode.EventMap = map[string]config.EventTypes{"tool.execute.before": {protocol.EventToolRequested}}
+	cfg.Handlers = map[string]config.HandlerConfig{
+		"native": {
+			Command:   []string{"/bin/sh", "-c", `printf '%s' '{"status":"ok","decision":{"native_response":{"adapter_action":"throw","message":"native-only"}}}'`},
+			Events:    []string{string(protocol.EventToolRequested)},
+			Kind:      "control",
+			TimeoutMS: 1000,
+			OnError:   "fail_open",
+			OnTimeout: "fail_open",
+		},
+	}
+	var logs lockedBuffer
+	server := New(cfg, slog.New(slog.NewJSONHandler(&logs, nil)), st)
+	body := `{"mode":"sync","harness":"opencode","source_event_type":"tool.execute.before","source_payload":{"event":{"input":{"tool":"bash","sessionID":"s1","callID":"c1"},"output":{"args":{"command":"pwd"}}},"metadata":{"session_id":"s1"}},"hitch_client_version":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+	var native map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &native); err != nil {
+		t.Fatal(err)
+	}
+	if native["adapter_action"] != "throw" || native["message"] != "native-only" {
+		t.Fatalf("native_response-only decision was not passed through: %#v body=%s", native, rec.Body.String())
+	}
+	text := logs.String()
+	if !strings.Contains(text, `"sync_outcome":"handler_decision"`) {
+		t.Fatalf("native_response-only decision should be logged as handler-driven:\n%s", text)
+	}
+}
+
 func TestEventMapOverrideAndAddition(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))

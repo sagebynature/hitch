@@ -124,8 +124,11 @@ func normalizeRequestMode(mode string) (string, error) {
 	}
 }
 
-func syncOutcome(behavior protocol.DecisionBehavior) string {
-	if behavior == protocol.BehaviorNone {
+func syncOutcome(decision protocol.Decision) string {
+	if len(decision.NativeResponse) != 0 {
+		return "handler_decision"
+	}
+	if decision.Behavior == protocol.BehaviorNone {
 		return "passthrough"
 	}
 	return "handler_decision"
@@ -233,7 +236,7 @@ func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp Ev
 		log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusOK, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "error_kind", "response_write_failed", "error", err.Error())
 		return
 	}
-	log.emit(r.Context(), s.log, slog.LevelInfo, "api request completed", http.StatusOK, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "sync_outcome", syncOutcome(result.Aggregate.Decision.Behavior))
+	log.emit(r.Context(), s.log, slog.LevelInfo, "api request completed", http.StatusOK, "control_handler_count", len(result.Invocations), "native_response_bytes", len(native), "sync_outcome", syncOutcome(result.Aggregate.Decision))
 }
 func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, protocol.EventEnvelope, EventRequest, string, error) {
 	var req EventRequest

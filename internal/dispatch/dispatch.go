@@ -208,6 +208,7 @@ func handlerLogAttrs(inv Invocation, env protocol.EventEnvelope, extra ...any) [
 func aggregate(inv []Invocation, order []string, handlers map[string]config.HandlerConfig) protocol.AggregateDecision {
 	_ = order
 	best := protocol.Decision{Behavior: protocol.BehaviorNone}
+	var native *protocol.Decision
 	var contexts []string
 	var errs []string
 	transformSeen := false
@@ -225,6 +226,10 @@ func aggregate(inv []Invocation, order []string, handlers map[string]config.Hand
 		if d == nil {
 			continue
 		}
+		if len(d.NativeResponse) != 0 && native == nil {
+			candidate := *d
+			native = &candidate
+		}
 		if d.Behavior == protocol.BehaviorInjectContext && d.Context != "" {
 			contexts = append(contexts, d.Context)
 		}
@@ -238,6 +243,9 @@ func aggregate(inv []Invocation, order []string, handlers map[string]config.Hand
 		if precedence(d.Behavior) > precedence(best.Behavior) {
 			best = *d
 		}
+	}
+	if native != nil {
+		return protocol.AggregateDecision{Decision: *native, HandlerResults: results(inv), Errors: errs}
 	}
 	if best.Behavior == protocol.BehaviorNone && len(contexts) > 0 {
 		best = protocol.Decision{Behavior: protocol.BehaviorInjectContext, Context: strings.Join(contexts, "\n\n")}
