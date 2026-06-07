@@ -11,6 +11,8 @@ import (
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
+// Client is an internal test and tool helper for exercising the Hitch HTTP API.
+// It is not a public SDK because this module keeps implementation packages under internal/.
 type Client struct {
 	BaseURL string
 	HTTP    *http.Client
