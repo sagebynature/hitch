@@ -96,8 +96,8 @@ var ompExtensionEvents = []string{
 	"after_provider_response",
 	"context",
 	"message_start",
-	// "message_update",
-	"message_end",
+	// OMP v15 TUI clears the final assistant message after a message_end extension callback,
+	// even when the callback returns undefined. Do not register it until OMP fixes that behavior.
 	"tool_call",
 	"tool_result",
 	"tool_execution_start",

@@ -389,6 +389,22 @@ func TestPiOMPExtensionsRouteObserverEventsAsync(t *testing.T) {
 	}
 }
 
+func TestOMPExtensionDoesNotRegisterMessageEnd(t *testing.T) {
+	contentBytes, err := ompExtensionContent("http://127.0.0.1:8797")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var events []string
+	if err := json.Unmarshal([]byte(jsValueBetween(t, string(contentBytes), `const HITCH_EVENTS = `, ";\n")), &events); err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range events {
+		if event == "message_end" {
+			t.Fatalf("OMP message_end must not be registered because it clears final answers in the OMP TUI: %#v", events)
+		}
+	}
+}
+
 func TestPiOMPExtensionsRouteUserCommandsSync(t *testing.T) {
 	tests := []struct {
 		name  string
