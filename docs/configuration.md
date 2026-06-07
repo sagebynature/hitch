@@ -2,7 +2,7 @@
 
 Hitch reads user configuration from `~/.config/hitch/config.toml` by default. Repository checkout examples pass `--config internal/config/default.config.toml` explicitly when they should use the development config.
 
-Create the default user config, or add missing managed default sections to an existing valid config without overwriting user-owned values:
+Create the default user config when it does not already exist:
 
 ```sh
 hitch config init
