@@ -3,7 +3,7 @@ package hermes
 import (
 	"encoding/json"
 
-	"github.com/sagebynature/hitch/internal/harness"
+	"github.com/sagebynature/hitch/internal/harness/core"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -18,7 +18,7 @@ var controlCapableEvents = map[string]struct{}{
 	"pre_gateway_dispatch":      {},
 }
 
-var knownSourceEvents = harness.SourceEventSet(
+var knownSourceEvents = core.SourceEventSet(
 	"pre_tool_call",
 	"post_tool_call",
 	"pre_llm_call",
@@ -36,13 +36,13 @@ func (Mapper) KnownSourceEvents() map[string]struct{} {
 	return knownSourceEvents
 }
 
-func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
-	return harness.CapabilityFromSet(sourceEventType, controlCapableEvents)
+func (Mapper) Capability(sourceEventType string) core.SourceEventCapability {
+	return core.CapabilityFromSet(sourceEventType, controlCapableEvents)
 }
 
 func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
-	env := harness.NewEnvelope(protocol.HarnessHermes, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
-	harness.ApplySourceMetadata(&env, sourcePayload)
+	env := core.NewEnvelope(protocol.HarnessHermes, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
+	core.ApplySourceMetadata(&env, sourcePayload)
 	return env, protocol.ValidateEnvelope(env)
 }
 

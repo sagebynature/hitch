@@ -13,11 +13,6 @@ import (
 	"github.com/sagebynature/hitch/internal/config"
 	"github.com/sagebynature/hitch/internal/dispatch"
 	"github.com/sagebynature/hitch/internal/harness"
-	"github.com/sagebynature/hitch/internal/harness/codex"
-	"github.com/sagebynature/hitch/internal/harness/hermes"
-	"github.com/sagebynature/hitch/internal/harness/omp"
-	"github.com/sagebynature/hitch/internal/harness/opencode"
-	"github.com/sagebynature/hitch/internal/harness/pi"
 	"github.com/sagebynature/hitch/internal/protocol"
 	"github.com/sagebynature/hitch/internal/store"
 )
@@ -135,7 +130,11 @@ func syncOutcome(decision protocol.Decision) string {
 }
 
 func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
-	s := &Server{cfg: cfg, log: log, store: st, runner: dispatch.NewRunnerWithLogger(cfg.Handlers, log), harnesses: buildHarnessRuntimes(cfg)}
+	return NewWithHarnessRegistry(cfg, log, st, harness.DefaultRegistry())
+}
+
+func NewWithHarnessRegistry(cfg config.Config, log *slog.Logger, st *store.Store, registry harness.Registry) *Server {
+	s := &Server{cfg: cfg, log: log, store: st, runner: dispatch.NewRunnerWithLogger(cfg.Handlers, log), harnesses: buildHarnessRuntimes(cfg, registry)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", s.handleHealth)
 	mux.HandleFunc("POST /v1/events", s.handleEvent)
@@ -143,14 +142,20 @@ func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
 	s.mux = mux
 	return s
 }
-func buildHarnessRuntimes(cfg config.Config) map[protocol.Harness]harnessRuntime {
+
+func buildHarnessRuntimes(cfg config.Config, registry harness.Registry) map[protocol.Harness]harnessRuntime {
 	return map[protocol.Harness]harnessRuntime{
-		protocol.HarnessCodex:    {normalizer: codex.Mapper{}, eventMap: cfg.Harness.Codex.EventMap},
-		protocol.HarnessHermes:   {normalizer: hermes.Mapper{}, eventMap: cfg.Harness.Hermes.EventMap},
-		protocol.HarnessPi:       {normalizer: pi.Mapper{}, eventMap: cfg.Harness.Pi.EventMap},
-		protocol.HarnessOMP:      {normalizer: omp.Mapper{}, eventMap: cfg.Harness.OMP.EventMap},
-		protocol.HarnessOpenCode: {normalizer: opencode.Mapper{}, eventMap: cfg.Harness.OpenCode.EventMap},
+		protocol.HarnessCodex:    buildHarnessRuntime(registry, protocol.HarnessCodex, cfg.Harness.Codex.EventMap),
+		protocol.HarnessHermes:   buildHarnessRuntime(registry, protocol.HarnessHermes, cfg.Harness.Hermes.EventMap),
+		protocol.HarnessPi:       buildHarnessRuntime(registry, protocol.HarnessPi, cfg.Harness.Pi.EventMap),
+		protocol.HarnessOMP:      buildHarnessRuntime(registry, protocol.HarnessOMP, cfg.Harness.OMP.EventMap),
+		protocol.HarnessOpenCode: buildHarnessRuntime(registry, protocol.HarnessOpenCode, cfg.Harness.OpenCode.EventMap),
 	}
+}
+
+func buildHarnessRuntime(registry harness.Registry, h protocol.Harness, eventMap map[string]config.EventTypes) harnessRuntime {
+	normalizer, _ := registry.Lookup(h)
+	return harnessRuntime{normalizer: normalizer, eventMap: eventMap}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -271,6 +276,9 @@ func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, pr
 	env, err := runtime.normalizer.Normalize(req.SourceEventType, req.SourcePayload, hitchEventTypes[0])
 	if err != nil {
 		return EventResponse{}, protocol.EventEnvelope{}, req, mode, badRequest("%s", err.Error())
+	}
+	if env.Harness != h {
+		return EventResponse{}, protocol.EventEnvelope{}, req, mode, badRequest("normalizer returned harness %q for request harness %q", env.Harness, h)
 	}
 	inboundID := harness.NewID("in")
 	normalizedID := harness.NewID("norm")

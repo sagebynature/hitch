@@ -3,7 +3,7 @@ package pi
 import (
 	"encoding/json"
 
-	"github.com/sagebynature/hitch/internal/harness"
+	"github.com/sagebynature/hitch/internal/harness/core"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -25,7 +25,7 @@ var controlCapableEvents = map[string]struct{}{
 	"session.compacting":      {},
 }
 
-var knownSourceEvents = harness.SourceEventSet(
+var knownSourceEvents = core.SourceEventSet(
 	"input",
 	"before_agent_start",
 	"agent_start",
@@ -53,12 +53,12 @@ func (Mapper) KnownSourceEvents() map[string]struct{} {
 	return knownSourceEvents
 }
 
-func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
+func (Mapper) Capability(sourceEventType string) core.SourceEventCapability {
 	return CapabilityForHarness(sourceEventType)
 }
 
-func CapabilityForHarness(sourceEventType string) harness.SourceEventCapability {
-	return harness.CapabilityFromSet(sourceEventType, controlCapableEvents)
+func CapabilityForHarness(sourceEventType string) core.SourceEventCapability {
+	return core.CapabilityFromSet(sourceEventType, controlCapableEvents)
 }
 
 type nativePayloadEnvelope struct {
@@ -92,14 +92,14 @@ func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, 
 
 func NormalizeForHarness(h protocol.Harness, sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
 	eventPayload, meta := unwrapSourcePayload(sourcePayload)
-	env := harness.NewEnvelope(h, sourceEventType, eventPayload, hitchEventType, eventPayload)
+	env := core.NewEnvelope(h, sourceEventType, eventPayload, hitchEventType, eventPayload)
 	env.SessionID = meta.SessionID
 	env.TurnID = meta.TurnID
 	env.CWD = meta.CWD
 	env.Model = meta.Model
 	env.TranscriptPath = meta.TranscriptPath
 	if env.SessionID == "" && env.TurnID == "" && env.CWD == "" && env.Model == "" && env.TranscriptPath == "" {
-		harness.ApplySourceMetadata(&env, eventPayload)
+		core.ApplySourceMetadata(&env, eventPayload)
 	}
 	return env, protocol.ValidateEnvelope(env)
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sagebynature/hitch/internal/config"
+	"github.com/sagebynature/hitch/internal/harness"
 	"github.com/sagebynature/hitch/internal/protocol"
 	"github.com/sagebynature/hitch/internal/store"
 )
@@ -1021,5 +1022,104 @@ func TestIngestPersistsConfiguredSecondaryEvent(t *testing.T) {
 	}
 	if prompt.Normalized.Envelope.TurnID != "turn_1" || prompt.Normalized.Envelope.Model != "gpt-test" {
 		t.Fatalf("secondary event lost metadata: %#v", prompt.Normalized.Envelope)
+	}
+}
+
+type registryTestNormalizer struct{}
+
+func (registryTestNormalizer) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
+	env := harness.NewEnvelope(protocol.HarnessCodex, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
+	env.SessionID = "registry-test"
+	return env, protocol.ValidateEnvelope(env)
+}
+
+func (registryTestNormalizer) Translate(string, protocol.AggregateDecision) (protocol.RawJSON, error) {
+	return nil, nil
+}
+
+func (registryTestNormalizer) Capability(string) harness.SourceEventCapability {
+	return harness.CapabilityObserverOnly
+}
+
+func (registryTestNormalizer) KnownSourceEvents() map[string]struct{} {
+	return map[string]struct{}{"registry_test_event": {}}
+}
+
+type registryWrongHarnessNormalizer struct {
+	registryTestNormalizer
+}
+
+func (registryWrongHarnessNormalizer) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
+	env := harness.NewEnvelope(protocol.HarnessOMP, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
+	return env, protocol.ValidateEnvelope(env)
+}
+
+func (registryWrongHarnessNormalizer) Capability(string) harness.SourceEventCapability {
+	return harness.CapabilityControlCapable
+}
+
+func TestNewWithHarnessRegistryUsesInjectedRegistry(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	cfg := testConfig()
+	cfg.Harness.Codex.EventMap = map[string]config.EventTypes{
+		"registry_test_event": {protocol.EventToolRequested},
+	}
+	registry := harness.NewRegistry(map[protocol.Harness]harness.Normalizer{
+		protocol.HarnessCodex: registryTestNormalizer{},
+	})
+	s := NewWithHarnessRegistry(cfg, slog.Default(), st, registry)
+
+	body := `{"harness":"codex","source_event_type":"registry_test_event","source_payload":{"tool":"bash"},"hitch_client_version":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("event code %d body %s", w.Code, w.Body.String())
+	}
+	var resp EventResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.Normalized.Envelope.SessionID != "registry-test" {
+		t.Fatalf("server did not use injected registry normalizer: %#v", inspection.Normalized)
+	}
+}
+
+func TestNewWithHarnessRegistryRejectsMismatchedNormalizerHarness(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	cfg := testConfig()
+	cfg.Harness.Codex.EventMap = map[string]config.EventTypes{
+		"registry_test_event": {protocol.EventToolRequested},
+	}
+	registry := harness.NewRegistry(map[protocol.Harness]harness.Normalizer{
+		protocol.HarnessCodex: registryWrongHarnessNormalizer{},
+	})
+	s := NewWithHarnessRegistry(cfg, slog.Default(), st, registry)
+
+	body := `{"mode":"sync","harness":"codex","source_event_type":"registry_test_event","source_payload":{"tool":"bash"},"hitch_client_version":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("event code %d body %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `normalizer returned harness`) {
+		t.Fatalf("unexpected body %s", w.Body.String())
 	}
 }

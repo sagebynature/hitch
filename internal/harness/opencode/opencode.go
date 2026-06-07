@@ -3,7 +3,7 @@ package opencode
 import (
 	"encoding/json"
 
-	"github.com/sagebynature/hitch/internal/harness"
+	"github.com/sagebynature/hitch/internal/harness/core"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -24,7 +24,7 @@ var controlCapableEvents = map[string]struct{}{
 	"experimental.text.complete":           {},
 }
 
-var knownSourceEvents = harness.SourceEventSet(
+var knownSourceEvents = core.SourceEventSet(
 	"chat.message",
 	"chat.params",
 	"chat.headers",
@@ -76,8 +76,8 @@ func (Mapper) KnownSourceEvents() map[string]struct{} {
 	return knownSourceEvents
 }
 
-func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
-	return harness.CapabilityFromSet(sourceEventType, controlCapableEvents)
+func (Mapper) Capability(sourceEventType string) core.SourceEventCapability {
+	return core.CapabilityFromSet(sourceEventType, controlCapableEvents)
 }
 
 type pluginPayloadEnvelope struct {
@@ -102,14 +102,14 @@ type AdapterResponse struct {
 
 func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
 	eventPayload, meta := unwrapSourcePayload(sourcePayload)
-	env := harness.NewEnvelope(protocol.HarnessOpenCode, sourceEventType, sourcePayload, hitchEventType, eventPayload)
+	env := core.NewEnvelope(protocol.HarnessOpenCode, sourceEventType, sourcePayload, hitchEventType, eventPayload)
 	env.SessionID = meta.SessionID
 	env.TurnID = meta.TurnID
 	env.CWD = meta.CWD
 	env.Model = meta.Model
 	env.TranscriptPath = meta.TranscriptPath
 	if env.SessionID == "" && env.TurnID == "" && env.CWD == "" && env.Model == "" && env.TranscriptPath == "" {
-		harness.ApplySourceMetadata(&env, eventPayload)
+		core.ApplySourceMetadata(&env, eventPayload)
 	}
 	return env, protocol.ValidateEnvelope(env)
 }

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/sagebynature/hitch/internal/harness"
+	"github.com/sagebynature/hitch/internal/harness/core"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -88,13 +88,13 @@ func TestUserCommandUsesToolControlTranslation(t *testing.T) {
 }
 
 func TestCapabilityClassifiesSourceEvents(t *testing.T) {
-	if got := (Mapper{}).Capability("user_bash"); got != harness.CapabilityControlCapable {
+	if got := (Mapper{}).Capability("user_bash"); got != core.CapabilityControlCapable {
 		t.Fatalf("user_bash capability = %s", got)
 	}
-	if got := (Mapper{}).Capability("tool_call"); got != harness.CapabilityControlCapable {
+	if got := (Mapper{}).Capability("tool_call"); got != core.CapabilityControlCapable {
 		t.Fatalf("tool_call capability = %s", got)
 	}
-	if got := (Mapper{}).Capability("turn_end"); got != harness.CapabilityObserverOnly {
+	if got := (Mapper{}).Capability("turn_end"); got != core.CapabilityObserverOnly {
 		t.Fatalf("turn_end capability = %s", got)
 	}
 }

@@ -11,11 +11,7 @@ import (
 	"time"
 
 	"github.com/sagebynature/hitch/internal/config"
-	"github.com/sagebynature/hitch/internal/harness/codex"
-	"github.com/sagebynature/hitch/internal/harness/hermes"
-	"github.com/sagebynature/hitch/internal/harness/omp"
-	"github.com/sagebynature/hitch/internal/harness/opencode"
-	"github.com/sagebynature/hitch/internal/harness/pi"
+	"github.com/sagebynature/hitch/internal/harness"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -171,24 +167,10 @@ func DefaultURL() string {
 
 // NativeNoop returns the harness-native fail-open response used when synchronous dispatch cannot reach Hitch.
 func NativeNoop(harnessName, sourceEventType string) protocol.RawJSON {
-	aggregate := protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorNone}}
-	switch protocol.Harness(harnessName) {
-	case protocol.HarnessCodex:
-		native, _ := codex.Mapper{}.Translate(sourceEventType, aggregate)
-		return native
-	case protocol.HarnessHermes:
-		native, _ := hermes.Mapper{}.Translate(sourceEventType, aggregate)
-		return native
-	case protocol.HarnessPi:
-		native, _ := pi.Mapper{}.Translate(sourceEventType, aggregate)
-		return native
-	case protocol.HarnessOMP:
-		native, _ := omp.Mapper{}.Translate(sourceEventType, aggregate)
-		return native
-	case protocol.HarnessOpenCode:
-		native, _ := opencode.Mapper{}.Translate(sourceEventType, aggregate)
-		return native
-	default:
+	normalizer, ok := harness.DefaultRegistry().Lookup(protocol.Harness(harnessName))
+	if !ok {
 		return nil
 	}
+	native, _ := normalizer.Translate(sourceEventType, protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorNone}})
+	return native
 }

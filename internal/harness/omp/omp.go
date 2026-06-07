@@ -1,14 +1,14 @@
 package omp
 
 import (
-	"github.com/sagebynature/hitch/internal/harness"
+	"github.com/sagebynature/hitch/internal/harness/core"
 	piharness "github.com/sagebynature/hitch/internal/harness/pi"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
 type Mapper struct{}
 
-var knownSourceEvents = harness.SourceEventSet(
+var knownSourceEvents = core.SourceEventSet(
 	"input",
 	"before_agent_start",
 	"agent_start",
@@ -60,6 +60,6 @@ func (Mapper) Translate(sourceEventType string, aggregate protocol.AggregateDeci
 	return piharness.TranslateForHarness(sourceEventType, aggregate)
 }
 
-func (Mapper) Capability(sourceEventType string) harness.SourceEventCapability {
+func (Mapper) Capability(sourceEventType string) core.SourceEventCapability {
 	return piharness.CapabilityForHarness(sourceEventType)
 }
