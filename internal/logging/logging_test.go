@@ -1,7 +1,9 @@
 package logging
 
 import (
+	"bytes"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,6 +80,24 @@ func TestNewUsesPerSinkLevelAndFormat(t *testing.T) {
 	}
 	if strings.Contains(file, "msg=info-visible-both") {
 		t.Fatalf("file did not use JSON format: %q", file)
+	}
+}
+
+func TestConsoleHandlerColorsLevel(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(newHandler(&buf, "debug", "console", consoleColorsForced))
+
+	logger.Warn("careful now", "component", "test", "count", 2)
+
+	out := buf.String()
+	if !strings.Contains(out, "\x1b[") || !strings.Contains(out, "WARN") {
+		t.Fatalf("console log did not use logrus colored level formatting: %q", out)
+	}
+	if !strings.Contains(out, "careful now") || !strings.Contains(out, "test") || !strings.Contains(out, "2") {
+		t.Fatalf("console log did not format message and attrs: %q", out)
+	}
+	if strings.Contains(out, `"msg":"careful now"`) {
+		t.Fatalf("console log used JSON format: %q", out)
 	}
 }
 
