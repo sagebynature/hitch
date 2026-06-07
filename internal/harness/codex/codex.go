@@ -57,16 +57,18 @@ func (Mapper) Translate(sourceEventType string, aggregate protocol.AggregateDeci
 	out := map[string]interface{}{}
 	switch sourceEventType {
 	case "PermissionRequest":
-		if d.Behavior == protocol.BehaviorDeny || d.Behavior == protocol.BehaviorBlock || d.Behavior == protocol.BehaviorStop {
+		switch d.Behavior {
+		case protocol.BehaviorDeny, protocol.BehaviorBlock, protocol.BehaviorStop:
 			out["hookSpecificOutput"] = map[string]interface{}{"decision": map[string]interface{}{"behavior": "deny", "message": d.Reason}}
-		} else if d.Behavior == protocol.BehaviorAllow {
+		case protocol.BehaviorAllow:
 			out["hookSpecificOutput"] = map[string]interface{}{"decision": map[string]interface{}{"behavior": "allow"}}
 		}
 	case "PreToolUse":
-		if d.Behavior == protocol.BehaviorDeny || d.Behavior == protocol.BehaviorBlock || d.Behavior == protocol.BehaviorStop {
+		switch d.Behavior {
+		case protocol.BehaviorDeny, protocol.BehaviorBlock, protocol.BehaviorStop:
 			out["permissionDecision"] = "deny"
 			out["permissionDecisionReason"] = d.Reason
-		} else if d.Behavior == protocol.BehaviorAllow || d.Behavior == protocol.BehaviorTransform {
+		case protocol.BehaviorAllow, protocol.BehaviorTransform:
 			out["permissionDecision"] = "allow"
 			if len(d.UpdatedInput) != 0 {
 				var v interface{}

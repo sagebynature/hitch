@@ -67,12 +67,13 @@ func (Mapper) Translate(sourceEventType string, aggregate protocol.AggregateDeci
 			out["result"] = rawValue(d.UpdatedOutput)
 		}
 	case "pre_gateway_dispatch":
-		if d.Behavior == protocol.BehaviorHandled {
+		switch d.Behavior {
+		case protocol.BehaviorHandled:
 			out["action"] = "skip"
-		} else if d.Behavior == protocol.BehaviorTransform {
+		case protocol.BehaviorTransform:
 			out["action"] = "rewrite"
 			out["message"] = rawValue(d.UpdatedInput)
-		} else if d.Behavior == protocol.BehaviorAllow {
+		case protocol.BehaviorAllow:
 			out["action"] = "allow"
 		}
 	}
