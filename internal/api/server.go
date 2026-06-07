@@ -299,9 +299,11 @@ func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, pr
 		return resp, env, req, mode, err
 	}
 	for _, eventType := range hitchEventTypes[1:] {
-		derived := env
-		derived.EventID = harness.NewID("evt")
-		derived.HitchEventType = eventType
+		derived, err := runtime.normalizer.Normalize(req.SourceEventType, req.SourcePayload, eventType)
+		if err != nil {
+			return resp, env, req, mode, badRequest("%s", err.Error())
+		}
+		derived.ReceivedAt = env.ReceivedAt
 		if err := s.store.InsertNormalized(ctx, store.NormalizedEvent{ID: harness.NewID("norm"), InboundEventID: inboundID, HitchEventType: derived.HitchEventType, Envelope: derived, MappingVersion: protocol.Version}); err != nil {
 			return resp, env, req, mode, err
 		}

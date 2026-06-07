@@ -93,14 +93,17 @@ The handler receives the normalized envelope on stdin.
   },
   "hitch_event_type": "tool.requested",
   "payload": {
-    "hook_event_name": "PreToolUse",
-    "tool_name": "Bash",
-    "tool_input": {"command": "pwd"}
+    "tool": {
+      "name": "Bash",
+      "kind": "shell",
+      "input": {"command": "pwd"},
+      "command": "pwd"
+    }
   }
 }
 ```
 
-Current normalizers preserve source payloads unchanged in both `source_payload` and `payload` where no canonical payload extractor is defined. Write handlers against `hitch_event_type` first, then inspect `harness` and `source_event_type` only when a harness-specific field is required.
+`payload` is the Hitch-normalized handler contract for the event type. Use `payload.tool`, `payload.turn`, or `payload.llm` for common fields; inspect `source_payload`, `harness`, and `source_event_type` only when a harness-specific field is required or the typed payload is marked `{"unparsed": true}`.
 
 ## Step 4: Return a handler result
 

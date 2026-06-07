@@ -182,7 +182,7 @@ on_timeout = "fail_open"</code></pre>
 
         <section id="hitch-events">
           <h2>Hitch events</h2>
-          <p>Hitch normalizes Codex, Hermes, Pi, OMP, and OpenCode source events into one stable envelope while retaining the original native payload. Current normalizers preserve the source payload unchanged in both <code>source_payload</code> and <code>payload</code> where no canonical extractor is defined, then set <code>hitch_event_type</code> from the server-side event map.</p>
+          <p>Hitch normalizes Codex, Hermes, Pi, OMP, and OpenCode source events into one stable event envelope while retaining <code>source_payload</code> as the harness escape hatch. The handler-facing <code>payload</code> is keyed by <code>hitch_event_type</code>; common roots include <code>tool</code>, <code>turn</code>, and <code>llm</code>, with <code>llm.completed</code> carrying token and cost metrics when a harness source exposes them.</p>
           <p>Per-harness <code>[harness.&lt;name&gt;.event_map]</code> config entries are the source of truth for source-event to Hitch-event mapping. Values may be a single Hitch event or an ordered list. The first event is primary for sync dispatch/native responses; additional events are secondary audit rows. The default config intentionally omits duplicate or high-volume observer events; the catalog below marks those as opt-in so operators can add them when needed.</p>
           <h3>Normalized event types</h3>
           <table>

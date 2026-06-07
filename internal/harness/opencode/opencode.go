@@ -102,7 +102,7 @@ type AdapterResponse struct {
 
 func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
 	eventPayload, meta := unwrapSourcePayload(sourcePayload)
-	env := core.NewEnvelope(protocol.HarnessOpenCode, sourceEventType, sourcePayload, hitchEventType, eventPayload)
+	env := core.NewEnvelope(protocol.HarnessOpenCode, sourceEventType, sourcePayload, hitchEventType, core.ParseTypedPayload(protocol.HarnessOpenCode, sourceEventType, eventPayload, hitchEventType))
 	env.SessionID = meta.SessionID
 	env.TurnID = meta.TurnID
 	env.CWD = meta.CWD

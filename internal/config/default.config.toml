@@ -121,6 +121,7 @@ enabled = true
 "permission.ask" = "tool.permission_requested"
 "session.created" = "session.started"
 "session.idle" = ["turn.completed", "turn.assistant_completed"]
+"message.part.updated" = "llm.completed"
 "session.compacted" = "session.compacted"
 "experimental.session.compacting" = "session.compacted"
 "session.error" = "error.reported"

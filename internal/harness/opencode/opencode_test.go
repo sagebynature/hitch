@@ -37,8 +37,9 @@ func TestNormalizeUnwrapsPluginEnvelopeAndMetadata(t *testing.T) {
 	if err := json.Unmarshal(env.Payload, &payload); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := payload["input"]; !ok {
-		t.Fatalf("payload was not unwrapped: %#v", payload)
+	tool := payload["tool"].(map[string]interface{})
+	if tool["name"] != "bash" || tool["command"] != "pwd" {
+		t.Fatalf("payload was not typed from plugin event: %#v", payload)
 	}
 }
 

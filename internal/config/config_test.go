@@ -322,6 +322,7 @@ func TestDefaultConfigIncludesOpenCodeHarness(t *testing.T) {
 		"session.compacted":               protocol.EventSessionCompacted,
 		"experimental.session.compacting": protocol.EventSessionCompacted,
 		"session.error":                   protocol.EventErrorReported,
+		"message.part.updated":            protocol.EventLLMCompleted,
 	}
 	for source, want := range cases {
 		got := cfg.Harness.OpenCode.EventMap[source]

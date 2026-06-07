@@ -17,8 +17,13 @@ func TestNormalizePromotesPiMetadataEnvelope(t *testing.T) {
 	if env.SessionID != "session-1" || env.TurnID != "turn-2" || env.CWD != "/tmp/project" || env.Model != "anthropic/claude" || env.TranscriptPath != "/tmp/session-1.jsonl" {
 		t.Fatalf("metadata not promoted: %#v", env)
 	}
-	if string(env.Payload) != `{"input":{"command":"pwd"},"turnIndex":2}` {
-		t.Fatalf("payload should be unwrapped Pi event, got %s", env.Payload)
+	var typed map[string]interface{}
+	if err := json.Unmarshal(env.Payload, &typed); err != nil {
+		t.Fatal(err)
+	}
+	tool := typed["tool"].(map[string]interface{})
+	if tool["command"] != "pwd" {
+		t.Fatalf("payload should be typed tool payload, got %s", env.Payload)
 	}
 	if string(env.SourcePayload) != `{"input":{"command":"pwd"},"turnIndex":2}` {
 		t.Fatalf("source payload should be unwrapped Pi event, got %s", env.SourcePayload)
@@ -31,8 +36,13 @@ func TestNormalizeKeepsBarePiPayloadCompatible(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if env.SessionID != "" || env.CWD != "" || string(env.Payload) != string(payload) {
-		t.Fatalf("bare payload compatibility changed: %#v", env)
+	var typed map[string]interface{}
+	if err := json.Unmarshal(env.Payload, &typed); err != nil {
+		t.Fatal(err)
+	}
+	tool := typed["tool"].(map[string]interface{})
+	if env.SessionID != "" || env.CWD != "" || tool["command"] != "pwd" {
+		t.Fatalf("bare payload normalization changed: %#v", env)
 	}
 }
 

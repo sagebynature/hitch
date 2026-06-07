@@ -44,7 +44,7 @@ func (Mapper) Capability(sourceEventType string) core.SourceEventCapability {
 }
 
 func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
-	env := core.NewEnvelope(protocol.HarnessCodex, sourceEventType, sourcePayload, hitchEventType, sourcePayload)
+	env := core.NewEnvelope(protocol.HarnessCodex, sourceEventType, sourcePayload, hitchEventType, core.ParseTypedPayload(protocol.HarnessCodex, sourceEventType, sourcePayload, hitchEventType))
 	core.ApplySourceMetadata(&env, sourcePayload)
 	return env, protocol.ValidateEnvelope(env)
 }

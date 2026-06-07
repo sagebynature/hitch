@@ -16,8 +16,17 @@ Every harness normalizer creates the same envelope shape:
 | `source_payload` | Harness source payload | The original JSON payload received by Hitch. Pi, OMP, and OpenCode unwrap the installed adapter transport envelope before normalization. |
 | `hitch_event_type` | Server event map | One of the normalized event names below. |
 | `session_id`, `turn_id`, `cwd`, `model`, `transcript_path` | Server normalizer | Optional. Normalizers copy these from source payloads when available; Hermes also uses `extra.task_id` as a `session_id` fallback when it is meaningful. |
-| `payload` | Server normalizer | Hitch-normalized handler payload. Current normalizers conservatively preserve the source payload after any adapter transport unwrapping. |
+| `payload` | Server normalizer | Hitch-normalized handler payload keyed by `hitch_event_type`. High-value event types use common models such as `tool`, `turn`, and `llm`; unsupported event payloads are marked `{"unparsed": true}` while `source_payload` remains available for harness-specific details. |
 
+
+Common typed payload roots:
+
+| Hitch event | Payload root | Common fields |
+| --- | --- | --- |
+| `tool.requested` | `tool` | `name`, `kind`, `input`, `command`, `call_id` |
+| `tool.completed` | `tool` | `name`, `kind`, `input`, `output`, `error`, `exit_code` |
+| `turn.user_prompt` | `turn` | `prompt`, `messages`, `command` |
+| `llm.completed` | `llm` | `provider`, `model`, `finish_reason`, `output`, `usage.tokens`, `usage.cost`, `duration_ms`, `request_id` |
 Unsupported source event types are rejected unless configured in the harness event map. Hitch does not silently coerce unknown source events into a generic type.
 
 
@@ -214,12 +223,12 @@ OpenCode adapter response shape:
 | `command.execute.before` | `turn.user_prompt` | No | Hook input/output | `block`, `deny`, or `stop` throws; `inject_context` injects a no-reply context message. |
 | `command.executed` | `turn.user_prompt` | No | SDK event payload | Observer-only command audit. |
 | `chat.params`, `chat.headers` | `llm.requested` | No | Hook input/output | `transform` can replace hook output from `updated_input` or `native_response`. |
-| `experimental.text.complete` | `llm.completed` | No | Hook input/output | `replace_result` or `transform` replaces `output.output` from `updated_output`. |
+| `experimental.text.complete` | `llm.completed` | No | Typed `llm` payload with final text when available; no token/cost metrics are provided by this hook | `replace_result` or `transform` replaces `output.output` from `updated_output`. |
 | `shell.env` | `tool.requested` | No | Hook input/output | `transform` can replace `output.env` from `updated_input` or `native_response`. |
 | `tool.definition` | `tool.requested` | No | Hook input/output | `transform` can replace hook output from `updated_input` or `native_response`. |
 | `permission.asked`, `permission.updated` | `tool.permission_requested` | No | SDK event payload | Observer-only compatibility names; use `permission.ask` for control. |
 | `permission.replied` | `tool.permission_requested` | No | SDK event payload | Observer-only permission response audit. |
-| `message.updated`, `message.removed`, `message.part.updated`, `message.part.removed` | `turn.assistant_completed` or `turn.assistant_started` | No | SDK event payload | High-volume message telemetry; configure explicitly when needed. |
+| `message.part.updated` | `llm.completed` | Yes | Typed `llm` payload for OpenCode `step-finish` parts, including `tokens` and `cost` when present | Observer-only usage/cost audit. Other message SDK telemetry remains opt-in. |
 | `file.edited` | `tool.completed` | No | SDK event payload | File mutation audit. |
 | `file.watcher.updated` | `tool.progress` | No | SDK event payload | File watcher telemetry. |
 | `todo.updated` | `turn.started` | No | SDK event payload | Task-state audit. |

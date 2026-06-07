@@ -1025,6 +1025,54 @@ func TestIngestPersistsConfiguredSecondaryEvent(t *testing.T) {
 	if prompt.Normalized.Envelope.TurnID != "turn_1" || prompt.Normalized.Envelope.Model != "gpt-test" {
 		t.Fatalf("secondary event lost metadata: %#v", prompt.Normalized.Envelope)
 	}
+	var secondaryPayload map[string]interface{}
+	if err := json.Unmarshal(prompt.Normalized.Envelope.Payload, &secondaryPayload); err != nil {
+		t.Fatal(err)
+	}
+	turn, ok := secondaryPayload["turn"].(map[string]interface{})
+	if !ok || turn["prompt"] != "inspect this repo" {
+		t.Fatalf("secondary event payload was not reparsed for turn.user_prompt: %s", prompt.Normalized.Envelope.Payload)
+	}
+}
+
+func TestIngestOpenCodeStepFinishPersistsLLMUsagePayload(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	s := New(testConfig(), slog.Default(), st)
+
+	body := `{"harness":"opencode","source_event_type":"message.part.updated","source_payload":{"event":{"type":"message.part.updated","properties":{"sessionID":"sess_1","messageID":"msg_1","part":{"type":"step-finish","reason":"stop","tokens":{"input":10,"output":4,"reasoning":1,"cache":{"read":2,"write":3},"total":20},"cost":0.0025}}},"metadata":{"session_id":"sess_1","turn_id":"msg_1","cwd":"/tmp/hitch","model":"anthropic/claude-sonnet-4"}},"hitch_client_version":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("event code %d body %s", w.Code, w.Body.String())
+	}
+	var resp EventResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := st.InspectEvent(ctx, resp.NormalizedEventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.Normalized.HitchEventType != protocol.EventLLMCompleted {
+		t.Fatalf("unexpected event type: %#v", inspection.Normalized)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(inspection.Normalized.Envelope.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	llm := payload["llm"].(map[string]interface{})
+	usage := llm["usage"].(map[string]interface{})
+	tokens := usage["tokens"].(map[string]interface{})
+	cost := usage["cost"].(map[string]interface{})
+	if llm["finish_reason"] != "stop" || tokens["input"] != float64(10) || tokens["cache_read"] != float64(2) || cost["amount"] != 0.0025 || cost["source"] != "opencode_step_finish" {
+		t.Fatalf("bad llm usage payload: %s", inspection.Normalized.Envelope.Payload)
+	}
 }
 
 type registryTestNormalizer struct{}

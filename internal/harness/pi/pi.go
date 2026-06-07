@@ -92,7 +92,7 @@ func (Mapper) Normalize(sourceEventType string, sourcePayload protocol.RawJSON, 
 
 func NormalizeForHarness(h protocol.Harness, sourceEventType string, sourcePayload protocol.RawJSON, hitchEventType protocol.EventType) (protocol.EventEnvelope, error) {
 	eventPayload, meta := unwrapSourcePayload(sourcePayload)
-	env := core.NewEnvelope(h, sourceEventType, eventPayload, hitchEventType, eventPayload)
+	env := core.NewEnvelope(h, sourceEventType, eventPayload, hitchEventType, core.ParseTypedPayload(h, sourceEventType, eventPayload, hitchEventType))
 	env.SessionID = meta.SessionID
 	env.TurnID = meta.TurnID
 	env.CWD = meta.CWD

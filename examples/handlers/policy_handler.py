@@ -27,6 +27,11 @@ def none() -> None:
 
 
 def text_from_payload(payload: dict[str, Any]) -> str:
+    turn = payload.get("turn")
+    if isinstance(turn, dict):
+        prompt = turn.get("prompt")
+        if isinstance(prompt, str):
+            return prompt
     for key in ("prompt", "input", "message", "text"):
         value = payload.get(key)
         if isinstance(value, str):
@@ -35,6 +40,17 @@ def text_from_payload(payload: dict[str, Any]) -> str:
 
 
 def command_from_payload(payload: dict[str, Any]) -> str:
+    tool = payload.get("tool")
+    if isinstance(tool, dict):
+        command = tool.get("command")
+        if isinstance(command, str):
+            return command
+        tool_input = tool.get("input")
+        if isinstance(tool_input, dict):
+            command = tool_input.get("command")
+            if isinstance(command, str):
+                return command
+
     tool_input = payload.get("tool_input")
     if isinstance(tool_input, dict):
         command = tool_input.get("command")
@@ -88,7 +104,13 @@ def main() -> int:
         return 0
 
     if source_event_type in {"transform_tool_result", "transform_terminal_output", "transform_llm_output"}:
-        output = payload.get("output")
+        output: Any = payload.get("output")
+        tool = payload.get("tool")
+        if output is None and isinstance(tool, dict):
+            output = tool.get("output")
+        llm = payload.get("llm")
+        if output is None and isinstance(llm, dict):
+            output = llm.get("output")
         if isinstance(output, str):
             result("replace_result", updated_output=f"[reviewed by hitch] {output}")
             return 0
