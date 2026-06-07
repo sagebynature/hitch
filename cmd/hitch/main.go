@@ -8,16 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
-	"github.com/sagebynature/hitch/internal/api"
+	"github.com/sagebynature/hitch/internal/app"
 	"github.com/sagebynature/hitch/internal/config"
-	"github.com/sagebynature/hitch/internal/dispatch"
-	"github.com/sagebynature/hitch/internal/harness"
-	"github.com/sagebynature/hitch/internal/logging"
 	"github.com/sagebynature/hitch/internal/store"
 )
 
@@ -75,25 +70,13 @@ func serve(args []string) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	configPath := fs.String("config", config.DefaultPath, "config file")
 	_ = fs.Parse(args)
-	cfg, err := config.Load(*configPath)
+	bundle, err := app.NewServerBundle(context.Background(), app.ServeOptions{ConfigPath: *configPath, ConfigPathProvided: cliFlagProvided(args, "config")})
 	if err != nil {
 		fatal(err)
 	}
-	logger, closer, err := logging.New(cfg.Log)
-	if err != nil {
-		fatal(err)
-	}
-	defer closer.Close()
-	dbPath := config.ExpandHome(cfg.Audit.SQLite.Path)
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		fatal(err)
-	}
-	st, err := store.Open(context.Background(), dbPath)
-	if err != nil {
-		fatal(err)
-	}
-	defer st.Close()
-	srv := &http.Server{Addr: fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port), Handler: api.New(cfg, logger, st).Handler(), ReadHeaderTimeout: 5 * time.Second}
+	defer bundle.Close()
+	srv := bundle.Server
+	logger := bundle.Logger
 	go func() {
 		logger.Info("hitch server starting", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -104,7 +87,7 @@ func serve(args []string) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := app.ShutdownContext(context.Background())
 	defer cancel()
 	_ = srv.Shutdown(ctx)
 }
@@ -207,31 +190,11 @@ func replay(args []string) {
 	if fs.NArg() != 1 {
 		fatal(fmt.Errorf("replay requires id"))
 	}
-	cfg, err := config.Load(*configPath)
+	result, err := app.Replay(context.Background(), app.ReplayOptions{ConfigPath: *configPath, ConfigPathProvided: cliFlagProvided(args, "config"), EventID: fs.Arg(0), DryRun: *dryRun})
 	if err != nil {
 		fatal(err)
 	}
-	st, err := store.Open(context.Background(), config.ExpandHome(cfg.Audit.SQLite.Path))
-	if err != nil {
-		fatal(err)
-	}
-	defer st.Close()
-	env, err := st.GetEvent(context.Background(), fs.Arg(0))
-	if err != nil {
-		fatal(err)
-	}
-	if *dryRun {
-		writeCLI(true, map[string]interface{}{"dry_run": true, "event": env})
-		return
-	}
-	result := dispatch.NewRunner(cfg.Handlers).Dispatch(context.Background(), env, "control", 2*time.Second)
-	for _, inv := range result.Invocations {
-		err := st.InsertHandlerInvocation(context.Background(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: fs.Arg(0), HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error, ReplaySourceID: fs.Arg(0)})
-		if err != nil {
-			fatal(err)
-		}
-	}
-	writeCLI(true, map[string]interface{}{"dry_run": false, "event": env, "aggregate": result.Aggregate})
+	writeCLI(true, result)
 }
 
 func writeCLI(jsonOut bool, v interface{}) {
@@ -243,4 +206,14 @@ func writeCLI(jsonOut bool, v interface{}) {
 	fmt.Println(string(b))
 }
 
+func cliFlagProvided(args []string, name string) bool {
+	short := "-" + name
+	long := "--" + name
+	for _, arg := range args {
+		if arg == short || arg == long || strings.HasPrefix(arg, short+"=") || strings.HasPrefix(arg, long+"=") {
+			return true
+		}
+	}
+	return false
+}
 func fatal(err error) { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
