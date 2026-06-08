@@ -56,10 +56,10 @@ func mergeExtensions(cfg *Config, root string) error {
 			continue
 		}
 		name := entry.Name()
-		sameName, sameNameExists := cfg.Handlers[name]
+		_, sameNameExists := cfg.Handlers[name]
 		referenced := referencesExtension(cfg, name)
 		needsMerge := referenced && needsExtensionDefaults(cfg, name)
-		if sameNameExists && (!referenced || sameName.Extension != name) {
+		if sameNameExists && !needsMerge {
 			continue
 		}
 		if referenced && !needsMerge {
@@ -129,8 +129,9 @@ func needsExtensionDefaults(cfg *Config, extensionName string) bool {
 		if h.Extension != extensionName {
 			continue
 		}
-		if h.Entrypoint == "" || h.Kind == "" || len(h.HitchEvents) == 0 || len(h.SourceEvents) == 0 ||
-			!h.payloadSet || h.TimeoutMS == 0 || h.OnError == "" || h.OnTimeout == "" {
+		if h.Entrypoint == "" || h.Kind == "" || len(h.HitchEvents) == 0 ||
+			(len(h.SourceEvents) == 0 && !h.sourceEventsSet) || !h.payloadSet ||
+			h.TimeoutMS == 0 || h.OnError == "" || h.OnTimeout == "" {
 			return true
 		}
 	}
@@ -152,7 +153,7 @@ func mergeExtensionDefaults(cfg *Config, extensionName string, ext extensionFile
 		if len(h.HitchEvents) == 0 {
 			h.HitchEvents = append([]string(nil), defaults.HitchEvents...)
 		}
-		if len(h.SourceEvents) == 0 {
+		if len(h.SourceEvents) == 0 && !h.sourceEventsSet {
 			h.SourceEvents = append([]SourceEventFilter(nil), defaults.SourceEvents...)
 		}
 		if !h.payloadSet && defaults.Payload != "" {

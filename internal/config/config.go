@@ -116,7 +116,8 @@ type HandlerConfig struct {
 	TimeoutMS    int                 `toml:"timeout_ms"`
 	OnError      string              `toml:"on_error"`
 	OnTimeout    string              `toml:"on_timeout"`
-	payloadSet   bool
+	payloadSet      bool
+	sourceEventsSet bool
 }
 
 type HarnessConfig struct {
@@ -197,6 +198,7 @@ func parseConfigBytes(b []byte, validate bool) (Config, error) {
 	upgradeLegacyDefaultEventMaps(&c)
 	for name, h := range c.Handlers {
 		h.payloadSet = md.IsDefined("handlers", name, "payload")
+		h.sourceEventsSet = md.IsDefined("handlers", name, "source_events")
 		if err := normalizeHandlerConfig(name, &h); err != nil {
 			return Config{}, err
 		}
