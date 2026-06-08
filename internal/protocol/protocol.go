@@ -134,6 +134,17 @@ type InvocationContext struct {
 	NormalizedEventID string          `json:"normalized_event_id"`
 	PayloadKind       string          `json:"payload_kind"`
 	Payload           RawJSON         `json:"payload"`
+	EventID           string          `json:"event_id"`
+	ReceivedAt        time.Time       `json:"received_at"`
+	Harness           Harness         `json:"harness"`
+	SourceEventType   string          `json:"source_event_type"`
+	SourcePayload     RawJSON         `json:"source_payload"`
+	HitchEventType    EventType       `json:"hitch_event_type"`
+	SessionID         string          `json:"session_id,omitempty"`
+	TurnID            string          `json:"turn_id,omitempty"`
+	CWD               string          `json:"cwd,omitempty"`
+	Model             string          `json:"model,omitempty"`
+	TranscriptPath    string          `json:"transcript_path,omitempty"`
 	Event             InvocationEvent `json:"event"`
 }
 

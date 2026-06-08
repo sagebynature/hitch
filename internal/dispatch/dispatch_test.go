@@ -408,8 +408,14 @@ echo '{"status":"ok","decision":{"behavior":"allow"}}'`)
 	if invCtx.PayloadKind != "source" || string(invCtx.Payload) != `{"native":true,"nested":{"x":1}}` {
 		t.Fatalf("bad selected payload: kind=%q payload=%s", invCtx.PayloadKind, invCtx.Payload)
 	}
+	if invCtx.Harness != protocol.HarnessCodex || invCtx.SourceEventType != "PreToolUse" || invCtx.HitchEventType != protocol.EventToolRequested {
+		t.Fatalf("bad legacy event metadata: %#v", invCtx)
+	}
+	if string(invCtx.SourcePayload) != `{"native":true,"nested":{"x":1}}` {
+		t.Fatalf("bad legacy source payload: %s", invCtx.SourcePayload)
+	}
 	if invCtx.Event.Harness != protocol.HarnessCodex || invCtx.Event.SourceEventType != "PreToolUse" || invCtx.Event.HitchEventType != protocol.EventToolRequested {
-		t.Fatalf("bad event metadata: %#v", invCtx.Event)
+		t.Fatalf("bad nested event metadata: %#v", invCtx.Event)
 	}
 	if string(invCtx.Event.SourcePayload) != `{"native":true,"nested":{"x":1}}` || string(invCtx.Event.Payload) != `{"tool":{"name":"Bash"}}` {
 		t.Fatalf("event did not include both payloads: %#v", invCtx.Event)

@@ -32,6 +32,11 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("HITCH_PAYLOAD_LOG_PATH", "tmp/hitch-payload-logger/payloads.jsonl"),
         help="JSONL log path. Defaults to HITCH_PAYLOAD_LOG_PATH or tmp/hitch-payload-logger/payloads.jsonl.",
     )
+    parser.add_argument(
+        "selected_payload",
+        nargs="?",
+        help="Selected Hitch payload JSON passed by newer Hitch dispatchers. The logger reads stdin for the full context.",
+    )
     return parser.parse_args()
 
 
