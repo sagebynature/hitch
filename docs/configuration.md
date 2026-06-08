@@ -38,9 +38,21 @@ Rejected until implemented:
 - enabled `audit.backend = "jsonl"` configs
 - `[log.otlp].enabled = true`
 
-Handler commands receive the normalized Hitch event envelope as JSON on stdin and may return a Hitch handler result as JSON on stdout.
+Handlers support two invocation types: `shell` and `native`. Existing command handlers default to `type = "shell"` and may keep using `events = ["tool.requested"]`; new configs should use `hitch_events = ["tool.requested"]`.
+
+Shell handlers receive a Hitch invocation context JSON object on stdin and the selected primary payload as one compact JSON command-line argument. The context keeps legacy top-level event fields for existing handlers and also includes a nested `event` object with both `source_payload` and Hitch `payload`.
+
+`source_events` narrows a handler to exact source hook pairs:
+
+```toml
+source_events = [{ harness = "codex", source_event_type = "PreToolUse" }]
+```
+
+`payload = "hitch"` passes Hitch's normalized payload as the primary payload. `payload = "source"` passes the preserved source payload as the primary payload. Both payloads are always available in the invocation context.
 
 `handlers.<name>.working_dir` is optional. When set through a loaded config file, relative values resolve against the directory containing that config file. Hitch runs the handler command from that directory, so relative command arguments and output paths are stable regardless of where `hitch serve` was launched.
+
+Native Python extensions are discovered under `~/.config/hitch/extensions/<name>/config.toml`. An extension config uses the same routing fields and an `entrypoint = "module:function"` value; Hitch runs the extension in an isolated Python subprocess through the Hitch SDK.
 
 Harness event maps live in config. The default config includes the recommended low-noise mappings. Duplicate, high-volume, or product-specific source events are documented in `docs/events.md` as opt-in catalog rows; add entries in the relevant map to capture them:
 

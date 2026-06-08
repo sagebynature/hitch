@@ -52,9 +52,12 @@ Add a `[handlers.<name>]` table to your Hitch config.
 
 ```toml
 [handlers.block_dangerous_shell]
+type = "shell"
 command = ["python3", "examples/handlers/policy_handler.py"]
 working_dir = "."
-events = ["tool.requested"]
+hitch_events = ["tool.requested"]
+source_events = [{ harness = "codex", source_event_type = "PreToolUse" }]
+payload = "hitch"
 kind = "control"
 timeout_ms = 1000
 on_error = "fail_closed"
@@ -65,9 +68,14 @@ Fields:
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `command` | Yes | Command and arguments passed to `exec`. Hitch writes the envelope to stdin. |
-| `working_dir` | No | Directory Hitch runs the command from. Relative values in loaded config files resolve from the config file directory. |
-| `events` | Yes | Normalized Hitch events to match. Use `"*"` to match all events. |
+| `type` | No | `shell` or `native`. Missing values default to `shell` for existing command handlers. |
+| `command` | Shell | Command and arguments passed to `exec`. Hitch writes the invocation context to stdin and appends the selected payload JSON as one argument. |
+| `extension` | Native | Extension name under `~/.config/hitch/extensions/<name>`. |
+| `entrypoint` | Native | Python `module:function` entrypoint. Discovered extension configs supply this automatically. |
+| `working_dir` | No | Directory Hitch runs the command from. Relative values in loaded config files resolve from the config file directory. Native discovered extensions run from their extension directory. |
+| `hitch_events` | Yes | Normalized Hitch events to match. Use `"*"` to match all events. Legacy `events` remains accepted as an alias. |
+| `source_events` | No | Exact source hook filters such as `{ harness = "codex", source_event_type = "PreToolUse" }`. Empty means every source event. |
+| `payload` | No | `hitch` for Hitch-normalized payload or `source` for preserved source payload. Defaults to `hitch`. |
 | `kind` | Yes | `"control"` or `"observer"`. Control handlers may affect sync native responses; observer handlers never do. |
 | `timeout_ms` | Yes | Per-handler timeout. Hitch records `timeout` if exceeded. |
 | `on_error` | No | `fail_open`, `fail_closed`, or `native_default`. Current dispatch treats `fail_closed` as a blocking aggregate decision; other values continue. |
@@ -75,9 +83,9 @@ Fields:
 
 Handler names determine deterministic aggregation order. Hitch sorts matching handler names lexicographically before aggregating results. Use numeric prefixes when order matters, such as `00_context` and `10_policy`.
 
-## Step 3: Read the event envelope
+## Step 3: Read the invocation context
 
-The handler receives the normalized envelope on stdin.
+The handler receives a Hitch invocation context on stdin. Existing envelope fields remain available at the top level, and the nested `event` object always carries both payload forms.
 
 ```json
 {
@@ -104,6 +112,43 @@ The handler receives the normalized envelope on stdin.
 ```
 
 `payload` is the Hitch-normalized handler contract for the event type. Use `payload.tool`, `payload.turn`, or `payload.llm` for common fields; inspect `source_payload`, `harness`, and `source_event_type` only when a harness-specific field is required or the typed payload is marked `{"unparsed": true}`. Final assistant text is exposed as `payload.turn.assistant.text` on `turn.assistant_completed`; token and cost metrics are exposed under `payload.llm.usage` on `llm.completed` when the harness provides them.
+
+## Native Python extensions
+
+Create extensions under `~/.config/hitch/extensions/<name>/`:
+
+```text
+~/.config/hitch/extensions/audit_logger/
+  config.toml
+  handler.py
+```
+
+`config.toml`:
+
+```toml
+name = "audit_logger"
+entrypoint = "handler:handle"
+kind = "observer"
+hitch_events = ["tool.completed"]
+payload = "hitch"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+```
+
+`handler.py`:
+
+```python
+import sys
+
+from hitch_sdk import Context, HandlerResult
+
+def handle(context: Context) -> HandlerResult:
+    print(context.event.hitch_event_type, file=sys.stderr)
+    return HandlerResult.none()
+```
+
+Hitch runs native extensions as isolated Python subprocesses. The SDK deserializes stdin into `Context` and serializes the returned `HandlerResult` to stdout.
 
 ## Step 4: Return a handler result
 

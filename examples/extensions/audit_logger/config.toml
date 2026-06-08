@@ -1,0 +1,8 @@
+name = "audit_logger"
+entrypoint = "handler:handle"
+kind = "observer"
+hitch_events = ["tool.completed"]
+payload = "hitch"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"

@@ -142,6 +142,7 @@ enabled = true
 "session.error" = "error.reported"
 
 [handlers.payload_logger_sync]
+type = "shell"
 command = [
     "python3",
     "examples/handlers/payload_logger.py",
@@ -149,13 +150,15 @@ command = [
     "tmp/hitch-payload-logger/payloads.jsonl",
 ]
 working_dir = ".."
-events = ["*"]
+hitch_events = ["*"]
 kind = "control"
+payload = "hitch"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"
 
 [handlers.payload_logger_async]
+type = "shell"
 command = [
     "python3",
     "examples/handlers/payload_logger.py",
@@ -163,8 +166,9 @@ command = [
     "tmp/hitch-payload-logger/payloads.jsonl",
 ]
 working_dir = ".."
-events = ["*"]
+hitch_events = ["*"]
 kind = "observer"
+payload = "hitch"
 timeout_ms = 1000
 on_error = "fail_open"
 on_timeout = "fail_open"
