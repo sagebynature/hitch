@@ -192,7 +192,7 @@ echo '{"status":"ok","decision":{"behavior":"allow"}}'`)
 	if invCtx.Event.Harness != protocol.HarnessCodex || invCtx.Event.SourceEventType != "PreToolUse" || invCtx.Event.HitchEventType != protocol.EventToolRequested {
 		t.Fatalf("bad event metadata: %#v", invCtx.Event)
 	}
-	if string(invCtx.Event.SourcePayload) != `{ "native" : true, "nested" : { "x" : 1 } }` || string(invCtx.Event.Payload) != `{"tool":{"name":"Bash"}}` {
+	if string(invCtx.Event.SourcePayload) != `{"native":true,"nested":{"x":1}}` || string(invCtx.Event.Payload) != `{"tool":{"name":"Bash"}}` {
 		t.Fatalf("event did not include both payloads: %#v", invCtx.Event)
 	}
 }
