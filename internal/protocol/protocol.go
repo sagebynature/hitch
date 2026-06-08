@@ -80,14 +80,15 @@ var validBehaviors = map[DecisionBehavior]struct{}{
 type HandlerStatus string
 
 const (
-	StatusOK      HandlerStatus = "ok"
-	StatusError   HandlerStatus = "error"
-	StatusTimeout HandlerStatus = "timeout"
-	StatusSkipped HandlerStatus = "skipped"
+	StatusOK       HandlerStatus = "ok"
+	StatusError    HandlerStatus = "error"
+	StatusTimeout  HandlerStatus = "timeout"
+	StatusSkipped  HandlerStatus = "skipped"
+	StatusReserved HandlerStatus = "reserved"
 )
 
 var validStatuses = map[HandlerStatus]struct{}{
-	StatusOK: {}, StatusError: {}, StatusTimeout: {}, StatusSkipped: {},
+	StatusOK: {}, StatusError: {}, StatusTimeout: {}, StatusSkipped: {}, StatusReserved: {},
 }
 
 type RawJSON = json.RawMessage

@@ -99,8 +99,8 @@ func TestReserveHandlerInvocationPreventsDuplicateHookExecution(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, `SELECT status, completed_at FROM handler_invocations WHERE id = ?`, "handler_1").Scan(&status, &completedAt); err != nil {
 		t.Fatal(err)
 	}
-	if status != protocol.StatusOK {
-		t.Fatalf("reserved status = %q, want %q", status, protocol.StatusOK)
+	if status != protocol.StatusReserved {
+		t.Fatalf("reserved status = %q, want %q", status, protocol.StatusReserved)
 	}
 	if completedAt.Valid && completedAt.String != "" {
 		t.Fatalf("reserved completed_at = %q, want empty", completedAt.String)
@@ -112,6 +112,86 @@ func TestReserveHandlerInvocationPreventsDuplicateHookExecution(t *testing.T) {
 	}
 	if reserved {
 		t.Fatal("duplicate reservation succeeded")
+	}
+
+	if err := s.CompleteHandlerInvocation(ctx, HandlerInvocation{ID: "handler_1", CompletedAt: now.Add(time.Second), Status: protocol.StatusError, Error: "boom"}); err != nil {
+		t.Fatalf("complete reservation: %v", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT status FROM handler_invocations WHERE id = ?`, "handler_1").Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != protocol.StatusError {
+		t.Fatalf("completed status = %q, want %q", status, protocol.StatusError)
+	}
+}
+
+func TestReserveHandlerInvocationPrimaryKeyCollisionReturnsError(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	now := time.Now().UTC()
+	env := protocol.EventEnvelope{HitchVersion: protocol.Version, EventID: "evt_1", ReceivedAt: now, Harness: protocol.HarnessCodex, SourceEventType: "PostToolUse", SourcePayload: protocol.Raw(map[string]interface{}{"x": 1}), HitchEventType: protocol.EventToolCompleted, Payload: protocol.Raw(map[string]interface{}{"tool": "bash"})}
+	if err := s.InsertInbound(ctx, InboundEvent{ID: "in_1", ReceivedAt: now, Harness: env.Harness, SourceEventType: env.SourceEventType, SourcePayload: env.SourcePayload}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InsertNormalized(ctx, NormalizedEvent{ID: "norm_1", InboundEventID: "in_1", HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: "test"}); err != nil {
+		t.Fatal(err)
+	}
+
+	reservation := HandlerInvocationReservation{ID: "handler_1", InboundEventID: "in_1", NormalizedEventID: "norm_1", HandlerName: "audit", Kind: "observer", HookKey: "hook:one", StartedAt: now}
+	reserved, err := s.ReserveHandlerInvocation(ctx, reservation)
+	if err != nil || !reserved {
+		t.Fatalf("first reservation reserved=%v err=%v", reserved, err)
+	}
+	reservation.HookKey = "hook:two"
+	reserved, err = s.ReserveHandlerInvocation(ctx, reservation)
+	if err == nil {
+		t.Fatalf("primary key collision reserved=%v err=nil, want error", reserved)
+	}
+	if reserved {
+		t.Fatal("primary key collision reported as reserved")
+	}
+}
+
+func TestInsertHandlerInvocationLegacyReplayUsesDistinctHookKey(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	now := time.Now().UTC()
+	env := protocol.EventEnvelope{HitchVersion: protocol.Version, EventID: "evt_1", ReceivedAt: now, Harness: protocol.HarnessCodex, SourceEventType: "PostToolUse", SourcePayload: protocol.Raw(map[string]interface{}{"x": 1}), HitchEventType: protocol.EventToolCompleted, Payload: protocol.Raw(map[string]interface{}{"tool": "bash"})}
+	if err := s.InsertInbound(ctx, InboundEvent{ID: "in_1", ReceivedAt: now, Harness: env.Harness, SourceEventType: env.SourceEventType, SourcePayload: env.SourcePayload}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InsertNormalized(ctx, NormalizedEvent{ID: "norm_1", InboundEventID: "in_1", HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InsertHandlerInvocation(ctx, HandlerInvocation{ID: "handler_live", NormalizedEventID: "norm_1", HandlerName: "audit", Kind: "observer", StartedAt: now, CompletedAt: now, Status: protocol.StatusOK}); err != nil {
+		t.Fatalf("insert live handler: %v", err)
+	}
+	if err := s.InsertHandlerInvocation(ctx, HandlerInvocation{ID: "handler_replay", NormalizedEventID: "norm_1", HandlerName: "audit", Kind: "observer", StartedAt: now.Add(time.Second), CompletedAt: now.Add(time.Second), Status: protocol.StatusOK, ReplaySourceID: "handler_live"}); err != nil {
+		t.Fatalf("insert replay handler: %v", err)
+	}
+
+	inspection, err := s.InspectEvent(ctx, "norm_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inspection.HandlerInvocations) != 2 {
+		t.Fatalf("handler invocation count = %d, want 2: %#v", len(inspection.HandlerInvocations), inspection.HandlerInvocations)
+	}
+	if inspection.HandlerInvocations[0].HookKey != "legacy:norm_1:audit:observer" {
+		t.Fatalf("live hook key = %q", inspection.HandlerInvocations[0].HookKey)
+	}
+	if inspection.HandlerInvocations[1].HookKey != "legacy:replay:handler_live:audit:observer" {
+		t.Fatalf("replay hook key = %q", inspection.HandlerInvocations[1].HookKey)
 	}
 }
 

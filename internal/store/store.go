@@ -235,14 +235,18 @@ func (s *Store) InsertHandlerInvocation(ctx context.Context, h HandlerInvocation
 }
 
 func (s *Store) ReserveHandlerInvocation(ctx context.Context, r HandlerInvocationReservation) (bool, error) {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO handler_invocations(id, inbound_event_id, normalized_event_id, handler_name, kind, hook_key, started_at, status, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, r.ID, r.InboundEventID, r.NormalizedEventID, r.HandlerName, r.Kind, r.HookKey, r.StartedAt.Format(time.RFC3339Nano), protocol.StatusOK, schemaVersion)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO handler_invocations(id, inbound_event_id, normalized_event_id, handler_name, kind, hook_key, started_at, status, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, r.ID, r.InboundEventID, r.NormalizedEventID, r.HandlerName, r.Kind, r.HookKey, r.StartedAt.Format(time.RFC3339Nano), protocol.StatusReserved, schemaVersion)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if isHandlerInvocationDedupeConflict(err) {
 			return false, nil
 		}
 		return false, err
 	}
 	return true, nil
+}
+
+func isHandlerInvocationDedupeConflict(err error) bool {
+	return strings.Contains(err.Error(), "UNIQUE constraint failed: handler_invocations.inbound_event_id, handler_invocations.handler_name, handler_invocations.hook_key")
 }
 
 func (s *Store) CompleteHandlerInvocation(ctx context.Context, h HandlerInvocation) error {
@@ -271,7 +275,11 @@ func (s *Store) withLegacyInvocationDedupeFields(ctx context.Context, h HandlerI
 		}
 	}
 	if h.HookKey == "" {
-		h.HookKey = strings.Join([]string{"legacy", h.NormalizedEventID, h.HandlerName, h.Kind}, ":")
+		if h.ReplaySourceID != "" {
+			h.HookKey = strings.Join([]string{"legacy", "replay", h.ReplaySourceID, h.HandlerName, h.Kind}, ":")
+		} else {
+			h.HookKey = strings.Join([]string{"legacy", h.NormalizedEventID, h.HandlerName, h.Kind}, ":")
+		}
 	}
 	return h, nil
 }
