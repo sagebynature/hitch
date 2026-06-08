@@ -249,6 +249,40 @@ func TestBashLoginShellCommandPayloadIsPassedAsFirstScriptArg(t *testing.T) {
 	}
 }
 
+func TestEnvPrefixedShellCommandPayloadIsPassedAsFirstScriptArg(t *testing.T) {
+	dir := t.TempDir()
+	r := NewRunner(map[string]config.HandlerConfig{
+		"shell": {
+			Command:     []string{"env", "FOO=1", "bash", "-c", `printf '%s' "$1" > "$CAPTURE_DIR/argv1.json"; printf '%s' "$FOO" > "$CAPTURE_DIR/foo.txt"; echo '{"status":"ok","decision":{"behavior":"allow"}}'`},
+			HitchEvents: []string{"*"},
+			Kind:        "control",
+			TimeoutMS:   fastHandlerTimeoutMS,
+		},
+	})
+	req := testRequest("control", 5*time.Second)
+	req.Envelope.Payload = protocol.RawJSON(`{ "tool" : { "name" : "Bash" } }`)
+
+	t.Setenv("CAPTURE_DIR", dir)
+	got := r.Dispatch(context.Background(), req)
+	if len(got.Invocations) != 1 || got.Invocations[0].Status != protocol.StatusOK {
+		t.Fatalf("expected env-prefixed shell payload invocation: %#v", got.Invocations)
+	}
+	argv1, err := os.ReadFile(filepath.Join(dir, "argv1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(argv1) != `{"tool":{"name":"Bash"}}` {
+		t.Fatalf("argv $1 payload = %s", argv1)
+	}
+	foo, err := os.ReadFile(filepath.Join(dir, "foo.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(foo) != "1" {
+		t.Fatalf("env assignment was not applied: %q", foo)
+	}
+}
+
 func TestBashLoginOptionBeforeCommandPayloadIsPassedAsFirstScriptArg(t *testing.T) {
 	dir := t.TempDir()
 	r := NewRunner(map[string]config.HandlerConfig{
@@ -291,6 +325,13 @@ func TestShellCommandScriptIndexScansOptionsUntilCommandMode(t *testing.T) {
 		wantOK    bool
 	}{
 		{name: "long option before command mode", command: []string{"bash", "--norc", "-c", "script"}, wantIndex: 3, wantOK: true},
+		{name: "shell option with separate value before command mode", command: []string{"bash", "--rcfile", "somefile", "-c", "script"}, wantIndex: 5, wantOK: true},
+		{name: "shell plus-o option with separate value before command mode", command: []string{"bash", "+o", "posix", "-c", "script"}, wantIndex: 5, wantOK: true},
+		{name: "env assignment before shell command mode", command: []string{"env", "FOO=1", "bash", "-c", "script"}, wantIndex: 4, wantOK: true},
+		{name: "env ignore environment before shell command mode", command: []string{"env", "-i", "bash", "-c", "script"}, wantIndex: 4, wantOK: true},
+		{name: "env unset option before shell command mode", command: []string{"env", "-u", "FOO", "bash", "-c", "script"}, wantIndex: 5, wantOK: true},
+		{name: "env option and assignment before shell command mode", command: []string{"env", "-i", "FOO=1", "bash", "-c", "script"}, wantIndex: 5, wantOK: true},
+		{name: "env non shell utility", command: []string{"env", "FOO=1", "python", "-c", "script"}, wantOK: false},
 		{name: "long option without command mode", command: []string{"bash", "--norc", "script"}, wantOK: false},
 		{name: "non option before command mode", command: []string{"bash", "script", "-c", "ignored"}, wantOK: false},
 	}

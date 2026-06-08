@@ -194,10 +194,60 @@ func shellCommandScriptIndex(command []string) (int, bool) {
 	if len(command) >= 2 && isShell(command[0]) {
 		return shellCommandScriptIndexAfterShell(command, 1)
 	}
-	if len(command) >= 3 && isEnv(command[0]) && isShell(command[1]) {
-		return shellCommandScriptIndexAfterShell(command, 2)
+	if len(command) >= 3 && isEnv(command[0]) {
+		shellIndex, ok := shellCommandIndexAfterEnv(command, 1)
+		if !ok {
+			return 0, false
+		}
+		return shellCommandScriptIndexAfterShell(command, shellIndex+1)
 	}
 	return 0, false
+}
+
+func shellCommandIndexAfterEnv(command []string, argStart int) (int, bool) {
+	for i := argStart; i < len(command); i++ {
+		arg := command[i]
+		if arg == "--" {
+			i++
+			if i < len(command) && isShell(command[i]) {
+				return i, true
+			}
+			return 0, false
+		}
+		if isEnvAssignment(arg) {
+			continue
+		}
+		if isShell(arg) {
+			return i, true
+		}
+		if !strings.HasPrefix(arg, "-") {
+			return 0, false
+		}
+		if envOptionConsumesNext(arg) {
+			i++
+			if i >= len(command) {
+				return 0, false
+			}
+		}
+	}
+	return 0, false
+}
+
+func isEnvAssignment(arg string) bool {
+	if strings.HasPrefix(arg, "-") {
+		return false
+	}
+	eq := strings.IndexByte(arg, '=')
+	return eq > 0
+}
+
+func envOptionConsumesNext(arg string) bool {
+	switch arg {
+	case "-u", "--unset", "-C", "--chdir", "-S", "--split-string":
+		return true
+	default:
+		return false
+	}
 }
 
 func shellCommandScriptIndexAfterShell(command []string, argStart int) (int, bool) {
@@ -209,11 +259,27 @@ func shellCommandScriptIndexAfterShell(command []string, argStart int) (int, boo
 			}
 			return 0, false
 		}
-		if len(arg) < 2 || arg[0] != '-' {
+		if shellOptionConsumesNext(arg) {
+			i++
+			if i >= len(command) {
+				return 0, false
+			}
+			continue
+		}
+		if len(arg) < 2 || (arg[0] != '-' && arg[0] != '+') {
 			return 0, false
 		}
 	}
 	return 0, false
+}
+
+func shellOptionConsumesNext(arg string) bool {
+	switch arg {
+	case "-o", "+o", "--rcfile", "--init-file":
+		return true
+	default:
+		return false
+	}
 }
 
 func isShellCommandOption(arg string) bool {

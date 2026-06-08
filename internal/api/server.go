@@ -215,7 +215,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	s.handleSyncEvent(w, r, resp, env, log)
 }
 func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp EventResponse, env protocol.EventEnvelope, log apiRequestLog) {
-	result := s.runner.Dispatch(r.Context(), env, "control", 2*time.Second)
+	result := s.runner.Dispatch(r.Context(), dispatch.Request{Envelope: env, Kind: "control", TotalDeadline: 2*time.Second})
 	for _, inv := range result.Invocations {
 		if err := s.store.InsertHandlerInvocation(r.Context(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: resp.NormalizedEventID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error}); err != nil {
 			log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error_kind", errorKind(err), "error", err.Error())
@@ -313,7 +313,7 @@ func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, pr
 
 func (s *Server) dispatchObservers(ctx context.Context, normalizedID string, env protocol.EventEnvelope) {
 	started := time.Now()
-	result := s.runner.Dispatch(ctx, env, "observer", 0)
+	result := s.runner.Dispatch(ctx, dispatch.Request{Envelope: env, Kind: "observer"})
 	if len(result.Invocations) == 0 {
 		return
 	}
