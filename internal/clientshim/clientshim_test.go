@@ -243,3 +243,25 @@ surprise = true
 		t.Fatalf("config default URL was not used: %s", got)
 	}
 }
+
+func TestDefaultURLUsesServerConfigWhenNativeHandlerNeedsExtensionDefaults(t *testing.T) {
+	t.Setenv("HITCH_URL", "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".config", "hitch", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := strings.Replace(config.DefaultConfigTOML, "port = 8799", "port = 9876", 1) + `
+[handlers.native_defaults]
+type = "native"
+extension = "native_defaults"
+`
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := DefaultURL(); got != "http://127.0.0.1:9876" {
+		t.Fatalf("config default URL was not used: %s", got)
+	}
+}

@@ -89,7 +89,9 @@ func mergeExtensions(cfg *Config, root string) error {
 			return err
 		}
 		if referenced {
-			mergeExtensionDefaults(cfg, name, ext)
+			if err := mergeExtensionDefaults(cfg, name, ext); err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -136,6 +138,7 @@ func readExtensionConfig(root, name string) (extensionFile, error) {
 	if err := normalizeHandlerConfig(ext.Name, &normalized); err != nil {
 		return extensionFile{}, fmt.Errorf("extension %s config: %w", name, err)
 	}
+	ext.Events = normalized.Events
 	ext.HitchEvents = normalized.HitchEvents
 	ext.Payload = normalized.Payload
 	return ext, nil
@@ -176,7 +179,7 @@ func needsExtensionDefaults(cfg *Config, extensionName string) bool {
 	return false
 }
 
-func mergeExtensionDefaults(cfg *Config, extensionName string, ext extensionFile) {
+func mergeExtensionDefaults(cfg *Config, extensionName string, ext extensionFile) error {
 	defaults := handlerFromExtension(ext)
 	for name, h := range cfg.Handlers {
 		if h.Type != "native" || h.Extension != extensionName {
@@ -207,8 +210,12 @@ func mergeExtensionDefaults(cfg *Config, extensionName string, ext extensionFile
 		if h.OnTimeout == "" {
 			h.OnTimeout = defaults.OnTimeout
 		}
+		if err := normalizeHandlerConfig(name, &h); err != nil {
+			return err
+		}
 		cfg.Handlers[name] = h
 	}
+	return nil
 }
 
 func handlerFromExtension(ext extensionFile) HandlerConfig {
@@ -217,6 +224,7 @@ func handlerFromExtension(ext extensionFile) HandlerConfig {
 		Extension:    ext.Name,
 		Entrypoint:   ext.Entrypoint,
 		Kind:         ext.Kind,
+		Events:       append([]string(nil), ext.Events...),
 		HitchEvents:  append([]string(nil), ext.HitchEvents...),
 		SourceEvents: append([]SourceEventFilter(nil), ext.SourceEvents...),
 		Payload:      ext.Payload,

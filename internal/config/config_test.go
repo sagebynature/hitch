@@ -512,6 +512,46 @@ timeout_ms = 500
 	}
 }
 
+func TestLoadWithExtensionDirMergesReferencedNativeExtensionHitchEventsAlias(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "audit_logger")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "audit_logger"
+entrypoint = "handler:handle"
+kind = "observer"
+hitch_events = ["tool.completed"]
+payload = "hitch"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	text := baseConfig + `
+[handlers.audit_native]
+type = "native"
+extension = "audit_logger"
+`
+	if err := os.WriteFile(configPath, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadWithExtensionDir(configPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := cfg.Handlers["audit_native"]
+	if len(h.HitchEvents) != 1 || h.HitchEvents[0] != "tool.completed" {
+		t.Fatalf("hitch_events not inherited: %#v", h.HitchEvents)
+	}
+	if len(h.Events) != 1 || h.Events[0] != "tool.completed" {
+		t.Fatalf("events alias not backfilled: %#v", h.Events)
+	}
+}
+
 func TestLoadWithExtensionDirInfersSameNameNativeExtensionDefaults(t *testing.T) {
 	dir := t.TempDir()
 	ext := filepath.Join(dir, "audit_logger")
@@ -657,6 +697,9 @@ on_timeout = "fail_open"
 	h := cfg.Handlers["audit_logger"]
 	if len(h.HitchEvents) != 1 || h.HitchEvents[0] != "tool.completed" {
 		t.Fatalf("hitch_events = %#v, want events alias value", h.HitchEvents)
+	}
+	if len(h.Events) != 1 || h.Events[0] != "tool.completed" {
+		t.Fatalf("events = %#v, want extension events value", h.Events)
 	}
 }
 

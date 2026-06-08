@@ -164,6 +164,26 @@ func LoadWithoutExtensions(path string) (Config, error) {
 	return loadFile(path, true)
 }
 
+func LoadServerConfig(path string) (ServerConfig, error) {
+	path = ExpandHome(path)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ServerConfig{}, err
+	}
+	var c Config
+	md, err := toml.Decode(string(b), &c)
+	if err != nil {
+		return ServerConfig{}, err
+	}
+	if undecoded := md.Undecoded(); len(undecoded) != 0 {
+		return ServerConfig{}, fmt.Errorf("unknown config keys: %v", undecoded)
+	}
+	if err := validateServerConfig(c.Server); err != nil {
+		return ServerConfig{}, err
+	}
+	return c.Server, nil
+}
+
 func loadFile(path string, validate bool) (Config, error) {
 	path = ExpandHome(path)
 	baseDir := filepath.Dir(path)
@@ -311,14 +331,8 @@ func stringMultisetsEqual(a, b []string) bool {
 }
 
 func (c Config) Validate() error {
-	if c.Server.Host == "" {
-		return errors.New("server.host is required")
-	}
-	if c.Server.Port <= 0 || c.Server.Port > 65535 {
-		return fmt.Errorf("server.port out of range: %d", c.Server.Port)
-	}
-	if c.Server.MaxRequestBytes <= 0 {
-		return errors.New("server.max_request_bytes must be positive")
+	if err := validateServerConfig(c.Server); err != nil {
+		return err
 	}
 	if c.Log.Level == "" {
 		return errors.New("log.level is required")
@@ -440,6 +454,19 @@ func (c Config) Validate() error {
 		if err := validatePolicy(name, "on_timeout", h.OnTimeout); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func validateServerConfig(server ServerConfig) error {
+	if server.Host == "" {
+		return errors.New("server.host is required")
+	}
+	if server.Port <= 0 || server.Port > 65535 {
+		return fmt.Errorf("server.port out of range: %d", server.Port)
+	}
+	if server.MaxRequestBytes <= 0 {
+		return errors.New("server.max_request_bytes must be positive")
 	}
 	return nil
 }
