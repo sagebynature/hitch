@@ -662,7 +662,7 @@ func waitInspectionWithHandlers(t *testing.T, ctx context.Context, st *store.Sto
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		inspection := onlyInspection(t, ctx, st, eventType)
-		if len(inspection.HandlerInvocations) >= handlers {
+		if completedHandlerCount(inspection.HandlerInvocations) >= handlers {
 			return inspection
 		}
 		if time.Now().After(deadline) {
@@ -680,7 +680,7 @@ func waitInspectionByIDWithHandlers(t *testing.T, ctx context.Context, st *store
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(inspection.HandlerInvocations) >= handlers {
+		if completedHandlerCount(inspection.HandlerInvocations) >= handlers {
 			return inspection
 		}
 		if time.Now().After(deadline) {
@@ -688,4 +688,14 @@ func waitInspectionByIDWithHandlers(t *testing.T, ctx context.Context, st *store
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+func completedHandlerCount(invocations []store.HandlerInvocation) int {
+	count := 0
+	for _, inv := range invocations {
+		if inv.Status != protocol.StatusReserved {
+			count++
+		}
+	}
+	return count
 }
