@@ -414,6 +414,37 @@ timeout_ms = 1000
 	}
 }
 
+func TestLoadWithExtensionDirMainConfigWinsOverBrokenExtension(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "audit")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "audit"
+kind = "observer"
+hitch_events = ["tool.completed"]
+timeout_ms = 1000
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadWithExtensionDir(configPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := cfg.Handlers["audit"]
+	if h.Type != "shell" {
+		t.Fatalf("handler type = %q, want shell", h.Type)
+	}
+	if got, want := h.Command, []string{"hitch-handler-audit"}; len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("handler command = %#v, want %#v", got, want)
+	}
+}
+
 func TestDefaultConfigTOMLMatchesEmbeddedConfigFile(t *testing.T) {
 	b, err := os.ReadFile("default.config.toml")
 	if err != nil {

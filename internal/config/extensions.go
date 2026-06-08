@@ -56,6 +56,9 @@ func mergeExtensions(cfg *Config, root string) error {
 			continue
 		}
 		name := entry.Name()
+		if _, exists := cfg.Handlers[name]; exists {
+			continue
+		}
 		path := filepath.Join(root, name, "config.toml")
 		b, err := os.ReadFile(path)
 		if errors.Is(err, os.ErrNotExist) {
