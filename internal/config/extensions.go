@@ -45,14 +45,14 @@ func mergeExtensions(cfg *Config, root string) error {
 		return nil
 	}
 	root = ExpandHome(root)
+	resolvable := map[string]struct{}{}
 	entries, err := os.ReadDir(root)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return validateNativeExtensionReferences(cfg, resolvable)
 	}
 	if err != nil {
 		return err
 	}
-	resolvable := map[string]struct{}{}
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -155,7 +155,7 @@ func validateNativeExtensionReferences(cfg *Config, resolvable map[string]struct
 
 func referencesExtension(cfg *Config, extensionName string) bool {
 	for _, h := range cfg.Handlers {
-		if h.Extension == extensionName {
+		if h.Type == "native" && h.Extension == extensionName {
 			return true
 		}
 	}
@@ -164,7 +164,7 @@ func referencesExtension(cfg *Config, extensionName string) bool {
 
 func needsExtensionDefaults(cfg *Config, extensionName string) bool {
 	for _, h := range cfg.Handlers {
-		if h.Extension != extensionName {
+		if h.Type != "native" || h.Extension != extensionName {
 			continue
 		}
 		if h.Entrypoint == "" || h.Kind == "" || len(h.HitchEvents) == 0 ||
@@ -179,7 +179,7 @@ func needsExtensionDefaults(cfg *Config, extensionName string) bool {
 func mergeExtensionDefaults(cfg *Config, extensionName string, ext extensionFile) {
 	defaults := handlerFromExtension(ext)
 	for name, h := range cfg.Handlers {
-		if h.Extension != extensionName {
+		if h.Type != "native" || h.Extension != extensionName {
 			continue
 		}
 		if h.Entrypoint == "" {

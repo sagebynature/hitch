@@ -158,7 +158,7 @@ func DefaultURL() string {
 	if v := os.Getenv("HITCH_URL"); v != "" {
 		return v
 	}
-	cfg, err := config.Load(config.DefaultPath)
+	cfg, err := config.LoadWithoutExtensions(config.DefaultPath)
 	if err == nil && cfg.Server.Host != "" && cfg.Server.Port != 0 {
 		return fmt.Sprintf("http://%s:%d", cfg.Server.Host, cfg.Server.Port)
 	}

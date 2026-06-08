@@ -160,6 +160,10 @@ func Load(path string) (Config, error) {
 	return LoadWithExtensionDir(path, DefaultExtensionDir())
 }
 
+func LoadWithoutExtensions(path string) (Config, error) {
+	return loadFile(path, true)
+}
+
 func loadFile(path string, validate bool) (Config, error) {
 	path = ExpandHome(path)
 	baseDir := filepath.Dir(path)
@@ -277,6 +281,9 @@ func normalizeHandlerConfig(name string, h *HandlerConfig) error {
 	}
 	if len(h.HitchEvents) == 0 {
 		h.HitchEvents = append([]string(nil), h.Events...)
+	}
+	if len(h.Events) == 0 {
+		h.Events = append([]string(nil), h.HitchEvents...)
 	}
 	return nil
 }

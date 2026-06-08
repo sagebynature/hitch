@@ -125,6 +125,23 @@ func TestParseHandlerConfigKeepsEventsAlias(t *testing.T) {
 	}
 }
 
+func TestParseHandlerConfigKeepsHitchEventsAlias(t *testing.T) {
+	text := baseConfig + `
+[handlers.hitch_only]
+command = ["x"]
+hitch_events = ["tool.completed"]
+kind = "observer"
+timeout_ms = 1
+`
+	cfg, err := Parse([]byte(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Handlers["hitch_only"].Events; len(got) != 1 || got[0] != "tool.completed" {
+		t.Fatalf("hitch_events alias was not copied to events: %#v", got)
+	}
+}
+
 func TestParseAcceptsReorderedEquivalentEventsAliases(t *testing.T) {
 	cfgText := baseConfig + `
 [handlers.reordered]
@@ -584,6 +601,33 @@ on_timeout = "fail_open"
 	}
 }
 
+func TestLoadWithExtensionDirRejectsUnresolvedNativeExtensionReferenceWhenRootMissing(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	text := baseConfig + `
+[handlers.audit_native]
+type = "native"
+extension = "audit_loger"
+entrypoint = "main:handle"
+hitch_events = ["tool.completed"]
+source_events = [{ harness = "codex", source_event_type = "turn.completed" }]
+kind = "observer"
+payload = "hitch"
+timeout_ms = 500
+on_error = "fail_open"
+on_timeout = "fail_open"
+`
+	if err := os.WriteFile(configPath, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadWithExtensionDir(configPath, filepath.Join(t.TempDir(), "missing"))
+	if err == nil {
+		t.Fatal("unresolved native extension reference accepted with missing extension root")
+	}
+	if !strings.Contains(err.Error(), `unresolved extension "audit_loger"`) {
+		t.Fatalf("error = %v, want unresolved extension reference", err)
+	}
+}
+
 func TestLoadWithExtensionDirAcceptsExtensionEventsAlias(t *testing.T) {
 	dir := t.TempDir()
 	ext := filepath.Join(dir, "audit_logger")
@@ -613,6 +657,53 @@ on_timeout = "fail_open"
 	h := cfg.Handlers["audit_logger"]
 	if len(h.HitchEvents) != 1 || h.HitchEvents[0] != "tool.completed" {
 		t.Fatalf("hitch_events = %#v, want events alias value", h.HitchEvents)
+	}
+}
+
+func TestLoadWithExtensionDirIgnoresShellExtensionReference(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "audit_logger")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "audit_logger"
+entrypoint = "handler:handle"
+kind = "observer"
+hitch_events = ["tool.completed"]
+payload = "source"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	text := baseConfig + `
+[handlers.shell_ref]
+type = "shell"
+extension = "audit_logger"
+command = ["x"]
+hitch_events = ["tool.completed"]
+kind = "observer"
+payload = "hitch"
+timeout_ms = 500
+on_error = "fail_open"
+on_timeout = "fail_open"
+`
+	if err := os.WriteFile(configPath, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadWithExtensionDir(configPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shell := cfg.Handlers["shell_ref"]
+	if shell.Entrypoint != "" || shell.Payload != "hitch" {
+		t.Fatalf("shell handler received extension defaults: %#v", shell)
+	}
+	if _, ok := cfg.Handlers["audit_logger"]; !ok {
+		t.Fatal("shell extension reference suppressed native extension discovery")
 	}
 }
 

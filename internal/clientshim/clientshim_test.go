@@ -210,3 +210,36 @@ func TestDefaultURLUsesConfigWhenEnvAbsent(t *testing.T) {
 		t.Fatalf("config default URL was not used: %s", got)
 	}
 }
+
+func TestDefaultURLIgnoresInvalidExtensions(t *testing.T) {
+	t.Setenv("HITCH_URL", "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".config", "hitch", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := strings.Replace(config.DefaultConfigTOML, "port = 8799", "port = 9876", 1)
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	extDir := filepath.Join(home, ".config", "hitch", "extensions", "broken")
+	if err := os.MkdirAll(extDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(extDir, "config.toml"), []byte(`
+name = "broken"
+entrypoint = "handler:handle"
+kind = "observer"
+hitch_events = ["tool.completed"]
+payload = "hitch"
+timeout_ms = 1000
+surprise = true
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := DefaultURL(); got != "http://127.0.0.1:9876" {
+		t.Fatalf("config default URL was not used: %s", got)
+	}
+}
