@@ -11,7 +11,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 5
+const schemaVersion = 6
 
 var migrations = []string{`
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -52,8 +52,10 @@ CREATE TABLE IF NOT EXISTS normalized_events (
 CREATE TABLE IF NOT EXISTS handler_invocations (
   id TEXT PRIMARY KEY,
   normalized_event_id TEXT NOT NULL REFERENCES normalized_events(id),
+  inbound_event_id TEXT NOT NULL REFERENCES inbound_events(id),
   handler_name TEXT NOT NULL,
   kind TEXT NOT NULL,
+  hook_key TEXT NOT NULL,
   started_at TEXT NOT NULL,
   completed_at TEXT,
   status TEXT NOT NULL,
@@ -65,6 +67,9 @@ CREATE TABLE IF NOT EXISTS handler_invocations (
   replay_source_id TEXT,
   schema_version INTEGER NOT NULL
 );
+`, `
+CREATE UNIQUE INDEX IF NOT EXISTS idx_handler_invocations_dedupe
+ON handler_invocations(inbound_event_id, handler_name, hook_key);
 `, `
 CREATE TABLE IF NOT EXISTS native_responses (
   id TEXT PRIMARY KEY,
@@ -158,9 +163,11 @@ type NormalizedEvent struct {
 
 type HandlerInvocation struct {
 	ID                string                 `json:"id"`
+	InboundEventID    string                 `json:"inbound_event_id"`
 	NormalizedEventID string                 `json:"normalized_event_id"`
 	HandlerName       string                 `json:"handler_name"`
 	Kind              string                 `json:"kind"`
+	HookKey           string                 `json:"hook_key"`
 	StartedAt         time.Time              `json:"started_at"`
 	CompletedAt       time.Time              `json:"completed_at,omitempty"`
 	Status            protocol.HandlerStatus `json:"status"`
@@ -170,6 +177,16 @@ type HandlerInvocation struct {
 	Decision          protocol.RawJSON       `json:"decision,omitempty"`
 	Error             string                 `json:"error,omitempty"`
 	ReplaySourceID    string                 `json:"replay_source_id,omitempty"`
+}
+
+type HandlerInvocationReservation struct {
+	ID                string
+	InboundEventID    string
+	NormalizedEventID string
+	HandlerName       string
+	Kind              string
+	HookKey           string
+	StartedAt         time.Time
 }
 
 type NativeResponse struct {
@@ -206,8 +223,57 @@ func (s *Store) InsertHandlerInvocation(ctx context.Context, h HandlerInvocation
 	if !h.CompletedAt.IsZero() {
 		completed = h.CompletedAt.Format(time.RFC3339Nano)
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO handler_invocations(id, normalized_event_id, handler_name, kind, started_at, completed_at, status, stdout, stderr, output_json, decision_json, error, replay_source_id, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, h.ID, h.NormalizedEventID, h.HandlerName, h.Kind, h.StartedAt.Format(time.RFC3339Nano), completed, h.Status, h.Stdout, h.Stderr, string(h.Output), string(h.Decision), h.Error, h.ReplaySourceID, schemaVersion)
+	if h.InboundEventID == "" || h.HookKey == "" {
+		var err error
+		h, err = s.withLegacyInvocationDedupeFields(ctx, h)
+		if err != nil {
+			return err
+		}
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO handler_invocations(id, inbound_event_id, normalized_event_id, handler_name, kind, hook_key, started_at, completed_at, status, stdout, stderr, output_json, decision_json, error, replay_source_id, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, h.ID, h.InboundEventID, h.NormalizedEventID, h.HandlerName, h.Kind, h.HookKey, h.StartedAt.Format(time.RFC3339Nano), completed, h.Status, h.Stdout, h.Stderr, string(h.Output), string(h.Decision), h.Error, h.ReplaySourceID, schemaVersion)
 	return err
+}
+
+func (s *Store) ReserveHandlerInvocation(ctx context.Context, r HandlerInvocationReservation) (bool, error) {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO handler_invocations(id, inbound_event_id, normalized_event_id, handler_name, kind, hook_key, started_at, status, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, r.ID, r.InboundEventID, r.NormalizedEventID, r.HandlerName, r.Kind, r.HookKey, r.StartedAt.Format(time.RFC3339Nano), protocol.StatusSkipped, schemaVersion)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *Store) CompleteHandlerInvocation(ctx context.Context, h HandlerInvocation) error {
+	completed := ""
+	if !h.CompletedAt.IsZero() {
+		completed = h.CompletedAt.Format(time.RFC3339Nano)
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE handler_invocations SET completed_at = ?, status = ?, stdout = ?, stderr = ?, output_json = ?, decision_json = ?, error = ?, replay_source_id = ? WHERE id = ?`, completed, h.Status, h.Stdout, h.Stderr, string(h.Output), string(h.Decision), h.Error, h.ReplaySourceID, h.ID)
+	if err != nil {
+		return err
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if updated == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (s *Store) withLegacyInvocationDedupeFields(ctx context.Context, h HandlerInvocation) (HandlerInvocation, error) {
+	if h.InboundEventID == "" {
+		if err := s.db.QueryRowContext(ctx, `SELECT inbound_event_id FROM normalized_events WHERE id = ?`, h.NormalizedEventID).Scan(&h.InboundEventID); err != nil {
+			return HandlerInvocation{}, err
+		}
+	}
+	if h.HookKey == "" {
+		h.HookKey = strings.Join([]string{h.HandlerName, h.Kind, h.NormalizedEventID, h.ID}, ":")
+	}
+	return h, nil
 }
 
 func (s *Store) InsertNativeResponse(ctx context.Context, r NativeResponse) error {
@@ -262,32 +328,45 @@ WHERE n.id = ?`, id).Scan(
 		return EventInspection{}, err
 	}
 
-	rows, err := s.db.QueryContext(ctx, `SELECT id, normalized_event_id, handler_name, kind, started_at, completed_at, status, stdout, stderr, output_json, decision_json, error, replay_source_id FROM handler_invocations WHERE normalized_event_id = ? ORDER BY started_at, id`, id)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, inbound_event_id, normalized_event_id, handler_name, kind, hook_key, started_at, completed_at, status, stdout, stderr, output_json, decision_json, error, replay_source_id FROM handler_invocations WHERE normalized_event_id = ? ORDER BY started_at, id`, id)
 	if err != nil {
 		return EventInspection{}, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var h HandlerInvocation
-		var startedAt, completedAt, outputRaw, decisionRaw string
-		if err := rows.Scan(&h.ID, &h.NormalizedEventID, &h.HandlerName, &h.Kind, &startedAt, &completedAt, &h.Status, &h.Stdout, &h.Stderr, &outputRaw, &decisionRaw, &h.Error, &h.ReplaySourceID); err != nil {
+		var startedAt string
+		var completedAt, stdout, stderr, outputRaw, decisionRaw, handlerError, replaySourceID sql.NullString
+		if err := rows.Scan(&h.ID, &h.InboundEventID, &h.NormalizedEventID, &h.HandlerName, &h.Kind, &h.HookKey, &startedAt, &completedAt, &h.Status, &stdout, &stderr, &outputRaw, &decisionRaw, &handlerError, &replaySourceID); err != nil {
 			return EventInspection{}, err
 		}
 		h.StartedAt, err = time.Parse(time.RFC3339Nano, startedAt)
 		if err != nil {
 			return EventInspection{}, err
 		}
-		if completedAt != "" {
-			h.CompletedAt, err = time.Parse(time.RFC3339Nano, completedAt)
+		if completedAt.Valid && completedAt.String != "" {
+			h.CompletedAt, err = time.Parse(time.RFC3339Nano, completedAt.String)
 			if err != nil {
 				return EventInspection{}, err
 			}
 		}
-		if outputRaw != "" {
-			h.Output = protocol.RawJSON(outputRaw)
+		if stdout.Valid {
+			h.Stdout = stdout.String
 		}
-		if decisionRaw != "" {
-			h.Decision = protocol.RawJSON(decisionRaw)
+		if stderr.Valid {
+			h.Stderr = stderr.String
+		}
+		if outputRaw.Valid && outputRaw.String != "" {
+			h.Output = protocol.RawJSON(outputRaw.String)
+		}
+		if decisionRaw.Valid && decisionRaw.String != "" {
+			h.Decision = protocol.RawJSON(decisionRaw.String)
+		}
+		if handlerError.Valid {
+			h.Error = handlerError.String
+		}
+		if replaySourceID.Valid {
+			h.ReplaySourceID = replaySourceID.String
 		}
 		out.HandlerInvocations = append(out.HandlerInvocations, h)
 	}

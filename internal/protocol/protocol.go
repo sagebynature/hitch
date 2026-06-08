@@ -83,10 +83,11 @@ const (
 	StatusOK      HandlerStatus = "ok"
 	StatusError   HandlerStatus = "error"
 	StatusTimeout HandlerStatus = "timeout"
+	StatusSkipped HandlerStatus = "skipped"
 )
 
 var validStatuses = map[HandlerStatus]struct{}{
-	StatusOK: {}, StatusError: {}, StatusTimeout: {},
+	StatusOK: {}, StatusError: {}, StatusTimeout: {}, StatusSkipped: {},
 }
 
 type RawJSON = json.RawMessage
@@ -105,6 +106,34 @@ type EventEnvelope struct {
 	Model           string    `json:"model,omitempty"`
 	TranscriptPath  string    `json:"transcript_path,omitempty"`
 	Payload         RawJSON   `json:"payload"`
+}
+
+type InvocationEvent struct {
+	HitchVersion    string    `json:"hitch_version"`
+	EventID         string    `json:"event_id"`
+	ReceivedAt      time.Time `json:"received_at"`
+	Harness         Harness   `json:"harness"`
+	SourceEventType string    `json:"source_event_type"`
+	SourcePayload   RawJSON   `json:"source_payload"`
+	HitchEventType  EventType `json:"hitch_event_type"`
+	SessionID       string    `json:"session_id,omitempty"`
+	TurnID          string    `json:"turn_id,omitempty"`
+	CWD             string    `json:"cwd,omitempty"`
+	Model           string    `json:"model,omitempty"`
+	TranscriptPath  string    `json:"transcript_path,omitempty"`
+	Payload         RawJSON   `json:"payload"`
+}
+
+type InvocationContext struct {
+	HitchVersion      string          `json:"hitch_version"`
+	HandlerName       string          `json:"handler_name"`
+	HandlerType       string          `json:"handler_type"`
+	Kind              string          `json:"kind"`
+	InboundEventID    string          `json:"inbound_event_id"`
+	NormalizedEventID string          `json:"normalized_event_id"`
+	PayloadKind       string          `json:"payload_kind"`
+	Payload           RawJSON         `json:"payload"`
+	Event             InvocationEvent `json:"event"`
 }
 
 type Decision struct {

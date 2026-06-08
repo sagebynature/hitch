@@ -52,11 +52,51 @@ func TestStoreRoundTrip(t *testing.T) {
 	if inspection.Inbound.SourceEventType != "PreToolUse" || string(inspection.Inbound.SourcePayload) == "" || inspection.Inbound.HitchClientVersion != "test-client" {
 		t.Fatalf("wrong source inspection fields: %#v", inspection.Inbound)
 	}
-	if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].ID != "handler_1" {
+	if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].ID != "handler_1" || inspection.HandlerInvocations[0].InboundEventID != "in_1" || inspection.HandlerInvocations[0].HookKey == "" {
 		t.Fatalf("wrong handler invocations: %#v", inspection.HandlerInvocations)
 	}
 	if len(inspection.NativeResponses) != 1 || inspection.NativeResponses[0].ID != "resp_1" {
 		t.Fatalf("wrong native responses: %#v", inspection.NativeResponses)
+	}
+}
+
+func TestReserveHandlerInvocationPreventsDuplicateHookExecution(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	now := time.Now().UTC()
+	env := protocol.EventEnvelope{HitchVersion: protocol.Version, EventID: "evt_1", ReceivedAt: now, Harness: protocol.HarnessCodex, SourceEventType: "PostToolUse", SourcePayload: protocol.Raw(map[string]interface{}{"x": 1}), HitchEventType: protocol.EventToolCompleted, Payload: protocol.Raw(map[string]interface{}{"tool": "bash"})}
+	if err := s.InsertInbound(ctx, InboundEvent{ID: "in_1", ReceivedAt: now, Harness: env.Harness, SourceEventType: env.SourceEventType, SourcePayload: env.SourcePayload, HitchClientVersion: "test-client"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InsertNormalized(ctx, NormalizedEvent{ID: "norm_1", InboundEventID: "in_1", HitchEventType: env.HitchEventType, Envelope: env, MappingVersion: "test"}); err != nil {
+		t.Fatal(err)
+	}
+
+	reservation := HandlerInvocationReservation{
+		ID:                "handler_1",
+		InboundEventID:    "in_1",
+		NormalizedEventID: "norm_1",
+		HandlerName:       "audit",
+		Kind:              "observer",
+		HookKey:           "codex:PostToolUse:tool.completed:observer",
+		StartedAt:         now,
+	}
+	reserved, err := s.ReserveHandlerInvocation(ctx, reservation)
+	if err != nil || !reserved {
+		t.Fatalf("first reservation reserved=%v err=%v", reserved, err)
+	}
+	reservation.ID = "handler_2"
+	reserved, err = s.ReserveHandlerInvocation(ctx, reservation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reserved {
+		t.Fatal("duplicate reservation succeeded")
 	}
 }
 
@@ -123,6 +163,10 @@ func TestStoreSchemaMirrorsCurrentEventModels(t *testing.T) {
 	assertColumns(t, s, "normalized_events",
 		[]string{"id", "hitch_version", "event_id", "received_at", "harness", "source_event_type", "source_payload", "hitch_event_type", "session_id", "turn_id", "cwd", "model", "transcript_path", "payload", "inbound_event_id", "mapping_version", "schema_version"},
 		[]string{"harness_version", "normalized_payload_json"},
+	)
+	assertColumns(t, s, "handler_invocations",
+		[]string{"id", "inbound_event_id", "normalized_event_id", "handler_name", "kind", "hook_key", "started_at", "completed_at", "status", "stdout", "stderr", "output_json", "decision_json", "error", "replay_source_id", "schema_version"},
+		[]string{"handler_type", "payload_json"},
 	)
 	assertColumns(t, s, "native_responses",
 		[]string{"id", "normalized_event_id", "response_json", "emitted_at", "schema_version"},
