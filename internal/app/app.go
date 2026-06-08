@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/sagebynature/hitch/internal/api"
@@ -49,6 +50,16 @@ func NewServerBundle(ctx context.Context, opts ServeOptions) (*ServerBundle, err
 	logger, logCloser, err := logging.New(cfg.Log)
 	if err != nil {
 		return nil, err
+	}
+	var activeExtensions []string
+	for _, h := range cfg.Handlers {
+		if h.Type == "native" && h.Extension != "" {
+			activeExtensions = append(activeExtensions, h.Extension)
+		}
+	}
+	if len(activeExtensions) > 0 {
+		sort.Strings(activeExtensions)
+		logger.Info("active extensions loaded", "extensions", activeExtensions)
 	}
 	dbPath := config.ExpandHome(cfg.Audit.SQLite.Path)
 	if err := ensureDir(filepath.Dir(dbPath)); err != nil {
