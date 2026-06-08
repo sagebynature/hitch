@@ -89,13 +89,14 @@ func mergeExtensions(cfg *Config, root string) error {
 			return err
 		}
 		if referenced {
-			if err := mergeExtensionDefaults(cfg, name, ext); err != nil {
+			if err := mergeExtensionDefaults(cfg, root, name, ext); err != nil {
 				return err
 			}
 			continue
 		}
 
 		h := handlerFromExtension(ext)
+		h.WorkingDir = filepath.Join(root, name)
 		if err := normalizeHandlerConfig(ext.Name, &h); err != nil {
 			return err
 		}
@@ -181,11 +182,15 @@ func needsExtensionDefaults(cfg *Config, extensionName string) bool {
 	return false
 }
 
-func mergeExtensionDefaults(cfg *Config, extensionName string, ext extensionFile) error {
+func mergeExtensionDefaults(cfg *Config, root, extensionName string, ext extensionFile) error {
 	defaults := handlerFromExtension(ext)
+	defaults.WorkingDir = filepath.Join(root, extensionName)
 	for name, h := range cfg.Handlers {
 		if h.Type != "native" || h.Extension != extensionName {
 			continue
+		}
+		if h.WorkingDir == "" {
+			h.WorkingDir = defaults.WorkingDir
 		}
 		if h.Entrypoint == "" {
 			h.Entrypoint = defaults.Entrypoint

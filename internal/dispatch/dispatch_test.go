@@ -69,8 +69,16 @@ func TestDispatchRunsHandlerInWorkingDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(string(b)) != dir {
-		t.Fatalf("handler ran in %q, want %q", strings.TrimSpace(string(b)), dir)
+	gotDir, err := filepath.EvalSymlinks(strings.TrimSpace(string(b)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotDir != wantDir {
+		t.Fatalf("handler ran in %q, want %q", gotDir, wantDir)
 	}
 }
 
@@ -419,5 +427,41 @@ echo '{"status":"ok","decision":{"behavior":"allow"}}'`)
 	}
 	if string(invCtx.Event.SourcePayload) != `{"native":true,"nested":{"x":1}}` || string(invCtx.Event.Payload) != `{"tool":{"name":"Bash"}}` {
 		t.Fatalf("event did not include both payloads: %#v", invCtx.Event)
+	}
+}
+
+func TestDispatchRunsNativeExtensionWithContext(t *testing.T) {
+	dir := t.TempDir()
+	handler := `
+from hitch_sdk import HandlerResult
+
+def handle(context):
+    assert context.event.source_event_type == "PreToolUse"
+    assert context.event.source_payload["native"] == "source"
+    assert context.event.payload["normalized"] == "hitch"
+    assert context.source_payload["native"] == "source"
+    return HandlerResult.allow()
+`
+	if err := os.WriteFile(filepath.Join(dir, "handler.py"), []byte(handler), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := testEnv()
+	env.SourcePayload = protocol.Raw(map[string]interface{}{"native": "source"})
+	env.Payload = protocol.Raw(map[string]interface{}{"normalized": "hitch"})
+	r := NewRunner(map[string]config.HandlerConfig{
+		"native": {
+			Type:        "native",
+			Extension:   "native",
+			Entrypoint:  "handler:handle",
+			WorkingDir:  dir,
+			HitchEvents: []string{"*"},
+			Kind:        "control",
+			Payload:     "hitch",
+			TimeoutMS:   fastHandlerTimeoutMS,
+		},
+	})
+	got := r.Dispatch(context.Background(), Request{Envelope: env, Kind: "control", InboundEventID: "in_1", NormalizedEventID: "norm_1", TotalDeadline: 5 * time.Second})
+	if got.Aggregate.Decision.Behavior != protocol.BehaviorAllow {
+		t.Fatalf("native handler did not allow: %#v", got)
 	}
 }

@@ -7,7 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -116,13 +119,20 @@ func runHandler(parent context.Context, log *slog.Logger, name string, cfg confi
 		inv.CompletedAt = time.Now().UTC()
 		return inv
 	}
-	args := handlerArgs(cfg.Command, string(primaryPayload))
-	cmd := exec.CommandContext(ctx, cfg.Command[0], args...)
+	var cmd *exec.Cmd
+	switch cfg.Type {
+	case "native":
+		cmd = exec.CommandContext(ctx, "python3", "-c", "import hitch_sdk, os; hitch_sdk.run(os.environ['HITCH_ENTRYPOINT'])")
+		cmd.Env = append(cmd.Environ(), "HITCH_CHILD=1", "HITCH_ENTRYPOINT="+cfg.Entrypoint, "PYTHONPATH="+pythonPath(cfg.WorkingDir))
+	default:
+		args := handlerArgs(cfg.Command, string(primaryPayload))
+		cmd = exec.CommandContext(ctx, cfg.Command[0], args...)
+		cmd.Env = append(cmd.Environ(), "HITCH_CHILD=1")
+	}
 	if cfg.WorkingDir != "" {
 		cmd.Dir = cfg.WorkingDir
 	}
 	cmd.Stdin = bytes.NewReader(invCtx)
-	cmd.Env = append(cmd.Environ(), "HITCH_CHILD=1")
 	logHandlerInvocationStarted(log, inv, env, cfg.TimeoutMS)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -174,6 +184,22 @@ func runHandler(parent context.Context, log *slog.Logger, name string, cfg confi
 	inv.Output = protocol.Raw(hr)
 	inv.Decision = protocol.Raw(hr.Decision)
 	return inv
+}
+
+func pythonPath(extensionDir string) string {
+	parts := []string{filepath.Join(repoRoot(), "sdk", "python")}
+	if extensionDir != "" {
+		parts = append(parts, extensionDir)
+	}
+	return strings.Join(parts, string(os.PathListSeparator))
+}
+
+func repoRoot() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return "."
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }
 
 func handlerArgs(command []string, selectedPayload string) []string {
