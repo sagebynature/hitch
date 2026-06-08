@@ -211,6 +211,38 @@ func TestDefaultURLUsesConfigWhenEnvAbsent(t *testing.T) {
 	}
 }
 
+func TestDefaultURLUsesServerConfigWithUnrelatedInvalidHandlerKey(t *testing.T) {
+	t.Setenv("HITCH_URL", "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".config", "hitch", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := `
+[server]
+host = "127.0.0.1"
+port = 9876
+max_request_bytes = 1048576
+
+[handlers.invalid]
+not_a_handler_field = true
+`
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	server, err := config.LoadServerConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if server.Port != 9876 {
+		t.Fatalf("server port = %d, want 9876", server.Port)
+	}
+	if got := DefaultURL(); got != "http://127.0.0.1:9876" {
+		t.Fatalf("config default URL was not used: %s", got)
+	}
+}
+
 func TestDefaultURLIgnoresInvalidExtensions(t *testing.T) {
 	t.Setenv("HITCH_URL", "")
 	home := t.TempDir()

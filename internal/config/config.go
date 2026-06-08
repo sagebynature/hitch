@@ -116,7 +116,9 @@ type HandlerConfig struct {
 	TimeoutMS    int                 `toml:"timeout_ms"`
 	OnError      string              `toml:"on_error"`
 	OnTimeout    string              `toml:"on_timeout"`
-	payloadSet      bool
+	onErrorSet     bool
+	onTimeoutSet   bool
+	payloadSet     bool
 	sourceEventsSet bool
 }
 
@@ -170,18 +172,22 @@ func LoadServerConfig(path string) (ServerConfig, error) {
 	if err != nil {
 		return ServerConfig{}, err
 	}
-	var c Config
-	md, err := toml.Decode(string(b), &c)
+	var serverOnly struct {
+		Server ServerConfig `toml:"server"`
+	}
+	md, err := toml.Decode(string(b), &serverOnly)
 	if err != nil {
 		return ServerConfig{}, err
 	}
-	if undecoded := md.Undecoded(); len(undecoded) != 0 {
-		return ServerConfig{}, fmt.Errorf("unknown config keys: %v", undecoded)
+	for _, key := range md.Undecoded() {
+		if len(key) > 0 && key[0] == "server" {
+			return ServerConfig{}, fmt.Errorf("unknown config keys: %v", []toml.Key{key})
+		}
 	}
-	if err := validateServerConfig(c.Server); err != nil {
+	if err := validateServerConfig(serverOnly.Server); err != nil {
 		return ServerConfig{}, err
 	}
-	return c.Server, nil
+	return serverOnly.Server, nil
 }
 
 func loadFile(path string, validate bool) (Config, error) {
@@ -221,6 +227,8 @@ func parseConfigBytes(b []byte, validate bool) (Config, error) {
 	}
 	upgradeLegacyDefaultEventMaps(&c)
 	for name, h := range c.Handlers {
+		h.onErrorSet = md.IsDefined("handlers", name, "on_error")
+		h.onTimeoutSet = md.IsDefined("handlers", name, "on_timeout")
 		h.payloadSet = md.IsDefined("handlers", name, "payload")
 		h.sourceEventsSet = md.IsDefined("handlers", name, "source_events")
 		if err := normalizeHandlerConfig(name, &h); err != nil {

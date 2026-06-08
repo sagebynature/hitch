@@ -512,6 +512,48 @@ timeout_ms = 500
 	}
 }
 
+func TestLoadWithExtensionDirPreservesEmptyPolicyOverrides(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "audit_logger")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "audit_logger"
+entrypoint = "handler:handle"
+kind = "observer"
+hitch_events = ["tool.completed"]
+payload = "hitch"
+timeout_ms = 1000
+on_error = "fail_closed"
+on_timeout = "fail_closed"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	text := baseConfig + `
+[handlers.audit_native]
+type = "native"
+extension = "audit_logger"
+on_error = ""
+on_timeout = ""
+`
+	if err := os.WriteFile(configPath, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadWithExtensionDir(configPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := cfg.Handlers["audit_native"]
+	if h.OnError != "" {
+		t.Fatalf("on_error = %q, want explicit empty override", h.OnError)
+	}
+	if h.OnTimeout != "" {
+		t.Fatalf("on_timeout = %q, want explicit empty override", h.OnTimeout)
+	}
+}
+
 func TestLoadWithExtensionDirMergesReferencedNativeExtensionHitchEventsAlias(t *testing.T) {
 	dir := t.TempDir()
 	ext := filepath.Join(dir, "audit_logger")
@@ -1156,6 +1198,26 @@ func TestParseRejectsUnknownKey(t *testing.T) {
 	_, err := Parse([]byte(baseConfig + "\nunknown = true\n"))
 	if err == nil {
 		t.Fatal("unknown key accepted")
+	}
+}
+
+func TestLoadServerConfigRejectsUnknownServerKey(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	text := `
+[server]
+host = "127.0.0.1"
+port = 8799
+max_request_bytes = 1048576
+surprise = true
+
+[handlers.unrelated]
+not_a_handler_field = true
+`
+	if err := os.WriteFile(configPath, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadServerConfig(configPath); err == nil {
+		t.Fatal("unknown server key accepted")
 	}
 }
 

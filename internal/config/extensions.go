@@ -172,7 +172,9 @@ func needsExtensionDefaults(cfg *Config, extensionName string) bool {
 		}
 		if h.Entrypoint == "" || h.Kind == "" || len(h.HitchEvents) == 0 ||
 			(len(h.SourceEvents) == 0 && !h.sourceEventsSet) || !h.payloadSet ||
-			h.TimeoutMS == 0 || h.OnError == "" || h.OnTimeout == "" {
+			h.TimeoutMS == 0 ||
+			(h.OnError == "" && !h.onErrorSet) ||
+			(h.OnTimeout == "" && !h.onTimeoutSet) {
 			return true
 		}
 	}
@@ -204,10 +206,10 @@ func mergeExtensionDefaults(cfg *Config, extensionName string, ext extensionFile
 		if h.TimeoutMS == 0 {
 			h.TimeoutMS = defaults.TimeoutMS
 		}
-		if h.OnError == "" {
+		if h.OnError == "" && !h.onErrorSet {
 			h.OnError = defaults.OnError
 		}
-		if h.OnTimeout == "" {
+		if h.OnTimeout == "" && !h.onTimeoutSet {
 			h.OnTimeout = defaults.OnTimeout
 		}
 		if err := normalizeHandlerConfig(name, &h); err != nil {
