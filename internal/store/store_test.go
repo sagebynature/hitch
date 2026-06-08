@@ -52,8 +52,12 @@ func TestStoreRoundTrip(t *testing.T) {
 	if inspection.Inbound.SourceEventType != "PreToolUse" || string(inspection.Inbound.SourcePayload) == "" || inspection.Inbound.HitchClientVersion != "test-client" {
 		t.Fatalf("wrong source inspection fields: %#v", inspection.Inbound)
 	}
-	if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].ID != "handler_1" || inspection.HandlerInvocations[0].InboundEventID != "in_1" || inspection.HandlerInvocations[0].HookKey == "" {
+	if len(inspection.HandlerInvocations) != 1 || inspection.HandlerInvocations[0].ID != "handler_1" || inspection.HandlerInvocations[0].InboundEventID != "in_1" {
 		t.Fatalf("wrong handler invocations: %#v", inspection.HandlerInvocations)
+	}
+	hookKey := inspection.HandlerInvocations[0].HookKey
+	if hookKey != "legacy:norm_1:h:control" || strings.Contains(hookKey, "handler_1") {
+		t.Fatalf("legacy hook key = %q, want deterministic key without invocation id", hookKey)
 	}
 	if len(inspection.NativeResponses) != 1 || inspection.NativeResponses[0].ID != "resp_1" {
 		t.Fatalf("wrong native responses: %#v", inspection.NativeResponses)
@@ -89,6 +93,17 @@ func TestReserveHandlerInvocationPreventsDuplicateHookExecution(t *testing.T) {
 	reserved, err := s.ReserveHandlerInvocation(ctx, reservation)
 	if err != nil || !reserved {
 		t.Fatalf("first reservation reserved=%v err=%v", reserved, err)
+	}
+	var status protocol.HandlerStatus
+	var completedAt sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT status, completed_at FROM handler_invocations WHERE id = ?`, "handler_1").Scan(&status, &completedAt); err != nil {
+		t.Fatal(err)
+	}
+	if status != protocol.StatusOK {
+		t.Fatalf("reserved status = %q, want %q", status, protocol.StatusOK)
+	}
+	if completedAt.Valid && completedAt.String != "" {
+		t.Fatalf("reserved completed_at = %q, want empty", completedAt.String)
 	}
 	reservation.ID = "handler_2"
 	reserved, err = s.ReserveHandlerInvocation(ctx, reservation)
