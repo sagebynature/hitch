@@ -201,7 +201,7 @@ func shellCommandScriptIndex(command []string) (int, bool) {
 }
 
 func isShellCommandOption(arg string) bool {
-	if len(arg) < 2 || arg[0] != '-' {
+	if len(arg) < 2 || arg[0] != '-' || arg[1] == '-' {
 		return false
 	}
 	for i := 1; i < len(arg); i++ {

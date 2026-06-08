@@ -249,6 +249,24 @@ func TestBashLoginShellCommandPayloadIsPassedAsFirstScriptArg(t *testing.T) {
 	}
 }
 
+func TestIsShellCommandOptionOnlyMatchesShortOptionsWithC(t *testing.T) {
+	tests := []struct {
+		arg  string
+		want bool
+	}{
+		{arg: "-c", want: true},
+		{arg: "-lc", want: true},
+		{arg: "--norc", want: false},
+		{arg: "-l", want: false},
+	}
+
+	for _, tt := range tests {
+		if got := isShellCommandOption(tt.arg); got != tt.want {
+			t.Fatalf("isShellCommandOption(%q) = %t, want %t", tt.arg, got, tt.want)
+		}
+	}
+}
+
 func TestSourcePayloadSelectedForArgvAndContextIncludesEvent(t *testing.T) {
 	dir := t.TempDir()
 	h := script(t, `printf '%s' "$1" > "$CAPTURE_DIR/argv.json"
