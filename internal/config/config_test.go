@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -77,6 +78,111 @@ func TestParseValidConfig(t *testing.T) {
 	}
 	if got := c.Handlers["security_gate"].Kind; got != "control" {
 		t.Fatalf("wrong kind: %s", got)
+	}
+}
+
+func TestParseHandlerConfigSupportsNewRoutingFields(t *testing.T) {
+	text := baseConfig + `
+[handlers.native_audit]
+type = "native"
+extension = "audit_logger"
+hitch_events = ["tool.completed"]
+source_events = [{ harness = "codex", source_event_type = "PostToolUse" }]
+payload = "source"
+kind = "observer"
+timeout_ms = 500
+`
+	cfg, err := Parse([]byte(text))
+	if err != nil {
+		t.Fatalf("valid config rejected: %v", err)
+	}
+	h := cfg.Handlers["native_audit"]
+	if h.Type != "native" || h.Extension != "audit_logger" || h.Payload != "source" {
+		t.Fatalf("new handler fields not parsed: %#v", h)
+	}
+	if len(h.HitchEvents) != 1 || h.HitchEvents[0] != "tool.completed" {
+		t.Fatalf("hitch_events not parsed: %#v", h.HitchEvents)
+	}
+	if len(h.SourceEvents) != 1 || h.SourceEvents[0].Harness != "codex" || h.SourceEvents[0].SourceEventType != "PostToolUse" {
+		t.Fatalf("source_events not parsed: %#v", h.SourceEvents)
+	}
+}
+
+func TestParseHandlerConfigKeepsEventsAlias(t *testing.T) {
+	cfg, err := Parse([]byte(baseConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Handlers["security_gate"].HitchEvents; len(got) != 2 || got[0] != "tool.requested" || got[1] != "tool.permission_requested" {
+		t.Fatalf("events alias was not copied to hitch_events: %#v", got)
+	}
+	if got := cfg.Handlers["security_gate"].Type; got != "shell" {
+		t.Fatalf("default handler type = %q", got)
+	}
+	if got := cfg.Handlers["security_gate"].Payload; got != "hitch" {
+		t.Fatalf("default payload = %q", got)
+	}
+}
+
+func TestParseAcceptsReorderedEquivalentEventsAliases(t *testing.T) {
+	cfgText := baseConfig + `
+[handlers.reordered]
+command = ["x"]
+events = ["tool.requested", "tool.completed"]
+hitch_events = ["tool.completed", "tool.requested"]
+kind = "observer"
+timeout_ms = 1
+`
+	if _, err := Parse([]byte(cfgText)); err != nil {
+		t.Fatalf("reordered equivalent events aliases rejected: %v", err)
+	}
+}
+
+func TestParseRejectsConflictingEventsAlias(t *testing.T) {
+	bad := baseConfig + `
+[handlers.conflict]
+command = ["x"]
+events = ["tool.requested"]
+hitch_events = ["tool.completed"]
+kind = "observer"
+timeout_ms = 1
+`
+	if _, err := Parse([]byte(bad)); err == nil {
+		t.Fatal("conflicting events aliases accepted")
+	}
+}
+
+func TestParseRejectsInvalidHandlerTypePayloadAndSourceFilter(t *testing.T) {
+	cases := []string{
+		`type = "worker"
+command = ["x"]
+hitch_events = ["tool.requested"]
+kind = "observer"
+timeout_ms = 1`,
+		`type = "shell"
+command = ["x"]
+hitch_events = ["tool.requested"]
+payload = "both"
+kind = "observer"
+timeout_ms = 1`,
+		`type = "shell"
+command = ["x"]
+hitch_events = ["tool.requested"]
+source_events = [{ harness = "unknown", source_event_type = "PreToolUse" }]
+kind = "observer"
+timeout_ms = 1`,
+		`type = "shell"
+command = ["x"]
+hitch_events = ["tool.requested"]
+source_events = [{ harness = "codex", source_event_type = "" }]
+kind = "observer"
+timeout_ms = 1`,
+	}
+	for i, handler := range cases {
+		bad := baseConfig + "\n[handlers.bad_" + strconv.Itoa(i) + "]\n" + handler + "\n"
+		if _, err := Parse([]byte(bad)); err == nil {
+			t.Fatalf("invalid handler case %d accepted", i)
+		}
 	}
 }
 

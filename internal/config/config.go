@@ -97,14 +97,24 @@ type JSONLAudit struct {
 	Path string `toml:"path"`
 }
 
+type SourceEventFilter struct {
+	Harness         string `toml:"harness"`
+	SourceEventType string `toml:"source_event_type"`
+}
+
 type HandlerConfig struct {
-	Command    []string `toml:"command"`
-	WorkingDir string   `toml:"working_dir"`
-	Events     []string `toml:"events"`
-	Kind       string   `toml:"kind"`
-	TimeoutMS  int      `toml:"timeout_ms"`
-	OnError    string   `toml:"on_error"`
-	OnTimeout  string   `toml:"on_timeout"`
+	Type         string              `toml:"type"`
+	Extension    string              `toml:"extension"`
+	Command      []string            `toml:"command"`
+	WorkingDir   string              `toml:"working_dir"`
+	Events       []string            `toml:"events"`
+	HitchEvents  []string            `toml:"hitch_events"`
+	SourceEvents []SourceEventFilter `toml:"source_events"`
+	Payload      string              `toml:"payload"`
+	Kind         string              `toml:"kind"`
+	TimeoutMS    int                 `toml:"timeout_ms"`
+	OnError      string              `toml:"on_error"`
+	OnTimeout    string              `toml:"on_timeout"`
 }
 
 type HarnessConfig struct {
@@ -175,6 +185,12 @@ func Parse(b []byte) (Config, error) {
 		c.Handlers = map[string]HandlerConfig{}
 	}
 	upgradeLegacyDefaultEventMaps(&c)
+	for name, h := range c.Handlers {
+		if err := normalizeHandlerConfig(name, &h); err != nil {
+			return Config{}, err
+		}
+		c.Handlers[name] = h
+	}
 	if err := c.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -232,6 +248,44 @@ func eventTypesEqual(a, b EventTypes) bool {
 		}
 	}
 	return true
+}
+
+func normalizeHandlerConfig(name string, h *HandlerConfig) error {
+	if h.Type == "" {
+		h.Type = "shell"
+	}
+	if h.Payload == "" {
+		h.Payload = "hitch"
+	}
+	if len(h.Events) != 0 && len(h.HitchEvents) != 0 && !stringMultisetsEqual(h.Events, h.HitchEvents) {
+		return fmt.Errorf("handlers.%s cannot set conflicting events and hitch_events", name)
+	}
+	if len(h.HitchEvents) == 0 {
+		h.HitchEvents = append([]string(nil), h.Events...)
+	}
+	return nil
+}
+
+func stringMultisetsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	counts := make(map[string]int, len(a))
+	for _, s := range a {
+		counts[s]++
+	}
+	for _, s := range b {
+		n := counts[s]
+		if n == 0 {
+			return false
+		}
+		if n == 1 {
+			delete(counts, s)
+			continue
+		}
+		counts[s] = n - 1
+	}
+	return len(counts) == 0
 }
 
 func (c Config) Validate() error {
@@ -314,15 +368,37 @@ func (c Config) Validate() error {
 		if name == "" {
 			return errors.New("handler name cannot be empty")
 		}
-		if len(h.Command) == 0 || h.Command[0] == "" {
-			return fmt.Errorf("handlers.%s.command is required", name)
+		switch h.Type {
+		case "shell":
+			if len(h.Command) == 0 || h.Command[0] == "" {
+				return fmt.Errorf("handlers.%s.command is required", name)
+			}
+		case "native":
+			if h.Extension == "" {
+				return fmt.Errorf("handlers.%s.extension is required for native handlers", name)
+			}
+		default:
+			return fmt.Errorf("handlers.%s.type must be shell or native", name)
 		}
-		if len(h.Events) == 0 {
-			return fmt.Errorf("handlers.%s.events is required", name)
+		if len(h.HitchEvents) == 0 {
+			return fmt.Errorf("handlers.%s.hitch_events is required", name)
 		}
-		for _, e := range h.Events {
+		for _, e := range h.HitchEvents {
 			if e != "*" && !protocol.IsValidEventType(protocol.EventType(e)) {
 				return fmt.Errorf("handlers.%s references unknown event %q", name, e)
+			}
+		}
+		switch h.Payload {
+		case "hitch", "source":
+		default:
+			return fmt.Errorf("handlers.%s.payload must be hitch or source", name)
+		}
+		for _, f := range h.SourceEvents {
+			if !protocol.IsValidHarness(protocol.Harness(f.Harness)) {
+				return fmt.Errorf("handlers.%s source_events references unknown harness %q", name, f.Harness)
+			}
+			if f.SourceEventType == "" {
+				return fmt.Errorf("handlers.%s source_events source_event_type is required", name)
 			}
 		}
 		switch h.Kind {
