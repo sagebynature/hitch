@@ -276,7 +276,7 @@ func (s *Store) withLegacyInvocationDedupeFields(ctx context.Context, h HandlerI
 	}
 	if h.HookKey == "" {
 		if h.ReplaySourceID != "" {
-			h.HookKey = strings.Join([]string{"legacy", "replay", h.ReplaySourceID, h.HandlerName, h.Kind}, ":")
+			h.HookKey = strings.Join([]string{"legacy", "replay", h.ReplaySourceID, h.ID, h.HandlerName, h.Kind}, ":")
 		} else {
 			h.HookKey = strings.Join([]string{"legacy", h.NormalizedEventID, h.HandlerName, h.Kind}, ":")
 		}

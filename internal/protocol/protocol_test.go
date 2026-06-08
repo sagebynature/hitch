@@ -81,4 +81,11 @@ func TestNormalizeHandlerResult(t *testing.T) {
 	if err := NormalizeHandlerResult(&r); err == nil {
 		t.Fatal("invalid status accepted")
 	}
+
+	for _, status := range []HandlerStatus{StatusSkipped, StatusReserved} {
+		r = HandlerResult{Status: status}
+		if err := NormalizeHandlerResult(&r); err == nil {
+			t.Fatalf("internal status %q accepted", status)
+		}
+	}
 }

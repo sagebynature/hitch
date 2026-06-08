@@ -87,8 +87,8 @@ const (
 	StatusReserved HandlerStatus = "reserved"
 )
 
-var validStatuses = map[HandlerStatus]struct{}{
-	StatusOK: {}, StatusError: {}, StatusTimeout: {}, StatusSkipped: {}, StatusReserved: {},
+var validHandlerResultStatuses = map[HandlerStatus]struct{}{
+	StatusOK: {}, StatusError: {}, StatusTimeout: {},
 }
 
 type RawJSON = json.RawMessage
@@ -168,7 +168,7 @@ type AggregateDecision struct {
 func IsValidHarness(h Harness) bool           { _, ok := validHarnesses[h]; return ok }
 func IsValidEventType(t EventType) bool       { _, ok := validEventTypes[t]; return ok }
 func IsValidBehavior(b DecisionBehavior) bool { _, ok := validBehaviors[b]; return ok }
-func IsValidStatus(s HandlerStatus) bool      { _, ok := validStatuses[s]; return ok }
+func IsValidStatus(s HandlerStatus) bool      { _, ok := validHandlerResultStatuses[s]; return ok }
 
 func ValidateEnvelope(e EventEnvelope) error {
 	if e.HitchVersion == "" {

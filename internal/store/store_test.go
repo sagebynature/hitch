@@ -176,22 +176,28 @@ func TestInsertHandlerInvocationLegacyReplayUsesDistinctHookKey(t *testing.T) {
 	if err := s.InsertHandlerInvocation(ctx, HandlerInvocation{ID: "handler_live", NormalizedEventID: "norm_1", HandlerName: "audit", Kind: "observer", StartedAt: now, CompletedAt: now, Status: protocol.StatusOK}); err != nil {
 		t.Fatalf("insert live handler: %v", err)
 	}
-	if err := s.InsertHandlerInvocation(ctx, HandlerInvocation{ID: "handler_replay", NormalizedEventID: "norm_1", HandlerName: "audit", Kind: "observer", StartedAt: now.Add(time.Second), CompletedAt: now.Add(time.Second), Status: protocol.StatusOK, ReplaySourceID: "handler_live"}); err != nil {
-		t.Fatalf("insert replay handler: %v", err)
+	if err := s.InsertHandlerInvocation(ctx, HandlerInvocation{ID: "handler_replay_1", NormalizedEventID: "norm_1", HandlerName: "audit", Kind: "observer", StartedAt: now.Add(time.Second), CompletedAt: now.Add(time.Second), Status: protocol.StatusOK, ReplaySourceID: "handler_live"}); err != nil {
+		t.Fatalf("insert first replay handler: %v", err)
+	}
+	if err := s.InsertHandlerInvocation(ctx, HandlerInvocation{ID: "handler_replay_2", NormalizedEventID: "norm_1", HandlerName: "audit", Kind: "observer", StartedAt: now.Add(2 * time.Second), CompletedAt: now.Add(2 * time.Second), Status: protocol.StatusOK, ReplaySourceID: "handler_live"}); err != nil {
+		t.Fatalf("insert second replay handler: %v", err)
 	}
 
 	inspection, err := s.InspectEvent(ctx, "norm_1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(inspection.HandlerInvocations) != 2 {
-		t.Fatalf("handler invocation count = %d, want 2: %#v", len(inspection.HandlerInvocations), inspection.HandlerInvocations)
+	if len(inspection.HandlerInvocations) != 3 {
+		t.Fatalf("handler invocation count = %d, want 3: %#v", len(inspection.HandlerInvocations), inspection.HandlerInvocations)
 	}
 	if inspection.HandlerInvocations[0].HookKey != "legacy:norm_1:audit:observer" {
 		t.Fatalf("live hook key = %q", inspection.HandlerInvocations[0].HookKey)
 	}
-	if inspection.HandlerInvocations[1].HookKey != "legacy:replay:handler_live:audit:observer" {
-		t.Fatalf("replay hook key = %q", inspection.HandlerInvocations[1].HookKey)
+	if inspection.HandlerInvocations[1].HookKey != "legacy:replay:handler_live:handler_replay_1:audit:observer" {
+		t.Fatalf("first replay hook key = %q", inspection.HandlerInvocations[1].HookKey)
+	}
+	if inspection.HandlerInvocations[2].HookKey != "legacy:replay:handler_live:handler_replay_2:audit:observer" {
+		t.Fatalf("second replay hook key = %q", inspection.HandlerInvocations[2].HookKey)
 	}
 }
 
