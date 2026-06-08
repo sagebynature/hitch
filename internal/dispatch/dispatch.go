@@ -91,7 +91,7 @@ func (r Runner) matchHandlers(req Request) []string {
 		if h.Kind != req.Kind {
 			continue
 		}
-		if !matchesHitchEvent(h.HitchEvents, env.HitchEventType) {
+		if !matchesHitchEvent(handlerHitchEvents(h), env.HitchEventType) {
 			continue
 		}
 		if !matchesSourceEvent(h.SourceEvents, env) {
@@ -317,6 +317,13 @@ func shellName(command string) string {
 		return command[i+1:]
 	}
 	return command
+}
+
+func handlerHitchEvents(h config.HandlerConfig) []string {
+	if len(h.HitchEvents) != 0 {
+		return h.HitchEvents
+	}
+	return h.Events
 }
 
 func matchesHitchEvent(events []string, event protocol.EventType) bool {
