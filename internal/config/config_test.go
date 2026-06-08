@@ -86,6 +86,7 @@ func TestParseHandlerConfigSupportsNewRoutingFields(t *testing.T) {
 [handlers.native_audit]
 type = "native"
 extension = "audit_logger"
+entrypoint = "handler:handle"
 hitch_events = ["tool.completed"]
 source_events = [{ harness = "codex", source_event_type = "PostToolUse" }]
 payload = "source"
@@ -97,7 +98,7 @@ timeout_ms = 500
 		t.Fatalf("valid config rejected: %v", err)
 	}
 	h := cfg.Handlers["native_audit"]
-	if h.Type != "native" || h.Extension != "audit_logger" || h.Payload != "source" {
+	if h.Type != "native" || h.Extension != "audit_logger" || h.Entrypoint != "handler:handle" || h.Payload != "source" {
 		t.Fatalf("new handler fields not parsed: %#v", h)
 	}
 	if len(h.HitchEvents) != 1 || h.HitchEvents[0] != "tool.completed" {
@@ -349,12 +350,67 @@ func TestLoadResolvesHandlerWorkingDirRelativeToConfig(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := Load(configPath)
+	cfg, err := LoadWithExtensionDir(configPath, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, want := cfg.Handlers["audit"].WorkingDir, dir; got != want {
 		t.Fatalf("working_dir resolved to %q, want %q", got, want)
+	}
+}
+
+func TestLoadWithExtensionDirDiscoversNativeExtension(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "audit_logger")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "audit_logger"
+entrypoint = "handler:handle"
+kind = "observer"
+hitch_events = ["tool.completed"]
+payload = "hitch"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadWithExtensionDir(configPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := cfg.Handlers["audit_logger"]
+	if h.Type != "native" || h.Extension != "audit_logger" || h.Entrypoint != "handler:handle" {
+		t.Fatalf("extension not discovered: %#v", h)
+	}
+}
+
+func TestLoadWithExtensionDirRejectsInvalidExtension(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "broken")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "broken"
+kind = "observer"
+hitch_events = ["tool.completed"]
+timeout_ms = 1000
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadWithExtensionDir(configPath, dir); err == nil {
+		t.Fatal("invalid extension accepted")
 	}
 }
 

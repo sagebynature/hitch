@@ -105,6 +105,7 @@ type SourceEventFilter struct {
 type HandlerConfig struct {
 	Type         string              `toml:"type"`
 	Extension    string              `toml:"extension"`
+	Entrypoint   string              `toml:"entrypoint"`
 	Command      []string            `toml:"command"`
 	WorkingDir   string              `toml:"working_dir"`
 	Events       []string            `toml:"events"`
@@ -154,6 +155,10 @@ func (e *EventTypes) UnmarshalTOML(v interface{}) error {
 }
 
 func Load(path string) (Config, error) {
+	return LoadWithExtensionDir(path, DefaultExtensionDir())
+}
+
+func loadFile(path string) (Config, error) {
 	path = ExpandHome(path)
 	baseDir := filepath.Dir(path)
 	if absPath, err := filepath.Abs(path); err == nil {
@@ -376,6 +381,9 @@ func (c Config) Validate() error {
 		case "native":
 			if h.Extension == "" {
 				return fmt.Errorf("handlers.%s.extension is required for native handlers", name)
+			}
+			if h.Entrypoint == "" {
+				return fmt.Errorf("handlers.%s.entrypoint is required for native handlers", name)
 			}
 		default:
 			return fmt.Errorf("handlers.%s.type must be shell or native", name)
