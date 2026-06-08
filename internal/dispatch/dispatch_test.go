@@ -147,6 +147,40 @@ func TestAggregationIgnoresInternalReservedAndSkippedStatuses(t *testing.T) {
 	}
 }
 
+func TestShellCommandPayloadIsPassedAsFirstScriptArg(t *testing.T) {
+	dir := t.TempDir()
+	r := NewRunner(map[string]config.HandlerConfig{
+		"shell": {
+			Command:     []string{"/bin/sh", "-c", `printf '%s' "$1" > "$CAPTURE_DIR/argv1.json"; printf '%s' "$0" > "$CAPTURE_DIR/argv0.txt"; echo '{"status":"ok","decision":{"behavior":"allow"}}'`},
+			HitchEvents: []string{"*"},
+			Kind:        "control",
+			TimeoutMS:   fastHandlerTimeoutMS,
+		},
+	})
+	req := testRequest("control", 5*time.Second)
+	req.Envelope.Payload = protocol.RawJSON(`{ "tool" : { "name" : "Bash" } }`)
+
+	t.Setenv("CAPTURE_DIR", dir)
+	got := r.Dispatch(context.Background(), req)
+	if len(got.Invocations) != 1 || got.Invocations[0].Status != protocol.StatusOK {
+		t.Fatalf("expected shell payload invocation: %#v", got.Invocations)
+	}
+	argv1, err := os.ReadFile(filepath.Join(dir, "argv1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(argv1) != `{"tool":{"name":"Bash"}}` {
+		t.Fatalf("argv $1 payload = %s", argv1)
+	}
+	argv0, err := os.ReadFile(filepath.Join(dir, "argv0.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(argv0) == `{"tool":{"name":"Bash"}}` {
+		t.Fatalf("payload was swallowed as $0")
+	}
+}
+
 func TestSourcePayloadSelectedForArgvAndContextIncludesEvent(t *testing.T) {
 	dir := t.TempDir()
 	h := script(t, `printf '%s' "$1" > "$CAPTURE_DIR/argv.json"

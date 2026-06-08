@@ -116,8 +116,7 @@ func runHandler(parent context.Context, log *slog.Logger, name string, cfg confi
 		inv.CompletedAt = time.Now().UTC()
 		return inv
 	}
-	args := append([]string(nil), cfg.Command[1:]...)
-	args = append(args, string(primaryPayload))
+	args := handlerArgs(cfg.Command, string(primaryPayload))
 	cmd := exec.CommandContext(ctx, cfg.Command[0], args...)
 	if cfg.WorkingDir != "" {
 		cmd.Dir = cfg.WorkingDir
@@ -175,6 +174,43 @@ func runHandler(parent context.Context, log *slog.Logger, name string, cfg confi
 	inv.Output = protocol.Raw(hr)
 	inv.Decision = protocol.Raw(hr.Decision)
 	return inv
+}
+
+func handlerArgs(command []string, selectedPayload string) []string {
+	args := append([]string(nil), command[1:]...)
+	if isShellCommand(command) {
+		args = append(args, "hitch-handler", selectedPayload)
+		return args
+	}
+	args = append(args, selectedPayload)
+	return args
+}
+
+func isShellCommand(command []string) bool {
+	if len(command) >= 3 && isShell(command[0]) && command[1] == "-c" {
+		return true
+	}
+	return len(command) >= 4 && isEnv(command[0]) && isShell(command[1]) && command[2] == "-c"
+}
+
+func isShell(command string) bool {
+	switch shellName(command) {
+	case "sh", "bash":
+		return true
+	default:
+		return false
+	}
+}
+
+func isEnv(command string) bool {
+	return shellName(command) == "env"
+}
+
+func shellName(command string) string {
+	if i := strings.LastIndexByte(command, '/'); i >= 0 {
+		return command[i+1:]
+	}
+	return command
 }
 
 func matchesHitchEvent(events []string, event protocol.EventType) bool {
