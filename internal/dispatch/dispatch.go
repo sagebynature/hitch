@@ -178,7 +178,11 @@ func runHandler(parent context.Context, log *slog.Logger, name string, cfg confi
 
 func handlerArgs(command []string, selectedPayload string) []string {
 	args := append([]string(nil), command[1:]...)
-	if isShellCommand(command) {
+	if scriptIndex, ok := shellCommandScriptIndex(command); ok {
+		if len(command) > scriptIndex+1 {
+			args = append(args, selectedPayload)
+			return args
+		}
 		args = append(args, "hitch-handler", selectedPayload)
 		return args
 	}
@@ -186,11 +190,31 @@ func handlerArgs(command []string, selectedPayload string) []string {
 	return args
 }
 
-func isShellCommand(command []string) bool {
-	if len(command) >= 3 && isShell(command[0]) && command[1] == "-c" {
-		return true
+func shellCommandScriptIndex(command []string) (int, bool) {
+	if len(command) >= 3 && isShell(command[0]) && isShellCommandOption(command[1]) {
+		return 2, true
 	}
-	return len(command) >= 4 && isEnv(command[0]) && isShell(command[1]) && command[2] == "-c"
+	if len(command) >= 4 && isEnv(command[0]) && isShell(command[1]) && isShellCommandOption(command[2]) {
+		return 3, true
+	}
+	return 0, false
+}
+
+func isShellCommandOption(arg string) bool {
+	if len(arg) < 2 || arg[0] != '-' {
+		return false
+	}
+	for i := 1; i < len(arg); i++ {
+		if arg[i] == 'c' {
+			return true
+		}
+	}
+	return false
+}
+
+func isShellCommand(command []string) bool {
+	_, ok := shellCommandScriptIndex(command)
+	return ok
 }
 
 func isShell(command string) bool {
