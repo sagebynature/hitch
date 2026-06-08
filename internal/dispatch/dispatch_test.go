@@ -249,6 +249,62 @@ func TestBashLoginShellCommandPayloadIsPassedAsFirstScriptArg(t *testing.T) {
 	}
 }
 
+func TestBashLoginOptionBeforeCommandPayloadIsPassedAsFirstScriptArg(t *testing.T) {
+	dir := t.TempDir()
+	r := NewRunner(map[string]config.HandlerConfig{
+		"shell": {
+			Command:     []string{"bash", "-l", "-c", `printf '%s' "$1" > "$CAPTURE_DIR/argv1.json"; printf '%s' "$0" > "$CAPTURE_DIR/argv0.txt"; echo '{"status":"ok","decision":{"behavior":"allow"}}'`},
+			HitchEvents: []string{"*"},
+			Kind:        "control",
+			TimeoutMS:   fastHandlerTimeoutMS,
+		},
+	})
+	req := testRequest("control", 5*time.Second)
+	req.Envelope.Payload = protocol.RawJSON(`{ "tool" : { "name" : "Bash" } }`)
+
+	t.Setenv("CAPTURE_DIR", dir)
+	got := r.Dispatch(context.Background(), req)
+	if len(got.Invocations) != 1 || got.Invocations[0].Status != protocol.StatusOK {
+		t.Fatalf("expected bash -l -c payload invocation: %#v", got.Invocations)
+	}
+	argv1, err := os.ReadFile(filepath.Join(dir, "argv1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(argv1) != `{"tool":{"name":"Bash"}}` {
+		t.Fatalf("argv $1 payload = %s", argv1)
+	}
+	argv0, err := os.ReadFile(filepath.Join(dir, "argv0.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(argv0) == `{"tool":{"name":"Bash"}}` {
+		t.Fatalf("payload was swallowed as $0")
+	}
+}
+
+func TestShellCommandScriptIndexScansOptionsUntilCommandMode(t *testing.T) {
+	tests := []struct {
+		name      string
+		command   []string
+		wantIndex int
+		wantOK    bool
+	}{
+		{name: "long option before command mode", command: []string{"bash", "--norc", "-c", "script"}, wantIndex: 3, wantOK: true},
+		{name: "long option without command mode", command: []string{"bash", "--norc", "script"}, wantOK: false},
+		{name: "non option before command mode", command: []string{"bash", "script", "-c", "ignored"}, wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotIndex, gotOK := shellCommandScriptIndex(tt.command)
+			if gotIndex != tt.wantIndex || gotOK != tt.wantOK {
+				t.Fatalf("shellCommandScriptIndex(%v) = (%d, %t), want (%d, %t)", tt.command, gotIndex, gotOK, tt.wantIndex, tt.wantOK)
+			}
+		})
+	}
+}
+
 func TestIsShellCommandOptionOnlyMatchesShortOptionsWithC(t *testing.T) {
 	tests := []struct {
 		arg  string

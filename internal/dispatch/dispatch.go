@@ -191,11 +191,27 @@ func handlerArgs(command []string, selectedPayload string) []string {
 }
 
 func shellCommandScriptIndex(command []string) (int, bool) {
-	if len(command) >= 3 && isShell(command[0]) && isShellCommandOption(command[1]) {
-		return 2, true
+	if len(command) >= 2 && isShell(command[0]) {
+		return shellCommandScriptIndexAfterShell(command, 1)
 	}
-	if len(command) >= 4 && isEnv(command[0]) && isShell(command[1]) && isShellCommandOption(command[2]) {
-		return 3, true
+	if len(command) >= 3 && isEnv(command[0]) && isShell(command[1]) {
+		return shellCommandScriptIndexAfterShell(command, 2)
+	}
+	return 0, false
+}
+
+func shellCommandScriptIndexAfterShell(command []string, argStart int) (int, bool) {
+	for i := argStart; i < len(command); i++ {
+		arg := command[i]
+		if isShellCommandOption(arg) {
+			if i+1 < len(command) {
+				return i + 1, true
+			}
+			return 0, false
+		}
+		if len(arg) < 2 || arg[0] != '-' {
+			return 0, false
+		}
 	}
 	return 0, false
 }
