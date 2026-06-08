@@ -327,6 +327,8 @@ func TestShellCommandScriptIndexScansOptionsUntilCommandMode(t *testing.T) {
 		{name: "long option before command mode", command: []string{"bash", "--norc", "-c", "script"}, wantIndex: 3, wantOK: true},
 		{name: "shell option with separate value before command mode", command: []string{"bash", "--rcfile", "somefile", "-c", "script"}, wantIndex: 4, wantOK: true},
 		{name: "shell plus-o option with separate value before command mode", command: []string{"bash", "+o", "posix", "-c", "script"}, wantIndex: 4, wantOK: true},
+		{name: "bash shopt option before command mode", command: []string{"bash", "-O", "extglob", "-c", "script"}, wantIndex: 4, wantOK: true},
+		{name: "bash plus-shopt option before command mode", command: []string{"bash", "+O", "extglob", "-c", "script"}, wantIndex: 4, wantOK: true},
 		{name: "env assignment before shell command mode", command: []string{"env", "FOO=1", "bash", "-c", "script"}, wantIndex: 4, wantOK: true},
 		{name: "env ignore environment before shell command mode", command: []string{"env", "-i", "bash", "-c", "script"}, wantIndex: 4, wantOK: true},
 		{name: "env unset option before shell command mode", command: []string{"env", "-u", "FOO", "bash", "-c", "script"}, wantIndex: 5, wantOK: true},

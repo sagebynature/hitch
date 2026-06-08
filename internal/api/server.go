@@ -51,6 +51,7 @@ type EventRequest struct {
 type EventResponse struct {
 	EventID           string `json:"event_id"`
 	NormalizedEventID string `json:"normalized_event_id"`
+	InboundEventID    string `json:"-"`
 }
 
 type apiRequestLog struct {
@@ -204,7 +205,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if mode == requestModeAsync {
-		go s.dispatchObservers(context.Background(), resp.NormalizedEventID, env)
+		go s.dispatchObservers(context.Background(), resp.InboundEventID, resp.NormalizedEventID, env)
 		if err := writeJSON(w, http.StatusAccepted, resp); err != nil {
 			log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusAccepted, "error_kind", "response_write_failed", "error", err.Error())
 			return
@@ -215,7 +216,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	s.handleSyncEvent(w, r, resp, env, log)
 }
 func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp EventResponse, env protocol.EventEnvelope, log apiRequestLog) {
-	result := s.runner.Dispatch(r.Context(), dispatch.Request{Envelope: env, Kind: "control", TotalDeadline: 2*time.Second})
+	result := s.runner.Dispatch(r.Context(), dispatch.Request{Envelope: env, Kind: "control", InboundEventID: resp.InboundEventID, NormalizedEventID: resp.NormalizedEventID, TotalDeadline: 2*time.Second})
 	for _, inv := range result.Invocations {
 		if err := s.store.InsertHandlerInvocation(r.Context(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: resp.NormalizedEventID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error}); err != nil {
 			log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error_kind", errorKind(err), "error", err.Error())
@@ -241,7 +242,7 @@ func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp Ev
 		}
 		return
 	}
-	go s.dispatchObservers(context.Background(), resp.NormalizedEventID, env)
+	go s.dispatchObservers(context.Background(), resp.InboundEventID, resp.NormalizedEventID, env)
 	w.Header().Set("X-Hitch-Event-ID", resp.EventID)
 	w.Header().Set("X-Hitch-Normalized-Event-ID", resp.NormalizedEventID)
 	w.Header().Set("Content-Type", "application/json")
@@ -291,7 +292,7 @@ func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, pr
 	}
 	inboundID := harness.NewID("in")
 	normalizedID := harness.NewID("norm")
-	resp := EventResponse{EventID: env.EventID, NormalizedEventID: normalizedID}
+	resp := EventResponse{EventID: env.EventID, NormalizedEventID: normalizedID, InboundEventID: inboundID}
 	if err := s.store.InsertInbound(ctx, store.InboundEvent{ID: inboundID, ReceivedAt: env.ReceivedAt, Harness: env.Harness, SourceEventType: env.SourceEventType, SourcePayload: env.SourcePayload, RequestHeaders: protocol.Raw(headers(r)), HitchClientVersion: req.HitchClientVersion}); err != nil {
 		return resp, env, req, mode, err
 	}
@@ -311,9 +312,9 @@ func (s *Server) ingest(ctx context.Context, r *http.Request) (EventResponse, pr
 	return resp, env, req, mode, nil
 }
 
-func (s *Server) dispatchObservers(ctx context.Context, normalizedID string, env protocol.EventEnvelope) {
+func (s *Server) dispatchObservers(ctx context.Context, inboundID string, normalizedID string, env protocol.EventEnvelope) {
 	started := time.Now()
-	result := s.runner.Dispatch(ctx, dispatch.Request{Envelope: env, Kind: "observer"})
+	result := s.runner.Dispatch(ctx, dispatch.Request{Envelope: env, Kind: "observer", InboundEventID: inboundID, NormalizedEventID: normalizedID})
 	if len(result.Invocations) == 0 {
 		return
 	}

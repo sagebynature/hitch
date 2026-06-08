@@ -275,7 +275,7 @@ func shellCommandScriptIndexAfterShell(command []string, argStart int) (int, boo
 
 func shellOptionConsumesNext(arg string) bool {
 	switch arg {
-	case "-o", "+o", "--rcfile", "--init-file":
+	case "-o", "+o", "-O", "+O", "--rcfile", "--init-file":
 		return true
 	default:
 		return false
