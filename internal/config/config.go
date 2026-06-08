@@ -116,6 +116,7 @@ type HandlerConfig struct {
 	TimeoutMS    int                 `toml:"timeout_ms"`
 	OnError      string              `toml:"on_error"`
 	OnTimeout    string              `toml:"on_timeout"`
+	payloadSet   bool
 }
 
 type HarnessConfig struct {
@@ -158,7 +159,7 @@ func Load(path string) (Config, error) {
 	return LoadWithExtensionDir(path, DefaultExtensionDir())
 }
 
-func loadFile(path string) (Config, error) {
+func loadFile(path string, validate bool) (Config, error) {
 	path = ExpandHome(path)
 	baseDir := filepath.Dir(path)
 	if absPath, err := filepath.Abs(path); err == nil {
@@ -169,7 +170,7 @@ func loadFile(path string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	c, err := Parse(b)
+	c, err := parseConfigBytes(b, validate)
 	if err != nil {
 		return Config{}, err
 	}
@@ -178,6 +179,10 @@ func loadFile(path string) (Config, error) {
 }
 
 func Parse(b []byte) (Config, error) {
+	return parseConfigBytes(b, true)
+}
+
+func parseConfigBytes(b []byte, validate bool) (Config, error) {
 	var c Config
 	md, err := toml.Decode(string(b), &c)
 	if err != nil {
@@ -191,13 +196,16 @@ func Parse(b []byte) (Config, error) {
 	}
 	upgradeLegacyDefaultEventMaps(&c)
 	for name, h := range c.Handlers {
+		h.payloadSet = md.IsDefined("handlers", name, "payload")
 		if err := normalizeHandlerConfig(name, &h); err != nil {
 			return Config{}, err
 		}
 		c.Handlers[name] = h
 	}
-	if err := c.Validate(); err != nil {
-		return Config{}, err
+	if validate {
+		if err := c.Validate(); err != nil {
+			return Config{}, err
+		}
 	}
 	return c, nil
 }

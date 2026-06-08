@@ -445,6 +445,177 @@ timeout_ms = 1000
 	}
 }
 
+func TestLoadWithExtensionDirMergesReferencedNativeExtensionDefaults(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "audit_logger")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "audit_logger"
+entrypoint = "handler:handle"
+kind = "observer"
+hitch_events = ["tool.completed"]
+source_events = [{ harness = "codex", source_event_type = "PostToolUse" }]
+payload = "source"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	text := baseConfig + `
+[handlers.audit_native]
+type = "native"
+extension = "audit_logger"
+hitch_events = ["tool.completed"]
+kind = "observer"
+timeout_ms = 500
+`
+	if err := os.WriteFile(configPath, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadWithExtensionDir(configPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := cfg.Handlers["audit_native"]
+	if h.Entrypoint != "handler:handle" {
+		t.Fatalf("entrypoint = %q, want extension default", h.Entrypoint)
+	}
+	if h.TimeoutMS != 500 {
+		t.Fatalf("timeout_ms = %d, want main config override", h.TimeoutMS)
+	}
+	if h.Payload != "source" {
+		t.Fatalf("payload = %q, want extension default", h.Payload)
+	}
+	if len(h.SourceEvents) != 1 || h.SourceEvents[0].Harness != "codex" {
+		t.Fatalf("source_events not inherited: %#v", h.SourceEvents)
+	}
+}
+
+func TestLoadWithExtensionDirReferencedNativeExtensionSuppressesDiscovery(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "audit_logger")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "audit_logger"
+entrypoint = "handler:handle"
+kind = "observer"
+hitch_events = ["tool.completed"]
+payload = "hitch"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	text := baseConfig + `
+[handlers.audit_native]
+type = "native"
+extension = "audit_logger"
+entrypoint = "main:handle"
+hitch_events = ["tool.completed"]
+kind = "observer"
+timeout_ms = 500
+on_error = "fail_open"
+on_timeout = "fail_open"
+`
+	if err := os.WriteFile(configPath, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadWithExtensionDir(configPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg.Handlers["audit_logger"]; ok {
+		t.Fatal("referenced extension was also auto-discovered as a handler")
+	}
+	if got, want := len(cfg.Handlers), 3; got != want {
+		t.Fatalf("handler count = %d, want %d", got, want)
+	}
+	if cfg.Handlers["audit_native"].Entrypoint != "main:handle" {
+		t.Fatalf("main config entrypoint was not preserved: %#v", cfg.Handlers["audit_native"])
+	}
+}
+
+func TestLoadWithExtensionDirFullySpecifiedReferenceIgnoresBrokenExtensionConfig(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "audit_logger")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "audit_logger"
+kind = "observer"
+hitch_events = ["tool.completed"]
+payload = "hitch"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	text := baseConfig + `
+[handlers.audit_native]
+type = "native"
+extension = "audit_logger"
+entrypoint = "main:handle"
+hitch_events = ["tool.completed"]
+source_events = [{ harness = "codex", source_event_type = "turn.completed" }]
+kind = "observer"
+payload = "hitch"
+timeout_ms = 500
+on_error = "fail_open"
+on_timeout = "fail_open"
+`
+	if err := os.WriteFile(configPath, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadWithExtensionDir(configPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Handlers["audit_native"].Entrypoint; got != "main:handle" {
+		t.Fatalf("entrypoint = %q, want main config override", got)
+	}
+}
+
+func TestLoadWithExtensionDirRejectsUnknownExtensionConfigKey(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "unknown_key")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "unknown_key"
+entrypoint = "handler:handle"
+kind = "observer"
+hitch_events = ["tool.completed"]
+payload = "hitch"
+timeout_ms = 1000
+surprise = true
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadWithExtensionDir(configPath, dir)
+	if err == nil {
+		t.Fatal("extension config with unknown key accepted")
+	}
+	if !strings.Contains(err.Error(), "unknown config keys") {
+		t.Fatalf("error = %v, want unknown config keys", err)
+	}
+}
+
 func TestDefaultConfigTOMLMatchesEmbeddedConfigFile(t *testing.T) {
 	b, err := os.ReadFile("default.config.toml")
 	if err != nil {
