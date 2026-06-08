@@ -40,20 +40,29 @@ type Runner struct {
 	Log      *slog.Logger
 }
 
+type Request struct {
+	Envelope          protocol.EventEnvelope
+	Kind              string
+	InboundEventID    string
+	NormalizedEventID string
+	ReplaySourceID    string
+	TotalDeadline     time.Duration
+}
+
 func NewRunner(handlers map[string]config.HandlerConfig) Runner { return Runner{Handlers: handlers} }
 
 func NewRunnerWithLogger(handlers map[string]config.HandlerConfig, log *slog.Logger) Runner {
 	return Runner{Handlers: handlers, Log: log}
 }
 
-func (r Runner) Dispatch(ctx context.Context, env protocol.EventEnvelope, kind string, totalDeadline time.Duration) Result {
-	selected := r.matchHandlers(env.HitchEventType, kind)
+func (r Runner) Dispatch(ctx context.Context, req Request) Result {
+	selected := r.matchHandlers(req)
 	if len(selected) == 0 {
 		return Result{Aggregate: protocol.AggregateDecision{Decision: protocol.Decision{Behavior: protocol.BehaviorNone}}}
 	}
-	if totalDeadline > 0 {
+	if req.TotalDeadline > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, totalDeadline)
+		ctx, cancel = context.WithTimeout(ctx, req.TotalDeadline)
 		defer cancel()
 	}
 	type pair struct {
@@ -64,7 +73,7 @@ func (r Runner) Dispatch(ctx context.Context, env protocol.EventEnvelope, kind s
 	for i, name := range selected {
 		cfg := r.Handlers[name]
 		go func(idx int, n string, c config.HandlerConfig) {
-			ch <- pair{idx: idx, inv: runHandler(ctx, r.Log, n, c, env)}
+			ch <- pair{idx: idx, inv: runHandler(ctx, r.Log, n, c, req)}
 		}(i, name, cfg)
 	}
 	inv := make([]Invocation, len(selected))
@@ -75,40 +84,45 @@ func (r Runner) Dispatch(ctx context.Context, env protocol.EventEnvelope, kind s
 	return Result{Invocations: inv, Aggregate: aggregate(inv, selected, r.Handlers)}
 }
 
-func (r Runner) matchHandlers(event protocol.EventType, kind string) []string {
+func (r Runner) matchHandlers(req Request) []string {
+	env := req.Envelope
 	names := make([]string, 0, len(r.Handlers))
 	for name, h := range r.Handlers {
-		if h.Kind != kind {
+		if h.Kind != req.Kind {
 			continue
 		}
-		for _, e := range h.Events {
-			if e == "*" || e == string(event) {
-				names = append(names, name)
-				break
-			}
+		if !matchesHitchEvent(h.HitchEvents, env.HitchEventType) {
+			continue
 		}
+		if !matchesSourceEvent(h.SourceEvents, env) {
+			continue
+		}
+		names = append(names, name)
 	}
 	sort.Strings(names)
 	return names
 }
 
-func runHandler(parent context.Context, log *slog.Logger, name string, cfg config.HandlerConfig, env protocol.EventEnvelope) Invocation {
+func runHandler(parent context.Context, log *slog.Logger, name string, cfg config.HandlerConfig, req Request) Invocation {
+	env := req.Envelope
 	started := time.Now().UTC()
 	inv := Invocation{HandlerName: name, Kind: cfg.Kind, StartedAt: started, Status: protocol.StatusOK}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(cfg.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	stdin, err := json.Marshal(env)
+	invCtx, primaryPayload, err := buildInvocationContext(name, cfg, req)
 	if err != nil {
 		inv.Status = protocol.StatusError
 		inv.Error = err.Error()
 		inv.CompletedAt = time.Now().UTC()
 		return inv
 	}
-	cmd := exec.CommandContext(ctx, cfg.Command[0], cfg.Command[1:]...)
+	args := append([]string(nil), cfg.Command[1:]...)
+	args = append(args, string(primaryPayload))
+	cmd := exec.CommandContext(ctx, cfg.Command[0], args...)
 	if cfg.WorkingDir != "" {
 		cmd.Dir = cfg.WorkingDir
 	}
-	cmd.Stdin = bytes.NewReader(stdin)
+	cmd.Stdin = bytes.NewReader(invCtx)
 	cmd.Env = append(cmd.Environ(), "HITCH_CHILD=1")
 	logHandlerInvocationStarted(log, inv, env, cfg.TimeoutMS)
 	var stdout, stderr bytes.Buffer
@@ -163,6 +177,79 @@ func runHandler(parent context.Context, log *slog.Logger, name string, cfg confi
 	return inv
 }
 
+func matchesHitchEvent(events []string, event protocol.EventType) bool {
+	for _, e := range events {
+		if e == "*" || e == string(event) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesSourceEvent(filters []config.SourceEventFilter, env protocol.EventEnvelope) bool {
+	if len(filters) == 0 {
+		return true
+	}
+	for _, f := range filters {
+		if f.Harness == string(env.Harness) && f.SourceEventType == env.SourceEventType {
+			return true
+		}
+	}
+	return false
+}
+
+func buildInvocationContext(name string, cfg config.HandlerConfig, req Request) ([]byte, protocol.RawJSON, error) {
+	env := req.Envelope
+	payloadKind := "hitch"
+	payload := env.Payload
+	if cfg.Payload == "source" {
+		payloadKind = "source"
+		payload = env.SourcePayload
+	}
+	primaryPayload, err := compactJSON(payload)
+	if err != nil {
+		return nil, nil, err
+	}
+	invCtx := protocol.InvocationContext{
+		HitchVersion:      env.HitchVersion,
+		HandlerName:       name,
+		HandlerType:       cfg.Type,
+		Kind:              req.Kind,
+		InboundEventID:    req.InboundEventID,
+		NormalizedEventID: req.NormalizedEventID,
+		PayloadKind:       payloadKind,
+		Payload:           primaryPayload,
+		Event: protocol.InvocationEvent{
+			HitchVersion:    env.HitchVersion,
+			EventID:         env.EventID,
+			ReceivedAt:      env.ReceivedAt,
+			Harness:         env.Harness,
+			SourceEventType: env.SourceEventType,
+			SourcePayload:   env.SourcePayload,
+			HitchEventType:  env.HitchEventType,
+			SessionID:       env.SessionID,
+			TurnID:          env.TurnID,
+			CWD:             env.CWD,
+			Model:           env.Model,
+			TranscriptPath:  env.TranscriptPath,
+			Payload:         env.Payload,
+		},
+	}
+	stdin, err := json.Marshal(invCtx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return stdin, primaryPayload, nil
+}
+
+func compactJSON(raw protocol.RawJSON) (protocol.RawJSON, error) {
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, raw); err != nil {
+		return nil, err
+	}
+	return protocol.RawJSON(buf.Bytes()), nil
+}
+
 func logHandlerInvocationStarted(log *slog.Logger, inv Invocation, env protocol.EventEnvelope, timeoutMS int) {
 	if log == nil {
 		return
@@ -215,6 +302,9 @@ func aggregate(inv []Invocation, order []string, handlers map[string]config.Hand
 	for _, in := range inv {
 		if in.Error != "" {
 			errs = append(errs, in.HandlerName+": "+in.Error)
+		}
+		if in.Status == protocol.StatusSkipped || in.Status == protocol.StatusReserved {
+			continue
 		}
 		if in.Status != protocol.StatusOK {
 			if failClosed(handlers[in.HandlerName], in.Status) {

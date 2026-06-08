@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,6 +20,10 @@ func testEnv() protocol.EventEnvelope {
 	return protocol.EventEnvelope{HitchVersion: protocol.Version, EventID: "evt", ReceivedAt: time.Now().UTC(), Harness: protocol.HarnessCodex, SourceEventType: "PreToolUse", SourcePayload: protocol.Raw(map[string]interface{}{}), HitchEventType: protocol.EventToolRequested, Payload: protocol.Raw(map[string]interface{}{})}
 }
 
+func testRequest(kind string, deadline time.Duration) Request {
+	return Request{Envelope: testEnv(), Kind: kind, InboundEventID: "inbound", NormalizedEventID: "normalized", TotalDeadline: deadline}
+}
+
 func script(t *testing.T, body string) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -33,8 +38,8 @@ func script(t *testing.T, body string) string {
 
 func TestDispatchParsesHandlerResult(t *testing.T) {
 	h := script(t, `echo '{"status":"ok","decision":{"behavior":"deny","reason":"no"}}'`)
-	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, Events: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS}})
-	got := r.Dispatch(context.Background(), testEnv(), "control", 5*time.Second)
+	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, HitchEvents: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS}})
+	got := r.Dispatch(context.Background(), testRequest("control", 5*time.Second))
 	if got.Aggregate.Decision.Behavior != protocol.BehaviorDeny {
 		t.Fatalf("got %s", got.Aggregate.Decision.Behavior)
 	}
@@ -45,8 +50,8 @@ func TestDispatchParsesHandlerResult(t *testing.T) {
 
 func TestDispatchInvalidJSONIsError(t *testing.T) {
 	h := script(t, `echo nope`)
-	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, Events: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS}})
-	got := r.Dispatch(context.Background(), testEnv(), "control", 5*time.Second)
+	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, HitchEvents: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS}})
+	got := r.Dispatch(context.Background(), testRequest("control", 5*time.Second))
 	if got.Invocations[0].Status != protocol.StatusError {
 		t.Fatalf("expected error: %#v", got.Invocations[0])
 	}
@@ -55,8 +60,8 @@ func TestDispatchInvalidJSONIsError(t *testing.T) {
 func TestDispatchRunsHandlerInWorkingDir(t *testing.T) {
 	dir := t.TempDir()
 	h := script(t, `pwd > cwd.txt`)
-	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, WorkingDir: dir, Events: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS}})
-	got := r.Dispatch(context.Background(), testEnv(), "control", 5*time.Second)
+	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, WorkingDir: dir, HitchEvents: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS}})
+	got := r.Dispatch(context.Background(), testRequest("control", 5*time.Second))
 	if got.Invocations[0].Status != protocol.StatusOK {
 		t.Fatalf("expected ok invocation: %#v", got.Invocations[0])
 	}
@@ -71,8 +76,8 @@ func TestDispatchRunsHandlerInWorkingDir(t *testing.T) {
 
 func TestDispatchTimeout(t *testing.T) {
 	h := script(t, `sleep 1`)
-	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, Events: []string{"*"}, Kind: "control", TimeoutMS: 10}})
-	got := r.Dispatch(context.Background(), testEnv(), "control", time.Second)
+	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, HitchEvents: []string{"*"}, Kind: "control", TimeoutMS: 10}})
+	got := r.Dispatch(context.Background(), testRequest("control", time.Second))
 	if got.Invocations[0].Status != protocol.StatusTimeout {
 		t.Fatalf("expected timeout: %#v", got.Invocations[0])
 	}
@@ -82,10 +87,10 @@ func TestAggregationDeterministic(t *testing.T) {
 	slowAllow := script(t, `sleep 0.05; echo '{"status":"ok","decision":{"behavior":"allow"}}'`)
 	fastDeny := script(t, `echo '{"status":"ok","decision":{"behavior":"deny"}}'`)
 	r := NewRunner(map[string]config.HandlerConfig{
-		"a_allow": {Command: []string{slowAllow}, Events: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS},
-		"b_deny":  {Command: []string{fastDeny}, Events: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS},
+		"a_allow": {Command: []string{slowAllow}, HitchEvents: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS},
+		"b_deny":  {Command: []string{fastDeny}, HitchEvents: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS},
 	})
-	got := r.Dispatch(context.Background(), testEnv(), "control", 5*time.Second)
+	got := r.Dispatch(context.Background(), testRequest("control", 5*time.Second))
 	if got.Aggregate.Decision.Behavior != protocol.BehaviorDeny {
 		t.Fatalf("deny should win: %#v", got.Aggregate.Decision)
 	}
@@ -95,11 +100,99 @@ func TestContextConcatenation(t *testing.T) {
 	h1 := script(t, `echo '{"status":"ok","decision":{"behavior":"inject_context","context":"one"}}'`)
 	h2 := script(t, `echo '{"status":"ok","decision":{"behavior":"inject_context","context":"two"}}'`)
 	r := NewRunner(map[string]config.HandlerConfig{
-		"a": {Command: []string{h1}, Events: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS},
-		"b": {Command: []string{h2}, Events: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS},
+		"a": {Command: []string{h1}, HitchEvents: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS},
+		"b": {Command: []string{h2}, HitchEvents: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS},
 	})
-	got := r.Dispatch(context.Background(), testEnv(), "control", 5*time.Second)
+	got := r.Dispatch(context.Background(), testRequest("control", 5*time.Second))
 	if got.Aggregate.Decision.Context != "one\n\ntwo" {
 		t.Fatalf("bad context: %q", got.Aggregate.Decision.Context)
+	}
+}
+
+func TestSourceEventFilterMatchesAndNonMatches(t *testing.T) {
+	h := script(t, `echo '{"status":"ok","decision":{"behavior":"allow"}}'`)
+	r := NewRunner(map[string]config.HandlerConfig{
+		"match": {Command: []string{h}, HitchEvents: []string{string(protocol.EventToolRequested)}, SourceEvents: []config.SourceEventFilter{{Harness: "codex", SourceEventType: "PreToolUse"}}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS},
+	})
+
+	matched := r.Dispatch(context.Background(), testRequest("control", 5*time.Second))
+	if len(matched.Invocations) != 1 || matched.Invocations[0].HandlerName != "match" {
+		t.Fatalf("expected matching source filter invocation: %#v", matched.Invocations)
+	}
+
+	req := testRequest("control", 5*time.Second)
+	req.Envelope.SourceEventType = "PostToolUse"
+	notMatched := r.Dispatch(context.Background(), req)
+	if len(notMatched.Invocations) != 0 || notMatched.Aggregate.Decision.Behavior != protocol.BehaviorNone {
+		t.Fatalf("expected source filter non-match: %#v", notMatched)
+	}
+}
+
+func TestAggregationIgnoresInternalReservedAndSkippedStatuses(t *testing.T) {
+	got := aggregate(
+		[]Invocation{
+			{HandlerName: "reserved", Status: protocol.StatusReserved},
+			{HandlerName: "skipped", Status: protocol.StatusSkipped},
+			{HandlerName: "allow", Status: protocol.StatusOK, Result: protocol.HandlerResult{Status: protocol.StatusOK, Decision: &protocol.Decision{Behavior: protocol.BehaviorAllow}}},
+		},
+		nil,
+		map[string]config.HandlerConfig{
+			"reserved": {OnError: "fail_closed"},
+			"skipped":  {OnError: "fail_closed"},
+			"allow":    {},
+		},
+	)
+	if got.Decision.Behavior != protocol.BehaviorAllow {
+		t.Fatalf("internal statuses should not fail closed: %#v", got)
+	}
+}
+
+func TestSourcePayloadSelectedForArgvAndContextIncludesEvent(t *testing.T) {
+	dir := t.TempDir()
+	h := script(t, `printf '%s' "$1" > "$CAPTURE_DIR/argv.json"
+cat > "$CAPTURE_DIR/stdin.json"
+echo '{"status":"ok","decision":{"behavior":"allow"}}'`)
+	r := NewRunner(map[string]config.HandlerConfig{
+		"source": {Command: []string{h}, HitchEvents: []string{"*"}, SourceEvents: []config.SourceEventFilter{{Harness: "codex", SourceEventType: "PreToolUse"}}, Payload: "source", Kind: "control", TimeoutMS: fastHandlerTimeoutMS},
+	})
+	req := testRequest("control", 5*time.Second)
+	req.Envelope.SourcePayload = protocol.RawJSON(`{ "native" : true, "nested" : { "x" : 1 } }`)
+	req.Envelope.Payload = protocol.RawJSON(`{"tool":{"name":"Bash"}}`)
+	req.Envelope.SessionID = "session-1"
+	req.Envelope.TurnID = "turn-1"
+	req.InboundEventID = "in-1"
+	req.NormalizedEventID = "norm-1"
+
+	t.Setenv("CAPTURE_DIR", dir)
+	got := r.Dispatch(context.Background(), req)
+	if len(got.Invocations) != 1 || got.Invocations[0].Status != protocol.StatusOK {
+		t.Fatalf("expected source payload invocation: %#v", got.Invocations)
+	}
+	argv, err := os.ReadFile(filepath.Join(dir, "argv.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(argv) != `{"native":true,"nested":{"x":1}}` {
+		t.Fatalf("argv payload = %s", argv)
+	}
+	stdin, err := os.ReadFile(filepath.Join(dir, "stdin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var invCtx protocol.InvocationContext
+	if err := json.Unmarshal(stdin, &invCtx); err != nil {
+		t.Fatal(err)
+	}
+	if invCtx.HandlerName != "source" || invCtx.Kind != "control" || invCtx.InboundEventID != "in-1" || invCtx.NormalizedEventID != "norm-1" {
+		t.Fatalf("bad invocation metadata: %#v", invCtx)
+	}
+	if invCtx.PayloadKind != "source" || string(invCtx.Payload) != `{"native":true,"nested":{"x":1}}` {
+		t.Fatalf("bad selected payload: kind=%q payload=%s", invCtx.PayloadKind, invCtx.Payload)
+	}
+	if invCtx.Event.Harness != protocol.HarnessCodex || invCtx.Event.SourceEventType != "PreToolUse" || invCtx.Event.HitchEventType != protocol.EventToolRequested {
+		t.Fatalf("bad event metadata: %#v", invCtx.Event)
+	}
+	if string(invCtx.Event.SourcePayload) != `{ "native" : true, "nested" : { "x" : 1 } }` || string(invCtx.Event.Payload) != `{"tool":{"name":"Bash"}}` {
+		t.Fatalf("event did not include both payloads: %#v", invCtx.Event)
 	}
 }
