@@ -41,9 +41,9 @@ func Replay(ctx context.Context, opts ReplayOptions) (ReplayResult, error) {
 	if opts.DryRun {
 		return ReplayResult{DryRun: true, Event: env}, nil
 	}
-	result := dispatch.NewRunner(cfg.Handlers).Dispatch(ctx, dispatch.Request{Envelope: env, Kind: "control", InboundEventID: harness.NewID("replay"), NormalizedEventID: opts.EventID, ReplaySourceID: opts.EventID, TotalDeadline: 2*time.Second})
+	result := dispatch.NewRunner(cfg.Handlers).Dispatch(ctx, dispatch.Request{Envelope: env, Kind: "control", InboundEventID: harness.NewID("replay"), NormalizedEventID: opts.EventID, ReplaySourceID: opts.EventID, TotalDeadline: 2 * time.Second})
 	for _, inv := range result.Invocations {
-		err := st.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: opts.EventID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error, ReplaySourceID: opts.EventID})
+		err := st.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: inv.ID, InboundEventID: inv.InboundEventID, NormalizedEventID: opts.EventID, HandlerName: inv.HandlerName, Kind: inv.Kind, HookKey: inv.HookKey, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error, ReplaySourceID: opts.EventID})
 		if err != nil {
 			return ReplayResult{}, err
 		}

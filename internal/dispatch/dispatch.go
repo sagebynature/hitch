@@ -16,21 +16,27 @@ import (
 	"time"
 
 	"github.com/sagebynature/hitch/internal/config"
+	"github.com/sagebynature/hitch/internal/harness"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
 type Invocation struct {
-	HandlerName string
-	Kind        string
-	StartedAt   time.Time
-	CompletedAt time.Time
-	Status      protocol.HandlerStatus
-	Stdout      string
-	Stderr      string
-	Output      protocol.RawJSON
-	Decision    protocol.RawJSON
-	Error       string
-	Result      protocol.HandlerResult
+	ID                string
+	InboundEventID    string
+	NormalizedEventID string
+	HookKey           string
+	ReplaySourceID    string
+	HandlerName       string
+	Kind              string
+	StartedAt         time.Time
+	CompletedAt       time.Time
+	Status            protocol.HandlerStatus
+	Stdout            string
+	Stderr            string
+	Output            protocol.RawJSON
+	Decision          protocol.RawJSON
+	Error             string
+	Result            protocol.HandlerResult
 }
 
 type Result struct {
@@ -38,9 +44,25 @@ type Result struct {
 	Invocations []Invocation
 }
 
+type Reservation struct {
+	ID                string
+	InboundEventID    string
+	NormalizedEventID string
+	HandlerName       string
+	Kind              string
+	HookKey           string
+	StartedAt         time.Time
+}
+
+type Recorder interface {
+	ReserveHandlerInvocation(context.Context, Reservation) (bool, error)
+	CompleteHandlerInvocation(context.Context, Invocation) error
+}
+
 type Runner struct {
 	Handlers map[string]config.HandlerConfig
 	Log      *slog.Logger
+	Recorder Recorder
 }
 
 type Request struct {
@@ -76,7 +98,7 @@ func (r Runner) Dispatch(ctx context.Context, req Request) Result {
 	for i, name := range selected {
 		cfg := r.Handlers[name]
 		go func(idx int, n string, c config.HandlerConfig) {
-			ch <- pair{idx: idx, inv: runHandler(ctx, r.Log, n, c, req)}
+			ch <- pair{idx: idx, inv: r.invokeHandler(ctx, n, c, req)}
 		}(i, name, cfg)
 	}
 	inv := make([]Invocation, len(selected))
@@ -85,6 +107,46 @@ func (r Runner) Dispatch(ctx context.Context, req Request) Result {
 		inv[p.idx] = p.inv
 	}
 	return Result{Invocations: inv, Aggregate: aggregate(inv, selected, r.Handlers)}
+}
+
+func (r Runner) invokeHandler(ctx context.Context, name string, cfg config.HandlerConfig, req Request) Invocation {
+	id := harness.NewID("hinv")
+	hookKey := hookKey(req.Envelope, req.Kind)
+	started := time.Now().UTC()
+	base := Invocation{ID: id, InboundEventID: req.InboundEventID, NormalizedEventID: req.NormalizedEventID, ReplaySourceID: req.ReplaySourceID, HookKey: hookKey, HandlerName: name, Kind: cfg.Kind, StartedAt: started}
+	if r.Recorder != nil && req.InboundEventID != "" {
+		reserved, err := r.Recorder.ReserveHandlerInvocation(ctx, Reservation{ID: id, InboundEventID: req.InboundEventID, NormalizedEventID: req.NormalizedEventID, HandlerName: name, Kind: cfg.Kind, HookKey: hookKey, StartedAt: started})
+		if err != nil {
+			base.Status = protocol.StatusError
+			base.Error = err.Error()
+			base.CompletedAt = time.Now().UTC()
+			base.Result = protocol.HandlerResult{Status: protocol.StatusError, Decision: &protocol.Decision{Behavior: protocol.BehaviorNone}}
+			return base
+		}
+		if !reserved {
+			base.Status = protocol.StatusSkipped
+			base.CompletedAt = time.Now().UTC()
+			return base
+		}
+	}
+	inv := runHandler(ctx, r.Log, name, cfg, req)
+	inv.ID = id
+	inv.InboundEventID = req.InboundEventID
+	inv.NormalizedEventID = req.NormalizedEventID
+	inv.ReplaySourceID = req.ReplaySourceID
+	inv.HookKey = hookKey
+	if r.Recorder != nil && req.InboundEventID != "" {
+		if err := r.Recorder.CompleteHandlerInvocation(ctx, inv); err != nil {
+			inv.Status = protocol.StatusError
+			inv.Error = err.Error()
+			inv.Result = protocol.HandlerResult{Status: protocol.StatusError, Decision: &protocol.Decision{Behavior: protocol.BehaviorNone}}
+		}
+	}
+	return inv
+}
+
+func hookKey(env protocol.EventEnvelope, kind string) string {
+	return string(env.Harness) + ":" + env.SourceEventType + ":" + string(env.HitchEventType) + ":" + kind
 }
 
 func (r Runner) matchHandlers(req Request) []string {

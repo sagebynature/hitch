@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -20,6 +21,10 @@ import (
 )
 
 var _ eventStore = (*store.Store)(nil)
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
 
 type lockedBuffer struct {
 	mu  sync.Mutex
@@ -1179,5 +1184,49 @@ func TestNewWithHarnessRegistryRejectsMismatchedNormalizerHarness(t *testing.T) 
 	}
 	if !strings.Contains(w.Body.String(), `normalizer returned harness`) {
 		t.Fatalf("unexpected body %s", w.Body.String())
+	}
+}
+
+func TestSyncDispatchDoesNotRunSameObserverHookTwiceForInboundEvent(t *testing.T) {
+	ctx := context.Background()
+	cfg := testConfig()
+	logPath := filepath.Join(t.TempDir(), "count.txt")
+	cfg.Handlers = map[string]config.HandlerConfig{
+		"observer": {
+			Command:   []string{"/bin/sh", "-c", "printf x >> " + shellQuote(logPath) + "; printf '%s' '{\"status\":\"ok\"}'"},
+			Events:    []string{"*"},
+			Kind:      "observer",
+			TimeoutMS: 1000,
+		},
+	}
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "events.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv := New(cfg, slog.Default(), st)
+	body := `{"mode":"sync","harness":"codex","source_event_type":"PreToolUse","source_payload":{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"pwd"}}}`
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(body))
+	srv.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("sync request failed: %d %s", w.Code, w.Body.String())
+	}
+	eventID := w.Header().Get("X-Hitch-Normalized-Event-ID")
+	env, err := st.GetEvent(ctx, eventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := st.InspectEvent(ctx, eventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.dispatchObservers(ctx, inspection.Inbound.ID, eventID, env)
+	b, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "x" {
+		t.Fatalf("observer ran more than once: %q", b)
 	}
 }

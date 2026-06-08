@@ -29,10 +29,46 @@ type Server struct {
 type eventStore interface {
 	InsertInbound(context.Context, store.InboundEvent) error
 	InsertNormalized(context.Context, store.NormalizedEvent) error
+	ReserveHandlerInvocation(context.Context, store.HandlerInvocationReservation) (bool, error)
+	CompleteHandlerInvocation(context.Context, store.HandlerInvocation) error
 	InsertHandlerInvocation(context.Context, store.HandlerInvocation) error
 	InsertNativeResponse(context.Context, store.NativeResponse) error
 	GetEvent(context.Context, string) (protocol.EventEnvelope, error)
 	InspectEvent(context.Context, string) (store.EventInspection, error)
+}
+
+type dispatchRecorder struct{ store eventStore }
+
+func (r dispatchRecorder) ReserveHandlerInvocation(ctx context.Context, res dispatch.Reservation) (bool, error) {
+	return r.store.ReserveHandlerInvocation(ctx, store.HandlerInvocationReservation{
+		ID:                res.ID,
+		InboundEventID:    res.InboundEventID,
+		NormalizedEventID: res.NormalizedEventID,
+		HandlerName:       res.HandlerName,
+		Kind:              res.Kind,
+		HookKey:           res.HookKey,
+		StartedAt:         res.StartedAt,
+	})
+}
+
+func (r dispatchRecorder) CompleteHandlerInvocation(ctx context.Context, inv dispatch.Invocation) error {
+	return r.store.CompleteHandlerInvocation(ctx, store.HandlerInvocation{
+		ID:                inv.ID,
+		InboundEventID:    inv.InboundEventID,
+		NormalizedEventID: inv.NormalizedEventID,
+		HandlerName:       inv.HandlerName,
+		Kind:              inv.Kind,
+		HookKey:           inv.HookKey,
+		StartedAt:         inv.StartedAt,
+		CompletedAt:       inv.CompletedAt,
+		Status:            inv.Status,
+		Stdout:            inv.Stdout,
+		Stderr:            inv.Stderr,
+		Output:            inv.Output,
+		Decision:          inv.Decision,
+		Error:             inv.Error,
+		ReplaySourceID:    inv.ReplaySourceID,
+	})
 }
 
 type harnessRuntime struct {
@@ -144,7 +180,9 @@ func New(cfg config.Config, log *slog.Logger, st *store.Store) *Server {
 }
 
 func NewWithHarnessRegistry(cfg config.Config, log *slog.Logger, st *store.Store, registry harness.Registry) *Server {
-	s := &Server{cfg: cfg, log: log, store: st, runner: dispatch.NewRunnerWithLogger(cfg.Handlers, log), harnesses: buildHarnessRuntimes(cfg, registry)}
+	runner := dispatch.NewRunnerWithLogger(cfg.Handlers, log)
+	runner.Recorder = dispatchRecorder{store: st}
+	s := &Server{cfg: cfg, log: log, store: st, runner: runner, harnesses: buildHarnessRuntimes(cfg, registry)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", s.handleHealth)
 	mux.HandleFunc("POST /v1/events", s.handleEvent)
@@ -216,16 +254,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	s.handleSyncEvent(w, r, resp, env, log)
 }
 func (s *Server) handleSyncEvent(w http.ResponseWriter, r *http.Request, resp EventResponse, env protocol.EventEnvelope, log apiRequestLog) {
-	result := s.runner.Dispatch(r.Context(), dispatch.Request{Envelope: env, Kind: "control", InboundEventID: resp.InboundEventID, NormalizedEventID: resp.NormalizedEventID, TotalDeadline: 2*time.Second})
-	for _, inv := range result.Invocations {
-		if err := s.store.InsertHandlerInvocation(r.Context(), store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: resp.NormalizedEventID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error}); err != nil {
-			log.emit(r.Context(), s.log, slog.LevelInfo, "api request failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error_kind", errorKind(err), "error", err.Error())
-			if writeErr := writeError(w, err); writeErr != nil {
-				log.emit(r.Context(), s.log, slog.LevelInfo, "api response write failed", http.StatusInternalServerError, "control_handler_count", len(result.Invocations), "error_kind", "response_write_failed", "error", writeErr.Error())
-			}
-			return
-		}
-	}
+	result := s.runner.Dispatch(r.Context(), dispatch.Request{Envelope: env, Kind: "control", InboundEventID: resp.InboundEventID, NormalizedEventID: resp.NormalizedEventID, TotalDeadline: 2 * time.Second})
 	runtime := s.harnesses[env.Harness]
 	native, err := runtime.normalizer.Translate(env.SourceEventType, result.Aggregate)
 	if err != nil {
@@ -317,23 +346,6 @@ func (s *Server) dispatchObservers(ctx context.Context, inboundID string, normal
 	result := s.runner.Dispatch(ctx, dispatch.Request{Envelope: env, Kind: "observer", InboundEventID: inboundID, NormalizedEventID: normalizedID})
 	if len(result.Invocations) == 0 {
 		return
-	}
-	persisted := 0
-	for _, inv := range result.Invocations {
-		if err := s.store.InsertHandlerInvocation(ctx, store.HandlerInvocation{ID: harness.NewID("hinv"), NormalizedEventID: normalizedID, HandlerName: inv.HandlerName, Kind: inv.Kind, StartedAt: inv.StartedAt, CompletedAt: inv.CompletedAt, Status: inv.Status, Stdout: inv.Stdout, Stderr: inv.Stderr, Output: inv.Output, Decision: inv.Decision, Error: inv.Error}); err != nil {
-			s.log.Log(ctx, slog.LevelInfo, "observer dispatch failed",
-				"normalized_event_id", normalizedID,
-				"harness", string(env.Harness),
-				"source_event_type", env.SourceEventType,
-				"hitch_event_type", string(env.HitchEventType),
-				"observer_handler_count", len(result.Invocations),
-				"observer_handler_persisted_count", persisted,
-				"duration_ms", time.Since(started).Milliseconds(),
-				"error", err.Error(),
-			)
-			return
-		}
-		persisted++
 	}
 	attrs := []any{
 		"normalized_event_id", normalizedID,
