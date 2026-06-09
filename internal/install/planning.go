@@ -72,6 +72,12 @@ func plannedOps(harnesses []string, uninstall bool, apiURL string, pinURL bool) 
 				action = "uninstall_opencode_plugin"
 			}
 			ops = append(ops, installOperation{Harness: h, Action: action, Path: detection.ConfigPath, BackupPath: timestampedBackupPath(h, filepath.Base(detection.ConfigPath)), Status: "planned", Reason: extensionURLReason(apiURL), AdapterURL: apiURL})
+		case "antigravity":
+			action := "install_antigravity_hook"
+			if uninstall {
+				action = "uninstall_antigravity_hook"
+			}
+			ops = append(ops, installOperation{Harness: h, Action: action, Path: detection.ConfigPath, BackupPath: timestampedBackupPath(h, filepath.Base(detection.ConfigPath)), Status: "planned", Reason: adapterCommandBase(binaryPath, apiURL)})
 		}
 	}
 	return ops, nil

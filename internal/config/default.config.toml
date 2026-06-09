@@ -128,3 +128,13 @@ enabled = true
 "session.error" = "error.reported"
 # Full source-event catalog and opt-in mappings are documented in docs/events.md.
 
+[harness.antigravity]
+enabled = true
+
+[harness.antigravity.event_map]
+PreToolUse = "tool.requested"
+PostToolUse = "tool.completed"
+PreInvocation = "turn.user_prompt"
+PostInvocation = "turn.completed"
+Stop = "session.ended"
+

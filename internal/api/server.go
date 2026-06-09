@@ -193,11 +193,12 @@ func NewWithHarnessRegistry(cfg config.Config, log *slog.Logger, st *store.Store
 
 func buildHarnessRuntimes(cfg config.Config, registry harness.Registry) map[protocol.Harness]harnessRuntime {
 	return map[protocol.Harness]harnessRuntime{
-		protocol.HarnessCodex:    buildHarnessRuntime(registry, protocol.HarnessCodex, cfg.Harness.Codex.EventMap),
-		protocol.HarnessHermes:   buildHarnessRuntime(registry, protocol.HarnessHermes, cfg.Harness.Hermes.EventMap),
-		protocol.HarnessPi:       buildHarnessRuntime(registry, protocol.HarnessPi, cfg.Harness.Pi.EventMap),
-		protocol.HarnessOMP:      buildHarnessRuntime(registry, protocol.HarnessOMP, cfg.Harness.OMP.EventMap),
-		protocol.HarnessOpenCode: buildHarnessRuntime(registry, protocol.HarnessOpenCode, cfg.Harness.OpenCode.EventMap),
+		protocol.HarnessCodex:      buildHarnessRuntime(registry, protocol.HarnessCodex, cfg.Harness.Codex.EventMap),
+		protocol.HarnessHermes:     buildHarnessRuntime(registry, protocol.HarnessHermes, cfg.Harness.Hermes.EventMap),
+		protocol.HarnessPi:         buildHarnessRuntime(registry, protocol.HarnessPi, cfg.Harness.Pi.EventMap),
+		protocol.HarnessOMP:        buildHarnessRuntime(registry, protocol.HarnessOMP, cfg.Harness.OMP.EventMap),
+		protocol.HarnessOpenCode:   buildHarnessRuntime(registry, protocol.HarnessOpenCode, cfg.Harness.OpenCode.EventMap),
+		protocol.HarnessAntigravity: buildHarnessRuntime(registry, protocol.HarnessAntigravity, cfg.Harness.Antigravity.EventMap),
 	}
 }
 

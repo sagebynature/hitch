@@ -52,6 +52,14 @@ func applyOps(ops []installOperation, uninstall bool) error {
 			if err := uninstallOpenCodePlugin(op.Path, op.BackupPath); err != nil {
 				return err
 			}
+		case "install_antigravity_hook":
+			if err := installAntigravityHook(op.Path, op.BackupPath, op.Reason); err != nil {
+				return err
+			}
+		case "uninstall_antigravity_hook":
+			if err := uninstallAntigravityHook(op.Path, op.BackupPath); err != nil {
+				return err
+			}
 		case "skip":
 			continue
 		case "install", "uninstall":

@@ -6,6 +6,7 @@ import (
 	"github.com/sagebynature/hitch/internal/harness/omp"
 	"github.com/sagebynature/hitch/internal/harness/opencode"
 	"github.com/sagebynature/hitch/internal/harness/pi"
+	"github.com/sagebynature/hitch/internal/harness/antigravity"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -23,11 +24,12 @@ func NewRegistry(normalizers map[protocol.Harness]Normalizer) Registry {
 
 func DefaultRegistry() Registry {
 	return NewRegistry(map[protocol.Harness]Normalizer{
-		protocol.HarnessCodex:    codex.Mapper{},
-		protocol.HarnessHermes:   hermes.Mapper{},
-		protocol.HarnessPi:       pi.Mapper{},
-		protocol.HarnessOMP:      omp.Mapper{},
-		protocol.HarnessOpenCode: opencode.Mapper{},
+		protocol.HarnessCodex:       codex.Mapper{},
+		protocol.HarnessHermes:      hermes.Mapper{},
+		protocol.HarnessPi:          pi.Mapper{},
+		protocol.HarnessOMP:         omp.Mapper{},
+		protocol.HarnessOpenCode:    opencode.Mapper{},
+		protocol.HarnessAntigravity: antigravity.Mapper{},
 	})
 }
 

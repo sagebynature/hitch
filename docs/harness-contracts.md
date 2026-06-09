@@ -13,6 +13,7 @@ Initial verified harness contracts:
 - Hermes: maps shell hook payloads and translates decisions to Hermes stdout JSON. Verified E2E: `pre_tool_call` `block` returns `{"action":"block","message":"..."}`.
 - Pi / OMP: map extension callback events in Go and install managed TypeScript extensions that post observer callbacks plus extension `ctx` metadata with `mode:"async"`, post return-capable control callbacks with `mode:"sync"`, apply `adapter_action` return values or mutations only for sync responses, and fail open when Hitch is unavailable. OMP uses its native `~/.omp/agent/extensions/hitch/index.ts` discovery path and current extension event names such as `session_before_branch`, `session.compacting`, and `auto_retry_*`.
 - OpenCode: installs a managed TypeScript plugin into `~/.config/opencode/plugins/hitch.ts`; posts typed plugin hooks with `mode:"sync"` and selected SDK events with `mode:"async"` to `/v1/events`; translates normalized decisions into plugin-owned adapter actions (`noop`, `throw`, `set`, `append`, `inject_context`) for typed hooks; and fails open if Hitch is unavailable.
+- Antigravity: installs managed hooks into `~/.gemini/config/hooks.json`; translates normalized decisions (`allow`, `deny`, `injectSteps`, `terminationBehavior`) to Antigravity stdout JSON.
 
 Adapter fail-open behavior:
 
