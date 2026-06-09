@@ -218,7 +218,7 @@ func knownHarnessSpecs() []harnessSpec {
 		{Name: "pi", Title: "Pi", Command: "pi", ConfigPath: "~/.pi/agent/extensions/hitch/index.ts", Supported: true},
 		{Name: "omp", Title: "OMP", Command: "omp", ConfigPath: "~/.omp/agent/extensions/hitch/index.ts", Supported: true},
 		{Name: "opencode", Title: "OpenCode", Command: "opencode", ConfigPath: "~/.config/opencode/plugins/hitch.ts", Supported: true},
-		{Name: "antigravity", Title: "Antigravity", Command: "antigravity", ConfigPath: "~/.gemini/config/hooks.json", Supported: true},
+		{Name: "antigravity", Title: "Antigravity", Command: "agy", ConfigPath: "~/.gemini/config/hooks.json", Supported: true},
 	}
 }
 
