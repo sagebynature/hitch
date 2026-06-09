@@ -2,7 +2,7 @@
 
 Control every agent lifecycle from one event layer.
 
-Hitch turns Codex, Hermes, Pi, OMP, and OpenCode hooks into one portable event protocol. Write a hook once, run it across harnesses, preserve the native payload, and route lifecycle events to local or remote handlers.
+Hitch turns Codex, Hermes, Pi, OMP, OpenCode, and Antigravity hooks into one portable event protocol. Write a hook once, run it across harnesses, preserve the native payload, and route lifecycle events to local or remote handlers.
 
 ## Why Hitch?
 
@@ -29,11 +29,11 @@ A single Hitch handler can watch tool calls, block risky commands, inject contex
 
 Let developers choose their harness. Keep lifecycle control centralized.
 
-Your team may use Codex, Hermes, Pi, OMP, OpenCode, or a new harness next month. Hitch lets those tools emit lifecycle events into one REST API, locally or remotely, so platform, security, and developer-experience teams can manage routing, handler execution, and observability from one place without forcing every developer onto the same agent CLI.
+Your team may use Codex, Hermes, Pi, OMP, OpenCode, Antigravity, or a new harness next month. Hitch lets those tools emit lifecycle events into one REST API, locally or remotely, so platform, security, and developer-experience teams can manage routing, handler execution, and observability from one place without forcing every developer onto the same agent CLI.
 
 ## What it provides
 
-- **Universal lifecycle event envelope** for native Codex, Hermes, Pi, OMP, and OpenCode hook payloads.
+- **Universal lifecycle event envelope** for native Codex, Hermes, Pi, OMP, OpenCode, and Antigravity hook payloads.
 - **Original payload preservation** through `source_payload`, so handlers can inspect harness-specific detail when needed.
 - **External-command handler protocol**: handlers read normalized JSON from stdin and return JSON decisions on stdout.
 - **Synchronous decisions** translated back to each harness's native response format.
@@ -140,12 +140,13 @@ go test ./...
 Hitch currently includes:
 
 - Codex shell hook installation into `~/.codex/hooks.json`.
-- Codex and Hermes shell hook shim entrypoints via `hitch-client`.
+- Codex, Hermes, and Antigravity shell hook shim entrypoints via `hitch-client`.
 - Pi TypeScript extension hook installation into `~/.pi/agent/extensions/hitch/index.ts`.
 - OMP TypeScript extension hook installation into `~/.omp/agent/extensions/hitch/index.ts`.
 - OpenCode TypeScript plugin installation into `~/.config/opencode/plugins/hitch.ts`.
+- Antigravity shell hook installation into `~/.gemini/config/hooks.json`.
 - Server config seeding via `hitch config init` for `~/.config/hitch/config.toml`.
-- Harness detection for Codex, Hermes, Pi, OMP, and OpenCode.
+- Harness detection for Codex, Hermes, Pi, OMP, OpenCode, and Antigravity.
 
 The source installer creates missing Hitch user config with `hitch config init`, prompts for a Hitch server URL through `/dev/tty` even when installed with `curl ... | sh`, and can persist `HITCH_URL` for remote servers. `hitch-client install` installs supported Codex and Hermes hooks, installs managed Pi and OMP extensions, installs a managed OpenCode plugin, and prefers `hitch-client` in managed shell-hook commands when it is installed beside `hitch`. Generated hooks resolve the server URL at runtime unless `--url` pins one.
 

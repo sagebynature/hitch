@@ -1,6 +1,6 @@
 # Hitch Events
 
-Hitch turns source hook payloads from Codex, Hermes, Pi, OMP, and OpenCode into one stable event envelope. Handlers receive the normalized envelope on stdin and return one handler result on stdout.
+Hitch turns source hook payloads from Codex, Hermes, Pi, OMP, OpenCode, and Antigravity into one stable event envelope. Handlers receive the normalized envelope on stdin and return one handler result on stdout.
 
 ## Normalized envelope
 
@@ -11,7 +11,7 @@ Every harness normalizer creates the same envelope shape:
 | `hitch_version` | Hitch runtime | Current protocol version. |
 | `event_id` | Hitch runtime | Unique `evt_...` identifier generated when Hitch receives the event. |
 | `received_at` | Hitch runtime | UTC timestamp generated at receipt. |
-| `harness` | Adapter selection | One of `codex`, `hermes`, `pi`, `omp`, or `opencode`. |
+| `harness` | Adapter selection | One of `codex`, `hermes`, `pi`, `omp`, `opencode`, or `antigravity`. |
 | `source_event_type` | Harness source event name | The exact source hook or callback name Hitch mapped. |
 | `source_payload` | Harness source payload | The original JSON payload received by Hitch. Pi, OMP, and OpenCode unwrap the installed adapter transport envelope before normalization. |
 | `hitch_event_type` | Server event map | One of the normalized event names below. |
@@ -243,3 +243,15 @@ OpenCode typed-hook handlers may also return `decision.native_response`. When pr
 2. `decision.native_response` is an escape hatch. It bypasses Hitch's behavior translation and returns harness-native JSON unchanged.
 3. A translated empty object or `adapter_action:"noop"` means Hitch made no control-flow change.
 4. All dispatch uses `POST /v1/events`. Missing or `"async"` request mode runs observer handlers and ignores native responses; `"sync"` request mode is accepted only for control-capable source events and returns the translated native response body directly.
+
+## Antigravity source events
+
+| Antigravity source event | Hitch event | Normalized payload | Native response behavior |
+| --- | --- | --- | --- |
+| `PreToolUse` | `tool.requested` | Original Antigravity payload | `deny`, `block`, or `stop` returns `decision: "deny"`; `allow` or `transform` returns `decision: "allow"`. |
+| `PostToolUse` | `tool.completed` | Original Antigravity payload | Observer-only lifecycle event. Returns `{}`. |
+| `PreInvocation` | `turn.user_prompt` | Original Antigravity payload | `inject_context` adds `ephemeralMessage` into `injectSteps`. |
+| `PostInvocation` | `turn.completed` | Original Antigravity payload | `inject_context` adds `ephemeralMessage` into `injectSteps`; `stop` returns `terminationBehavior: "terminate"`; `continue` returns `terminationBehavior: "force_continue"`. |
+| `Stop` | `session.ended` | Original Antigravity payload | `continue` returns `decision: "continue"` with `reason`. |
+
+Antigravity handlers may also return `decision.native_response`. When present, Hitch returns that JSON directly.

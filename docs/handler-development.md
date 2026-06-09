@@ -33,12 +33,12 @@ Common mappings:
 
 | Developer goal | Hitch event | Example source events |
 | --- | --- | --- |
-| Inspect or block a tool before it runs | `tool.requested` | Codex `PreToolUse`, Hermes `pre_tool_call`, Pi/OMP `tool_call`, OpenCode `tool.execute.before` |
-| Inspect a completed tool result | `tool.completed` | Codex `PostToolUse`, Hermes `transform_tool_result`, Pi/OMP `tool_result`, OpenCode `tool.execute.after` |
+| Inspect or block a tool before it runs | `tool.requested` | Codex `PreToolUse`, Hermes `pre_tool_call`, Pi/OMP `tool_call`, OpenCode `tool.execute.before`, Antigravity `PreToolUse` |
+| Inspect a completed tool result | `tool.completed` | Codex `PostToolUse`, Hermes `transform_tool_result`, Pi/OMP `tool_result`, OpenCode `tool.execute.after`, Antigravity `PostToolUse` |
 | Add context to a user request | `turn.user_prompt` | Codex `UserPromptSubmit`, Hermes `pre_gateway_dispatch`, Pi/OMP `input`, OpenCode `chat.message` |
 | Inspect or augment an LLM request | `llm.requested` | Hermes `pre_llm_call`; Pi/OMP `before_provider_request`; OpenCode `chat.params` or `chat.headers` when opted in |
 | Run at model or agent turn start | `turn.started` | Pi `turn_start`, OMP `turn_start` |
-| Run after model or agent turn completion | `turn.completed` | Codex `Stop`, Pi/OMP `turn_end`, OpenCode `session.idle` |
+| Run after model or agent turn completion | `turn.completed` | Codex `Stop`, Pi/OMP `turn_end`, OpenCode `session.idle`, Antigravity `Stop` |
 | Query assistant output completion consistently | `turn.assistant_completed` | Codex `Stop`, Hermes `transform_llm_output`, Pi/OMP `turn_end`, OpenCode managed-plugin `message.part.text` |
 | Handle compaction lifecycle | `session.compacted` | Codex `PreCompact`, Pi `session_before_compact`, OMP `auto_compaction_start`, OpenCode `experimental.session.compacting` |
 

@@ -40,6 +40,8 @@ func detectHarness(spec harnessSpec) harnessDetection {
 		d.Installed = piExtensionInstalled(d.ConfigPath)
 	case "opencode":
 		d.Installed = opencodePluginInstalled(d.ConfigPath)
+	case "antigravity":
+		d.Installed = antigravityHookInstalled(d.ConfigPath)
 	}
 	return d
 }
