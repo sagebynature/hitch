@@ -13,6 +13,22 @@ var codexLifecycleEvents = []string{
 	"Stop",
 }
 
+var claudecodeHookEvents = []string{
+	"SessionStart",
+	"SessionEnd",
+	"UserPromptSubmit",
+	"PreToolUse",
+	"PermissionRequest",
+	"PostToolUse",
+	"PostToolUseFailure",
+	"Stop",
+	"StopFailure",
+	"SubagentStart",
+	"SubagentStop",
+	"PreCompact",
+	"PostCompact",
+}
+
 var antigravityHookEvents = []string{
 	"PreToolUse",
 	"PostToolUse",
@@ -219,6 +235,7 @@ func knownHarnessSpecs() []harnessSpec {
 		{Name: "omp", Title: "OMP", Command: "omp", ConfigPath: "~/.omp/agent/extensions/hitch/index.ts", Supported: true},
 		{Name: "opencode", Title: "OpenCode", Command: "opencode", ConfigPath: "~/.config/opencode/plugins/hitch.ts", Supported: true},
 		{Name: "antigravity", Title: "Antigravity", Command: "agy", ConfigPath: "~/.gemini/config/hooks.json", Supported: true},
+		{Name: "claudecode", Title: "Claude Code", Command: "claude", ConfigPath: "~/.claude/settings.json", Supported: true},
 	}
 }
 

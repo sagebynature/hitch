@@ -199,6 +199,7 @@ func buildHarnessRuntimes(cfg config.Config, registry harness.Registry) map[prot
 		protocol.HarnessOMP:        buildHarnessRuntime(registry, protocol.HarnessOMP, cfg.Harness.OMP.EventMap),
 		protocol.HarnessOpenCode:   buildHarnessRuntime(registry, protocol.HarnessOpenCode, cfg.Harness.OpenCode.EventMap),
 		protocol.HarnessAntigravity: buildHarnessRuntime(registry, protocol.HarnessAntigravity, cfg.Harness.Antigravity.EventMap),
+		protocol.HarnessClaudeCode:  buildHarnessRuntime(registry, protocol.HarnessClaudeCode, cfg.Harness.ClaudeCode.EventMap),
 	}
 }
 
