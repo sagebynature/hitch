@@ -1222,9 +1222,17 @@ func TestSyncDispatchDoesNotRunSameObserverHookTwiceForInboundEvent(t *testing.T
 		t.Fatal(err)
 	}
 	srv.dispatchObservers(ctx, inspection.Inbound.ID, eventID, env)
-	b, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
+	var b []byte
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		b, err = os.ReadFile(logPath)
+		if err == nil {
+			break
+		}
+		if !os.IsNotExist(err) || time.Now().After(deadline) {
+			t.Fatal(err)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	if string(b) != "x" {
 		t.Fatalf("observer ran more than once: %q", b)
