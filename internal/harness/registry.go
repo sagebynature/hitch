@@ -1,12 +1,13 @@
 package harness
 
 import (
+	"github.com/sagebynature/hitch/internal/harness/antigravity"
+	"github.com/sagebynature/hitch/internal/harness/claudecode"
 	"github.com/sagebynature/hitch/internal/harness/codex"
 	"github.com/sagebynature/hitch/internal/harness/hermes"
 	"github.com/sagebynature/hitch/internal/harness/omp"
 	"github.com/sagebynature/hitch/internal/harness/opencode"
 	"github.com/sagebynature/hitch/internal/harness/pi"
-	"github.com/sagebynature/hitch/internal/harness/antigravity"
 	"github.com/sagebynature/hitch/internal/protocol"
 )
 
@@ -30,6 +31,7 @@ func DefaultRegistry() Registry {
 		protocol.HarnessOMP:         omp.Mapper{},
 		protocol.HarnessOpenCode:    opencode.Mapper{},
 		protocol.HarnessAntigravity: antigravity.Mapper{},
+		protocol.HarnessClaudeCode:  claudecode.Mapper{},
 	})
 }
 

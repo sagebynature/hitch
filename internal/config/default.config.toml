@@ -138,3 +138,21 @@ PreInvocation = "turn.user_prompt"
 PostInvocation = "turn.completed"
 Stop = "session.ended"
 
+[harness.claudecode]
+enabled = true
+
+[harness.claudecode.event_map]
+SessionStart = "session.started"
+SessionEnd = "session.ended"
+UserPromptSubmit = "turn.user_prompt"
+PreToolUse = "tool.requested"
+PermissionRequest = "tool.permission_requested"
+PostToolUse = "tool.completed"
+PostToolUseFailure = ["tool.completed", "error.reported"]
+Stop = ["turn.completed", "turn.assistant_completed"]
+StopFailure = ["turn.completed", "error.reported"]
+SubagentStart = "subagent.started"
+SubagentStop = "subagent.completed"
+PreCompact = "session.compacted"
+PostCompact = "session.compacted"
+
