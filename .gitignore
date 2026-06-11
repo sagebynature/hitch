@@ -36,6 +36,18 @@ bun.lockb
 .next/
 coverage/
 
+# Python SDK
+sdk/python/__pycache__/
+sdk/python/**/__pycache__/
+sdk/python/.pytest_cache/
+sdk/python/.mypy_cache/
+sdk/python/.ruff_cache/
+sdk/python/.venv/
+sdk/python/venv/
+sdk/python/build/
+sdk/python/dist/
+sdk/python/*.egg-info/
+
 # Hitch local runtime data
 *.db
 *.db-shm

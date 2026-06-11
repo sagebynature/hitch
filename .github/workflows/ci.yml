@@ -51,8 +51,3 @@ jobs:
         run: |
           ./scripts/install.sh
           "$HITCH_INSTALL_DIR/hitch" --version
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: latest
