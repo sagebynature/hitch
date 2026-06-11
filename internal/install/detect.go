@@ -42,6 +42,8 @@ func detectHarness(spec harnessSpec) harnessDetection {
 		d.Installed = opencodePluginInstalled(d.ConfigPath)
 	case "antigravity":
 		d.Installed = antigravityHookInstalled(d.ConfigPath)
+	case "claudecode":
+		d.Installed = claudecodeHookInstalled(d.ConfigPath)
 	}
 	return d
 }

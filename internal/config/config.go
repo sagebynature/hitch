@@ -129,6 +129,7 @@ type HarnessConfig struct {
 	OMP         HarnessToggle `toml:"omp"`
 	OpenCode    HarnessToggle `toml:"opencode"`
 	Antigravity HarnessToggle `toml:"antigravity"`
+	ClaudeCode  HarnessToggle `toml:"claudecode"`
 }
 
 type HarnessToggle struct {
@@ -410,6 +411,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := validateHarnessEventMap("antigravity", c.Harness.Antigravity.EventMap); err != nil {
+		return err
+	}
+	if err := validateHarnessEventMap("claudecode", c.Harness.ClaudeCode.EventMap); err != nil {
 		return err
 	}
 	for name, h := range c.Handlers {

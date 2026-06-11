@@ -18,10 +18,11 @@ const (
 	HarnessOMP          Harness = "omp"
 	HarnessOpenCode     Harness = "opencode"
 	HarnessAntigravity  Harness = "antigravity"
+	HarnessClaudeCode   Harness = "claudecode"
 )
 
 var validHarnesses = map[Harness]struct{}{
-	HarnessCodex: {}, HarnessHermes: {}, HarnessPi: {}, HarnessOMP: {}, HarnessOpenCode: {}, HarnessAntigravity: {},
+	HarnessCodex: {}, HarnessHermes: {}, HarnessPi: {}, HarnessOMP: {}, HarnessOpenCode: {}, HarnessAntigravity: {}, HarnessClaudeCode: {},
 }
 
 type EventType string

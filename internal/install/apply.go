@@ -60,6 +60,14 @@ func applyOps(ops []installOperation, uninstall bool) error {
 			if err := uninstallAntigravityHook(op.Path, op.BackupPath); err != nil {
 				return err
 			}
+		case "install_claudecode_hook":
+			if err := installClaudeCodeHook(op.Path, op.BackupPath, op.Reason); err != nil {
+				return err
+			}
+		case "uninstall_claudecode_hook":
+			if err := uninstallClaudeCodeHook(op.Path, op.BackupPath); err != nil {
+				return err
+			}
 		case "skip":
 			continue
 		case "install", "uninstall":
