@@ -57,3 +57,6 @@ temp/
 .omx/
 !.omx/plans/
 !.omx/plans/**
+
+# Mapped configuration
+.hitch_config

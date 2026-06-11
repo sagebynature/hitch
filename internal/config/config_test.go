@@ -408,6 +408,45 @@ on_timeout = "fail_open"
 	}
 }
 
+func TestLoadWithExtensionDirDiscoversShellExtension(t *testing.T) {
+	dir := t.TempDir()
+	ext := filepath.Join(dir, "hitch-face")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ext, "config.toml"), []byte(`
+name = "hitch_face"
+type = "shell"
+command = ["/bin/sh", "adapter.sh"]
+kind = "observer"
+hitch_events = ["*"]
+payload = "hitch"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadWithExtensionDir(configPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := cfg.Handlers["hitch_face"]
+	if h.Type != "shell" {
+		t.Fatalf("handler type = %q, want shell", h.Type)
+	}
+	if got, want := h.Command, []string{"/bin/sh", "adapter.sh"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("command = %#v, want %#v", got, want)
+	}
+	if h.WorkingDir != ext {
+		t.Fatalf("working_dir = %q, want extension dir %q", h.WorkingDir, ext)
+	}
+}
+
 func TestLoadWithExtensionDirRejectsInvalidExtension(t *testing.T) {
 	dir := t.TempDir()
 	ext := filepath.Join(dir, "broken")

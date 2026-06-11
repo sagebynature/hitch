@@ -76,6 +76,15 @@ hitch-client install --only opencode --yes --json</code></pre>
 ./bin/hitch --version
 ./bin/hitch-client --version
 ./bin/hitch serve --config internal/config/default.config.toml</code></pre>
+          <h3>Container image</h3>
+          <pre class="code-block"><code>docker build -t hitch .
+docker run --rm -p 8799:8799 hitch
+make docker-run
+HITCH_CONFIG_DIR="$PWD/.hitch-docker" make docker-run
+docker run --rm -p 8799:8799 \
+  -v "$HOME/.config/hitch:/var/lib/hitch/.config/hitch" \
+  hitch</code></pre>
+          <p>The image listens on <code>0.0.0.0:8799</code> and uses the same logical Hitch config root as local runs: <code>~/.config/hitch</code>. <code>make docker-run</code> creates <code>~/.config/hitch/config.toml</code>, <code>extensions/</code>, and <code>backups/</code> when missing, then mounts that directory at <code>/var/lib/hitch/.config/hitch</code> in the container. Override <code>HITCH_CONFIG_DIR</code> when you want a different host source. The runtime image includes Node.js for JavaScript/TypeScript extension adapters, and Compose sets <code>HITCH_FACE_URL=http://host.docker.internal:8888/event</code> so containerized handlers can call desktop services on the host.</p>
           <h3>Hook install commands</h3>
           <pre class="code-block"><code>hitch-client install --dry-run --json
 hitch-client install --all --dry-run --json

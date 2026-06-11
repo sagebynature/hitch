@@ -11,7 +11,10 @@ import (
 
 type extensionFile struct {
 	Name         string              `toml:"name"`
+	Type         string              `toml:"type"`
 	Entrypoint   string              `toml:"entrypoint"`
+	Command      []string            `toml:"command"`
+	WorkingDir   string              `toml:"working_dir"`
 	Kind         string              `toml:"kind"`
 	Events       []string            `toml:"events"`
 	HitchEvents  []string            `toml:"hitch_events"`
@@ -88,6 +91,17 @@ func mergeExtensions(cfg *Config, root string) error {
 		if err != nil {
 			return err
 		}
+		resolvable[ext.Name] = struct{}{}
+
+		referenced = referencesExtension(cfg, name) || referencesExtension(cfg, ext.Name)
+		needsMerge = (referencesExtension(cfg, name) && needsExtensionDefaults(cfg, name)) ||
+			(referencesExtension(cfg, ext.Name) && needsExtensionDefaults(cfg, ext.Name))
+		if _, exists := cfg.Handlers[ext.Name]; exists && !needsMerge {
+			continue
+		}
+		if referenced && !needsMerge {
+			continue
+		}
 		if referenced {
 			if err := mergeExtensionDefaults(cfg, root, name, ext); err != nil {
 				return err
@@ -96,12 +110,13 @@ func mergeExtensions(cfg *Config, root string) error {
 		}
 
 		h := handlerFromExtension(ext)
-		h.WorkingDir = filepath.Join(root, name)
+		if h.WorkingDir == "" {
+			h.WorkingDir = extensionWorkingDir(root, name, "")
+		} else {
+			h.WorkingDir = extensionWorkingDir(root, name, h.WorkingDir)
+		}
 		if err := normalizeHandlerConfig(ext.Name, &h); err != nil {
 			return err
-		}
-		if h.Entrypoint == "" {
-			return fmt.Errorf("extension %s entrypoint is required", ext.Name)
 		}
 		if _, exists := cfg.Handlers[ext.Name]; !exists {
 			cfg.Handlers[ext.Name] = h
@@ -126,9 +141,6 @@ func readExtensionConfig(root, name string) (extensionFile, error) {
 	}
 	if ext.Name == "" {
 		ext.Name = name
-	}
-	if ext.Name != name {
-		return extensionFile{}, fmt.Errorf("extension %s config name %q must match directory", name, ext.Name)
 	}
 	normalized := HandlerConfig{
 		Events:       append([]string(nil), ext.Events...),
@@ -184,9 +196,9 @@ func needsExtensionDefaults(cfg *Config, extensionName string) bool {
 
 func mergeExtensionDefaults(cfg *Config, root, extensionName string, ext extensionFile) error {
 	defaults := handlerFromExtension(ext)
-	defaults.WorkingDir = filepath.Join(root, extensionName)
+	defaults.WorkingDir = extensionWorkingDir(root, extensionName, defaults.WorkingDir)
 	for name, h := range cfg.Handlers {
-		if h.Type != "native" || h.Extension != extensionName {
+		if h.Type != "native" || (h.Extension != extensionName && h.Extension != ext.Name) {
 			continue
 		}
 		if h.WorkingDir == "" {
@@ -226,10 +238,15 @@ func mergeExtensionDefaults(cfg *Config, root, extensionName string, ext extensi
 }
 
 func handlerFromExtension(ext extensionFile) HandlerConfig {
-	return HandlerConfig{
-		Type:         "native",
-		Extension:    ext.Name,
+	handlerType := ext.Type
+	if handlerType == "" {
+		handlerType = "native"
+	}
+	h := HandlerConfig{
+		Type:         handlerType,
 		Entrypoint:   ext.Entrypoint,
+		Command:      append([]string(nil), ext.Command...),
+		WorkingDir:   ext.WorkingDir,
 		Kind:         ext.Kind,
 		Events:       append([]string(nil), ext.Events...),
 		HitchEvents:  append([]string(nil), ext.HitchEvents...),
@@ -239,4 +256,20 @@ func handlerFromExtension(ext extensionFile) HandlerConfig {
 		OnError:      ext.OnError,
 		OnTimeout:    ext.OnTimeout,
 	}
+	if handlerType == "native" {
+		h.Extension = ext.Name
+	}
+	return h
+}
+
+func extensionWorkingDir(root, extensionDir, workingDir string) string {
+	base := filepath.Join(root, extensionDir)
+	if workingDir == "" {
+		return base
+	}
+	dir := ExpandHome(workingDir)
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(base, dir)
+	}
+	return filepath.Clean(dir)
 }

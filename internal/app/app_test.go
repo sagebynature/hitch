@@ -8,8 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
-)
 
+	"github.com/sagebynature/hitch/internal/config"
+)
 
 func TestServerAddr(t *testing.T) {
 	got := ServerAddr("127.0.0.1", 8799)
@@ -40,6 +41,17 @@ func TestResolveConfigPathDefaultsOnlyWhenFlagNotProvided(t *testing.T) {
 	}
 	if got := resolveConfigPath("/tmp/hitch.toml", true); got != "/tmp/hitch.toml" {
 		t.Fatalf("explicit config path changed to %q", got)
+	}
+}
+
+func TestServerHostOverrideUsesEnvironment(t *testing.T) {
+	t.Setenv("HITCH_SERVER_HOST", "0.0.0.0")
+	cfg := config.Config{Server: config.ServerConfig{Host: "127.0.0.1", Port: 8799, MaxRequestBytes: 1}}
+
+	applyServerHostOverride(&cfg)
+
+	if cfg.Server.Host != "0.0.0.0" {
+		t.Fatalf("server host override was not applied: %#v", cfg.Server)
 	}
 }
 
@@ -127,4 +139,3 @@ extension = "test_ext"
 		t.Fatalf("expected log to contain extension name 'test_ext', got:\n%s", out)
 	}
 }
-

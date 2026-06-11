@@ -82,6 +82,24 @@ func TestDispatchRunsHandlerInWorkingDir(t *testing.T) {
 	}
 }
 
+func TestDispatchRunsRelativeShellScriptFromWorkingDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell scripts not supported in this test")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "adapter.sh"), []byte("#!/bin/sh\nprintf '%s' '{\"status\":\"ok\",\"decision\":{\"behavior\":\"allow\"}}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{"/bin/sh", "adapter.sh"}, WorkingDir: dir, HitchEvents: []string{"*"}, Kind: "control", TimeoutMS: fastHandlerTimeoutMS}})
+	got := r.Dispatch(context.Background(), testRequest("control", 5*time.Second))
+	if len(got.Invocations) != 1 || got.Invocations[0].Status != protocol.StatusOK {
+		t.Fatalf("expected ok invocation: %#v", got.Invocations)
+	}
+	if got.Aggregate.Decision.Behavior != protocol.BehaviorAllow {
+		t.Fatalf("behavior = %s, want allow", got.Aggregate.Decision.Behavior)
+	}
+}
+
 func TestDispatchTimeout(t *testing.T) {
 	h := script(t, `sleep 1`)
 	r := NewRunner(map[string]config.HandlerConfig{"a": {Command: []string{h}, HitchEvents: []string{"*"}, Kind: "control", TimeoutMS: 10}})

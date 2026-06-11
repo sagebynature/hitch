@@ -1,7 +1,7 @@
 [server]
 host = "127.0.0.1"
 port = 8799
-max_request_bytes = 1048576
+max_request_bytes = 2097152
 
 [log]
 level = "info"
@@ -137,4 +137,3 @@ PostToolUse = "tool.completed"
 PreInvocation = "turn.user_prompt"
 PostInvocation = "turn.completed"
 Stop = "session.ended"
-
