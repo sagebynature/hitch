@@ -9,7 +9,7 @@ services:
       HOME: /var/lib/hitch
       HITCH_CONFIG: /var/lib/hitch/.config/hitch/config.toml
       HITCH_SERVER_HOST: 0.0.0.0
-      #HITCH_FACE_URL: ${HITCH_FACE_URL:-http://host.docker.internal:8888/event}
+      HITCH_FACE_URL: ${HITCH_FACE_URL:-http://host.docker.internal:8888/event}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     user: "${HITCH_UID:-1000}:${HITCH_GID:-1000}"
