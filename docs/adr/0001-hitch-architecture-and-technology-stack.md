@@ -12,7 +12,7 @@ Proposed
 
 Hitch is a spin-off from Agent Pulse / sentiment-viewer. Agent Pulse proved that local agent harnesses can emit useful lifecycle information, but its event model was intentionally narrow: classify user intent, user reaction, and agent action for a desktop status panel.
 
-Hitch has a broader goal: provide a universal hook adapter for agent harnesses, initially Codex, Pi, Oh My Pi (OMP), Hermes, OpenCode, and Antigravity. Source harnesses have different hook mechanisms, event names, payload schemas, return contracts, trust models, and installation surfaces. Hitch must normalize those into a homogeneous event protocol while preserving the original native payload as JSON.
+Hitch has a broader goal: provide a universal hook adapter for agent harnesses, initially Codex, Claude Code, Pi, Oh My Pi (OMP), Hermes, OpenCode, and Antigravity. Source harnesses have different hook mechanisms, event names, payload schemas, return contracts, trust models, and installation surfaces. Hitch must normalize those into a homogeneous event protocol while preserving the original native payload as JSON.
 
 The key architectural complication is that harness hooks are not all fire-and-forget. Some are observational, while others are control points that expect a synchronous decision, transformed input, injected context, or rewritten output. Hitch therefore needs to handle both asynchronous event ingestion and synchronous native-response translation.
 
@@ -121,7 +121,7 @@ This keeps handlers portable. Handlers depend on the normalized Hitch envelope a
 Decision:
 
 - Remove `hitch adapter` from the daemon command surface.
-- Use `hitch-client` for command-hook harnesses such as Codex, Hermes, and Antigravity.
+- Use `hitch-client` for command-hook harnesses such as Codex, Claude Code, Hermes, and Antigravity.
 - Prefer direct HTTP integration only for harnesses that natively support synchronous HTTP hooks with reliable timeout and response semantics.
 - Treat external harness-specific adapters as thin, tested compatibility layers, not as places for policy logic.
 - Resolve installed hook server URLs through an explicit waterfall: pinned `--url`, `HITCH_URL`, user config, then the local default.
@@ -493,7 +493,7 @@ Python is good for handler authoring and prototypes, but not the best core daemo
 
 Use **Go for the Hitch daemon, `hitch-client` hook shim, persistence layer, installer/doctor CLI, native response aggregation, and operational logging**.
 
-Use **TypeScript for harness adapters where the harness integration surface is JavaScript/TypeScript-native**, especially Pi and OMP extensions and the OpenCode plugin. Codex, Hermes, and Antigravity shell-hook adapters should use the shipped `hitch-client` binary.
+Use **TypeScript for harness adapters where the harness integration surface is JavaScript/TypeScript-native**, especially Pi and OMP extensions and the OpenCode plugin. Codex, Claude Code, Hermes, and Antigravity shell-hook adapters should use the shipped `hitch-client` binary.
 
 Support user handlers as external commands first. This avoids committing to an in-process plugin ABI and lets handlers be written in any language.
 

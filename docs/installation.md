@@ -43,7 +43,7 @@ docker run --rm -p 8799:8799 \
 
 Set `HITCH_SKIP_HOOK_INSTALL=1` to install binaries and skip hook setup in `all` or `client` mode.
 
-The current `hitch-client install` command detects Codex, Hermes, Pi, OMP, and OpenCode binaries on `PATH`, installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`, installs Hitch shell hooks for supported Hermes events into `~/.hermes/config.yaml`, installs a managed Pi extension at `~/.pi/agent/extensions/hitch/index.ts`, installs a managed OMP extension at `~/.omp/agent/extensions/hitch/index.ts`, and installs a managed OpenCode plugin at `~/.config/opencode/plugins/hitch.ts`. Managed shell hook commands execute `hitch-client` directly. `hitch-client uninstall` also recognizes legacy managed hooks that used `hitch adapter`.
+The current `hitch-client install` command detects Codex, Claude Code, Hermes, Pi, OMP, and OpenCode binaries on `PATH`, installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`, installs Hitch command hooks for supported Claude Code events into `~/.claude/settings.json`, installs Hitch shell hooks for supported Hermes events into `~/.hermes/config.yaml`, installs a managed Pi extension at `~/.pi/agent/extensions/hitch/index.ts`, installs a managed OMP extension at `~/.omp/agent/extensions/hitch/index.ts`, and installs a managed OpenCode plugin at `~/.config/opencode/plugins/hitch.ts`. Managed shell hook commands execute `hitch-client` directly. `hitch-client uninstall` also recognizes legacy managed hooks that used `hitch adapter`.
 
 Dry run detected supported harnesses:
 
@@ -61,6 +61,7 @@ Install selected hooks. Without `--url`, installed hooks resolve the server URL 
 
 ```sh
 hitch-client install --only codex --yes --json
+hitch-client install --only claudecode --yes --json
 hitch-client install --only hermes --yes --json
 hitch-client install --only hermes --url http://127.0.0.1:8797 --yes --json
 hitch-client install --only pi --yes --json
@@ -77,16 +78,17 @@ Installer behavior verified by tests:
 - Existing valid user config keeps user-owned values and receives missing managed default sections, such as the OpenCode event map required by the managed plugin.
 - `hitch-client install --dry-run` does not mutate hook configuration.
 - Codex hook installation covers `SessionStart`, `SubagentStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStop`, and `Stop`, and is idempotent.
+- Claude Code hook installation covers `SessionStart`, `SessionEnd`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PostToolUseFailure`, `Stop`, `StopFailure`, `SubagentStart`, `SubagentStop`, `PreCompact`, and `PostCompact`, and is idempotent.
 - Hermes hook installation covers `pre_tool_call`, `post_tool_call`, `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`, `subagent_stop`, `transform_tool_result`, `transform_terminal_output`, `transform_llm_output`, and `pre_gateway_dispatch`, and is idempotent.
 - Pi extension installation covers Pi's documented extension event callbacks and is idempotent.
 - OMP extension installation covers OMP's current extension lifecycle, tool, session, retry, and user-command events and is idempotent.
 - OpenCode plugin installation covers OpenCode typed plugin hooks and SDK lifecycle events and is idempotent.
 - Installed clients know about the full source-event catalog where the harness exposes it, but the seeded server config only persists the recommended low-noise subset. Add opt-in `[harness.<name>.event_map]` rows from `docs/events.md` to capture excluded source events.
-- Generated Codex and Hermes hook commands omit `-url` by default, resolve the Hitch API URL at runtime, and use `hitch-client` when it is available.
+- Generated Codex, Claude Code, and Hermes hook commands omit `-url` by default, resolve the Hitch API URL at runtime, and use `hitch-client` when it is available.
 - Generated Pi and OMP extensions post observer callbacks with `mode:"async"` and return-capable control callbacks with `mode:"sync"` to `/v1/events`, resolve the Hitch API URL at runtime unless `--url` pins one, promote adapter metadata into Hitch envelope fields when available, and fail open if Hitch is unavailable. The generated OpenCode plugin also resolves the API URL at runtime and fails open.
-- Existing Codex, Hermes, Pi, OMP, and OpenCode hook configuration is backed up before Hitch modifies it.
+- Existing Codex, Claude Code, Hermes, Pi, OMP, and OpenCode hook configuration is backed up before Hitch modifies it.
 - Unknown harness names are rejected.
-- Uninstall removes only Hitch-managed Codex, Hermes, Pi, OMP, or OpenCode hooks and leaves user config in place.
+- Uninstall removes only Hitch-managed Codex, Claude Code, Hermes, Pi, OMP, or OpenCode hooks and leaves user config in place.
 
 Status and doctor:
 

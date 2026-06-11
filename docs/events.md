@@ -1,6 +1,6 @@
 # Hitch Events
 
-Hitch turns source hook payloads from Codex, Hermes, Pi, OMP, OpenCode, and Antigravity into one stable event envelope. Handlers receive the normalized envelope on stdin and return one handler result on stdout.
+Hitch turns source hook payloads from Codex, Claude Code, Hermes, Pi, OMP, OpenCode, and Antigravity into one stable event envelope. Handlers receive the normalized envelope on stdin and return one handler result on stdout.
 
 ## Normalized envelope
 
@@ -11,7 +11,7 @@ Every harness normalizer creates the same envelope shape:
 | `hitch_version` | Hitch runtime | Current protocol version. |
 | `event_id` | Hitch runtime | Unique `evt_...` identifier generated when Hitch receives the event. |
 | `received_at` | Hitch runtime | UTC timestamp generated at receipt. |
-| `harness` | Adapter selection | One of `codex`, `hermes`, `pi`, `omp`, `opencode`, or `antigravity`. |
+| `harness` | Adapter selection | One of `codex`, `claudecode`, `hermes`, `pi`, `omp`, `opencode`, or `antigravity`. |
 | `source_event_type` | Harness source event name | The exact source hook or callback name Hitch mapped. |
 | `source_payload` | Harness source payload | The original JSON payload received by Hitch. Pi, OMP, and OpenCode unwrap the installed adapter transport envelope before normalization. |
 | `hitch_event_type` | Server event map | One of the normalized event names below. |
@@ -78,6 +78,9 @@ Most source events produce one primary normalized event from `[harness.<name>.ev
 | Hermes `transform_llm_output` | `["llm.completed", "turn.assistant_completed"]` |
 | Pi `turn_end` | `["turn.completed", "turn.assistant_completed", "llm.completed"]` |
 | OMP `turn_end` | `["turn.completed", "turn.assistant_completed", "llm.completed"]` |
+| Claude Code `Stop` | `["turn.completed", "turn.assistant_completed"]` |
+| Claude Code `PostToolUseFailure` | `["tool.completed", "error.reported"]` |
+| Claude Code `StopFailure` | `["turn.completed", "error.reported"]` |
 
 Secondary rows are parsed for their target Hitch event type and share the same inbound event. They are for audit/query consistency and are not dispatched to live handlers; sync handler decisions and native responses are evaluated against the first configured event only.
 
@@ -97,6 +100,30 @@ Secondary rows are parsed for their target Hitch event type and share the same i
 | `Stop` | `turn.completed`, `turn.assistant_completed` | Original Codex payload | Primary `turn.completed` handles `stop` or `block` as `decision: "stop"` with `reason`; secondary `turn.assistant_completed` is audit-only. |
 
 Codex handlers may also return `decision.native_response`. When present, Hitch returns that JSON directly instead of translating the normalized behavior.
+
+## Claude Code source events
+
+| Claude Code source event | Hitch event | Default | Normalized payload | Native response behavior |
+| --- | --- | --- | --- | --- |
+| `SessionStart` | `session.started` | Yes | Original Claude Code payload | `inject_context` adds `additionalContext`; `block` or `deny` returns `decision: "block"` with `reason`. |
+| `SessionEnd` | `session.ended` | Yes | Original Claude Code payload | Observer-only lifecycle event. Returns `{}`. |
+| `Setup` | `session.started` | No | Original Claude Code payload | Observer-only setup lifecycle event; configure explicitly when needed. |
+| `UserPromptSubmit` | `turn.user_prompt` | Yes | Original Claude Code payload | `inject_context` adds `additionalContext`; `block` or `deny` returns `decision: "block"` with `reason`. |
+| `UserPromptExpansion` | `turn.user_prompt` | No | Original Claude Code payload | Observer-only prompt expansion event; configure explicitly when needed. |
+| `PreToolUse` | `tool.requested` | Yes | Original Claude Code payload | `deny`, `block`, or `stop` returns `hookSpecificOutput.permissionDecision: "deny"` with `permissionDecisionReason`; `allow` or `transform` returns `permissionDecision: "allow"`; `transform` may include `updatedInput`. |
+| `PermissionRequest` | `tool.permission_requested` | Yes | Original Claude Code payload | `deny`, `block`, or `stop` returns `hookSpecificOutput.decision.behavior: "deny"`; `allow` returns `hookSpecificOutput.decision.behavior: "allow"`. |
+| `PostToolUse` | `tool.completed` | Yes | Original Claude Code payload | `inject_context` adds `additionalContext`; `block` or `deny` returns `decision: "block"` with `reason`; `replace_result` may return `updatedToolOutput`. |
+| `PostToolUseFailure` | `tool.completed`, `error.reported` | Yes | Original Claude Code payload | Primary `tool.completed` has no special translation; secondary `error.reported` is audit-only. |
+| `PostToolBatch` | `tool.completed` | No | Original Claude Code payload | Observer-only batch completion event; configure explicitly when needed. |
+| `Stop` | `turn.completed`, `turn.assistant_completed` | Yes | Original Claude Code payload | Primary `turn.completed` handles `block` or `stop` as `decision: "block"` with `reason`; `inject_context` adds `additionalContext`; secondary `turn.assistant_completed` is audit-only. |
+| `StopFailure` | `turn.completed`, `error.reported` | Yes | Original Claude Code payload | Primary `turn.completed` has no special translation; secondary `error.reported` is audit-only. |
+| `SubagentStart` | `subagent.started` | Yes | Original Claude Code payload | `block`, `deny`, or `stop` returns `decision: "block"` with `reason`. |
+| `SubagentStop` | `subagent.completed` | Yes | Original Claude Code payload | `block`, `deny`, or `stop` returns `decision: "block"` with `reason`. |
+| `PreCompact` | `session.compacted` | Yes | Original Claude Code payload | `block`, `deny`, or `stop` returns `decision: "block"` with `reason`. |
+| `PostCompact` | `session.compacted` | Yes | Original Claude Code payload | `block`, `deny`, or `stop` returns `decision: "block"` with `reason`. |
+| `InstructionsLoaded`, `Notification`, `MessageDisplay`, `CwdChanged`, `FileChanged`, `ConfigChange`, `Elicitation`, `ElicitationResult`, `WorktreeCreate`, `WorktreeRemove`, `TaskCreated`, `TaskCompleted`, `TeammateIdle` | Operator-selected Hitch event | No | Original Claude Code payload | Product/runtime telemetry; leave unmapped by default unless a handler needs it. |
+
+Claude Code handlers may also return `decision.native_response`. When present, Hitch returns that JSON directly instead of translating the normalized behavior.
 
 ## Hermes source events
 

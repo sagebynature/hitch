@@ -33,14 +33,14 @@ Common mappings:
 
 | Developer goal | Hitch event | Example source events |
 | --- | --- | --- |
-| Inspect or block a tool before it runs | `tool.requested` | Codex `PreToolUse`, Hermes `pre_tool_call`, Pi/OMP `tool_call`, OpenCode `tool.execute.before`, Antigravity `PreToolUse` |
-| Inspect a completed tool result | `tool.completed` | Codex `PostToolUse`, Hermes `transform_tool_result`, Pi/OMP `tool_result`, OpenCode `tool.execute.after`, Antigravity `PostToolUse` |
-| Add context to a user request | `turn.user_prompt` | Codex `UserPromptSubmit`, Hermes `pre_gateway_dispatch`, Pi/OMP `input`, OpenCode `chat.message` |
+| Inspect or block a tool before it runs | `tool.requested` | Codex/Claude Code `PreToolUse`, Hermes `pre_tool_call`, Pi/OMP `tool_call`, OpenCode `tool.execute.before`, Antigravity `PreToolUse` |
+| Inspect a completed tool result | `tool.completed` | Codex/Claude Code `PostToolUse`, Hermes `transform_tool_result`, Pi/OMP `tool_result`, OpenCode `tool.execute.after`, Antigravity `PostToolUse` |
+| Add context to a user request | `turn.user_prompt` | Codex/Claude Code `UserPromptSubmit`, Hermes `pre_gateway_dispatch`, Pi/OMP `input`, OpenCode `chat.message` |
 | Inspect or augment an LLM request | `llm.requested` | Hermes `pre_llm_call`; Pi/OMP `before_provider_request`; OpenCode `chat.params` or `chat.headers` when opted in |
 | Run at model or agent turn start | `turn.started` | Pi `turn_start`, OMP `turn_start` |
-| Run after model or agent turn completion | `turn.completed` | Codex `Stop`, Pi/OMP `turn_end`, OpenCode `session.idle`, Antigravity `Stop` |
-| Query assistant output completion consistently | `turn.assistant_completed` | Codex `Stop`, Hermes `transform_llm_output`, Pi/OMP `turn_end`, OpenCode managed-plugin `message.part.text` |
-| Handle compaction lifecycle | `session.compacted` | Codex `PreCompact`, Pi `session_before_compact`, OMP `auto_compaction_start`, OpenCode `experimental.session.compacting` |
+| Run after model or agent turn completion | `turn.completed` | Codex/Claude Code `Stop`, Pi/OMP `turn_end`, OpenCode `session.idle`, Antigravity `Stop` |
+| Query assistant output completion consistently | `turn.assistant_completed` | Codex/Claude Code `Stop`, Hermes `transform_llm_output`, Pi/OMP `turn_end`, OpenCode managed-plugin `message.part.text` |
+| Handle compaction lifecycle | `session.compacted` | Codex/Claude Code `PreCompact`, Pi `session_before_compact`, OMP `auto_compaction_start`, OpenCode `experimental.session.compacting` |
 
 Secondary audit rows from multi-event source mappings are not used for sync native-response translation or live handler dispatch. If a handler must block, transform, replace, or observe a live source event, register for the primary Hitch event. Query secondary events such as `turn.assistant_completed` when you need a consistent audit signal across harnesses.
 

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hitch — one event layer for every agent harness</title>
-    <meta name="description" content="Hitch is the universal event and observability layer for Codex, Hermes, Pi, OMP, and OpenCode. Normalize lifecycle events, preserve native payloads, and route hooks locally or remotely." />
+    <meta name="description" content="Hitch is the universal event and observability layer for Codex, Claude Code, Hermes, Pi, OMP, OpenCode, and Antigravity. Normalize lifecycle events, preserve native payloads, and route hooks locally or remotely." />
     <meta property="og:title" content="Hitch" />
     <meta property="og:description" content="Write hooks once, run them across harnesses, and route lifecycle events through one local-first, remote-ready REST API." />
     <meta property="og:type" content="website" />
@@ -42,7 +42,7 @@
         <div class="hero-copy">
           <p class="eyebrow">Universal agent event layer</p>
           <h1 id="hero-title">One lifecycle surface for every agent harness.</h1>
-          <p class="lede">Hitch turns Codex, Hermes, Pi, OMP, and OpenCode hooks into one portable event protocol. Preserve native payloads, normalize lifecycle events, and route decisions through local or remote handlers.</p>
+          <p class="lede">Hitch turns Codex, Claude Code, Hermes, Pi, OMP, OpenCode, and Antigravity hooks into one portable event protocol. Preserve native payloads, normalize lifecycle events, and route decisions through local or remote handlers.</p>
         </div>
         <aside class="event-visual" aria-label="Hitch event normalization example">
           <div class="event-card native"><span>native payload</span><code>Codex • PreToolUse</code></div>
@@ -61,7 +61,7 @@
         <div class="editorial-split">
           <h2 id="problem-title">Every harness speaks a different lifecycle language.</h2>
           <div class="editorial-copy">
-            <p>Each agent CLI has its own event names, payloads, response rules, and lifecycle boundaries. Guardrails, observers, context injectors, and workflow hooks should not have to chase five native formats.</p>
+            <p>Each agent CLI has its own event names, payloads, response rules, and lifecycle boundaries. Guardrails, observers, context injectors, and workflow hooks should not have to chase seven native formats.</p>
             <div class="rule-list" aria-label="Hitch preserves and normalizes events">
               <span>Native JSON preserved</span>
               <span>Normalized event taxonomy</span>
@@ -74,7 +74,7 @@
       <section class="section section-editorial" aria-labelledby="action-title">
         <h2 id="action-title">Hitch in action</h2>
         <div class="flow-panel" aria-label="Hitch event flow">
-          <div class="flow-step"><span>01</span><strong>Harness</strong><p>Codex, Hermes, Pi, OMP, or OpenCode emits lifecycle data.</p></div>
+          <div class="flow-step"><span>01</span><strong>Harness</strong><p>Codex, Claude Code, Hermes, Pi, OMP, OpenCode, or Antigravity emits lifecycle data.</p></div>
           <div class="flow-step"><span>02</span><strong>Envelope</strong><p>Hitch maps it to a stable event while retaining the original payload.</p></div>
           <div class="flow-step"><span>03</span><strong>Handler</strong><p>Configured commands inspect events and return decisions.</p></div>
           <div class="flow-step"><span>04</span><strong>Observe</strong><p>Decisions, audit rows, and replayable history stay in one place.</p></div>
@@ -111,6 +111,7 @@ hitch serve --config ~/.config/hitch/config.toml
 hitch status --json
 hitch doctor --json
 hitch-client install --only codex --dry-run --json
+hitch-client install --only claudecode --dry-run --json
 hitch-client install --only opencode --yes --json</code></pre>
             <div class="actions">
               <a class="button primary" href="docs/latest/#quickstart">Full quickstart</a>
@@ -130,9 +131,9 @@ hitch-client install --only opencode --yes --json</code></pre>
           <div class="docs-index">
             <a class="doc-card" href="docs/latest/#handler-protocol"><small>Protocol</small><h3>Handler results</h3><p>Status values, decision behaviors, stdout parsing, timeout handling, and aggregation rules.</p></a>
             <a class="doc-card" href="docs/latest/#handler-development"><small>Guide</small><h3>Build handlers</h3><p>Step-by-step handler development, config mapping, decisions, and runnable examples.</p></a>
-            <a class="doc-card" href="docs/latest/#hitch-events"><small>Events</small><h3>Hitch event mapping</h3><p>Normalized event taxonomy and source-event mappings for Codex, Hermes, Pi, OMP, and OpenCode.</p></a>
+            <a class="doc-card" href="docs/latest/#hitch-events"><small>Events</small><h3>Hitch event mapping</h3><p>Normalized event taxonomy and source-event mappings for Codex, Claude Code, Hermes, Pi, OMP, OpenCode, and Antigravity.</p></a>
             <a class="doc-card" href="docs/latest/#http-api"><small>API</small><h3>Local HTTP API</h3><p>Health checks, event ingestion, synchronous dispatch, inspection, and replay entry points.</p></a>
-            <a class="doc-card" href="docs/latest/#harness-contracts"><small>Adapters</small><h3>Harness contracts</h3><p>Codex, Hermes, Pi, OMP, and OpenCode behavior at the native boundary.</p></a>
+            <a class="doc-card" href="docs/latest/#harness-contracts"><small>Adapters</small><h3>Harness contracts</h3><p>Codex, Claude Code, Hermes, Pi, OMP, OpenCode, and Antigravity behavior at the native boundary.</p></a>
             <a class="doc-card" href="docs/latest/#schemas"><small>Schemas</small><h3>JSON references</h3><p>Envelope, handler result, and dispatch result schema files for tests and integrations.</p></a>
           </div>
         </div>
