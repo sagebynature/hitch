@@ -57,41 +57,51 @@ Install from latest source:
 curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | sh
 ```
 
-Or build the CLI locally:
+Or build the CLIs locally:
 
 ```sh
 make build
 ```
 
-Or build and run the container image:
+Run Hitch from source with the repository development config:
+
+```sh
+make serve
+```
+
+`make serve` runs:
+
+```sh
+go run ./cmd/hitch serve --config internal/config/default.config.toml
+```
+
+In another shell, check the local server and installation state:
+
+```sh
+make doctor
+make status
+```
+
+The default server listens on `127.0.0.1:8799` and stores audit and observability records in SQLite at `~/.local/share/hitch/events.sqlite`. SQLite is the current verified audit backend. Operational logs are supported on stdout and a rolling file sink; enabled JSONL audit configs and enabled OTLP log export configs are rejected until implemented.
+
+Build and run the container image with Make:
+
+```sh
+make docker-run
+```
+
+`make docker-run` builds the image, prepares `~/.config/hitch/config.toml`, `extensions/`, and `backups/` when missing, mounts that directory at `/var/lib/hitch/.config/hitch`, and starts Hitch through Docker Compose on port `8799`.
+
+You can also run the container manually:
 
 ```sh
 docker build -t hitch .
-docker run --rm -p 8799:8799 hitch
-```
-
-The image uses the same logical Hitch config root as local runs: `~/.config/hitch`. `make docker-run` creates `~/.config/hitch/config.toml`, `extensions/`, and `backups/` when missing, then mounts that directory at `/var/lib/hitch/.config/hitch` in the container. The container sets `HITCH_SERVER_HOST=0.0.0.0` at runtime, so the shared config can keep the local default `server.host = "127.0.0.1"`. The runtime image includes Node.js for JavaScript/TypeScript extension adapters and Compose sets `HITCH_FACE_URL=http://host.docker.internal:8888/event` for desktop callbacks.
-
-```sh
 docker run --rm -p 8799:8799 \
   -v "$HOME/.config/hitch:/var/lib/hitch/.config/hitch" \
   hitch
 ```
 
-Run Hitch locally:
-
-```sh
-./bin/hitch serve --config internal/config/default.config.toml
-```
-
-In another shell, check the installation:
-
-```sh
-./bin/hitch doctor --json
-./bin/hitch status --json
-```
-
-The default server listens on `127.0.0.1:8799` and stores audit and observability records in SQLite at `~/.local/share/hitch/events.sqlite`. SQLite is the current verified audit backend. Operational logs are supported on stdout and a rolling file sink; enabled JSONL audit configs and enabled OTLP log export configs are rejected until implemented.
+The image uses the same logical Hitch config root as local runs: `~/.config/hitch`. The container sets `HITCH_SERVER_HOST=0.0.0.0` at runtime, so the shared config can keep the local default `server.host = "127.0.0.1"`. The runtime image includes Node.js for JavaScript/TypeScript extension adapters and Compose sets `HITCH_FACE_URL=http://host.docker.internal:8888/event` for desktop callbacks.
 
 ## Agent observability
 
@@ -135,13 +145,19 @@ See `docs/handler-protocol.md` for the full handler result contract.
 ## Common commands
 
 ```sh
+make build             # Build bin/hitch and bin/hitch-client
+make run               # Run the hitch CLI from source
+make serve             # Run the local Hitch server with the repo config
+make status            # Print CLI status as JSON
+make doctor            # Run CLI doctor as JSON
+make docker-build      # Build the Hitch container image
+make docker-run        # Prepare config and run Hitch through Docker Compose
+make install-dry-run   # Preview hook installation
 make test              # Run Go tests
 make test-go           # Alias for Go tests used by CI/release workflows
 make vet               # Run go vet
 make check             # Run lint when available, vet, tests, and builds
-make build             # Build bin/hitch and bin/hitch-client
-make serve             # Run the local Hitch server
-make install-dry-run   # Preview hook installation
+make clean             # Remove build outputs
 ```
 
 Run tests directly:
