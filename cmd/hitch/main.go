@@ -16,7 +16,7 @@ import (
 	"github.com/sagebynature/hitch/internal/store"
 )
 
-var version = "0.1.0"
+var version = "dev"
 
 func main() {
 	if len(os.Args) > 1 {

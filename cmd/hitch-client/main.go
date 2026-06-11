@@ -11,7 +11,7 @@ import (
 	"github.com/sagebynature/hitch/internal/install"
 )
 
-var version = "0.1.0"
+var version = "dev"
 
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {

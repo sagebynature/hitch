@@ -2,7 +2,7 @@
 set -eu
 
 HITCH_REPO_URL=${HITCH_REPO_URL:-https://github.com/sagebynature/hitch.git}
-HITCH_REF=${HITCH_REF:-main}
+HITCH_REF=${HITCH_REF:-}
 HITCH_INSTALL_DIR=${HITCH_INSTALL_DIR:-$HOME/.local/bin}
 HITCH_SOURCE_DIR=${HITCH_SOURCE_DIR:-}
 HITCH_SKIP_HOOK_INSTALL=${HITCH_SKIP_HOOK_INSTALL:-0}
@@ -16,6 +16,43 @@ require_command() {
   fi
 }
 
+
+latest_release_ref() {
+  git ls-remote --tags --refs --sort='version:refname' "$HITCH_REPO_URL" 'v[0-9]*.[0-9]*.[0-9]*' |
+    awk 'NF >= 2 { ref = $2 } END { sub("^refs/tags/", "", ref); print ref }'
+}
+
+resolve_version() {
+  if [ -n "${HITCH_VERSION:-}" ]; then
+    printf '%s' "${HITCH_VERSION#v}"
+    return 0
+  fi
+
+  if command -v git >/dev/null 2>&1 && [ -d "$1/.git" ]; then
+    version=$(git -C "$1" describe --tags --exact-match 2>/dev/null || true)
+    if [ -n "$version" ]; then
+      printf '%s' "${version#v}"
+      return 0
+    fi
+
+    version=$(git -C "$1" describe --tags --dirty --always 2>/dev/null || true)
+    if [ -n "$version" ]; then
+      printf '%s' "${version#v}"
+      return 0
+    fi
+  fi
+
+  printf 'dev'
+}
+
+build_ldflags() {
+  version=$1
+  if [ "$version" = dev ]; then
+    printf '%s' '-s -w'
+  else
+    printf '%s' "-s -w -X main.version=$version"
+  fi
+}
 path_is_first() {
   cmd_name=$1
   cmd_path=$(command -v "$cmd_name" 2>/dev/null || true)
@@ -231,16 +268,26 @@ main() {
   if [ -n "$HITCH_SOURCE_DIR" ]; then
     src_dir=$HITCH_SOURCE_DIR
   else
+    if [ -z "$HITCH_REF" ]; then
+      HITCH_REF=$(latest_release_ref)
+    fi
+    if [ -z "$HITCH_REF" ]; then
+      printf 'could not resolve latest Hitch release tag\n' >&2
+      exit 1
+    fi
     src_dir=$tmp_dir/src
     git clone --depth 1 --branch "$HITCH_REF" "$HITCH_REPO_URL" "$src_dir"
   fi
 
-  printf 'Building Hitch from %s...\n' "$src_dir"
+  version=$(resolve_version "$src_dir")
+  ldflags=$(build_ldflags "$version")
+
+  printf 'Building Hitch %s from %s...\n' "$version" "$src_dir"
   if [ "$install_hitch" = 1 ]; then
-    (cd "$src_dir" && go build -o "$tmp_dir/hitch" ./cmd/hitch)
+    (cd "$src_dir" && go build -ldflags "$ldflags" -o "$tmp_dir/hitch" ./cmd/hitch)
   fi
   if [ "$install_client" = 1 ]; then
-    (cd "$src_dir" && go build -o "$tmp_dir/hitch-client" ./cmd/hitch-client)
+    (cd "$src_dir" && go build -ldflags "$ldflags" -o "$tmp_dir/hitch-client" ./cmd/hitch-client)
   fi
 
   mkdir -p "$HITCH_INSTALL_DIR"

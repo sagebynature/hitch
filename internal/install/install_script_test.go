@@ -160,6 +160,21 @@ func TestSourceInstallerInstallModes(t *testing.T) {
 	}
 }
 
+func TestSourceInstallerInjectsRequestedVersion(t *testing.T) {
+	result := runSourceInstaller(t, map[string]string{
+		"HITCH_INSTALL_MODE": "client",
+		"HITCH_VERSION":      "v9.8.7",
+	})
+	if result.Err != nil {
+		t.Fatalf("installer failed: %v\n%s", result.Err, result.Output)
+	}
+	if !strings.Contains(result.Output, "Building Hitch 9.8.7 from") {
+		t.Fatalf("installer output missing derived version\noutput:\n%s", result.Output)
+	}
+	if !strings.Contains(result.Log, "go build -ldflags -s -w -X main.version=9.8.7") {
+		t.Fatalf("installer did not inject version ldflags\nlog:\n%s", result.Log)
+	}
+}
 func hasBuildTarget(log string, target buildTarget) bool {
 	want := "go build output=" + target.Binary + " package=" + target.Package
 	for _, line := range strings.Split(log, "\n") {
