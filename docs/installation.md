@@ -24,6 +24,23 @@ curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/ins
 curl -fsSL https://raw.githubusercontent.com/sagebynature/hitch/main/scripts/install.sh | HITCH_INSTALL_MODE=client HITCH_URL=http://127.0.0.1:8799 sh
 ```
 
+Build and run the container image:
+
+```sh
+docker build -t hitch .
+docker run --rm -p 8799:8799 hitch
+```
+
+The image listens on `0.0.0.0:8799` and uses the same logical Hitch config root as local runs: `~/.config/hitch`. `make docker-run` creates `~/.config/hitch/config.toml`, `extensions/`, and `backups/` when missing, then mounts that directory at `/var/lib/hitch/.config/hitch` in the container. Override `HITCH_CONFIG_DIR` when you want a different host source. The runtime image includes Node.js for JavaScript/TypeScript extension adapters, and Compose sets `HITCH_FACE_URL=http://host.docker.internal:8888/event` so containerized handlers can call desktop services on the host.
+
+```sh
+make docker-run
+HITCH_CONFIG_DIR="$PWD/.hitch-docker" make docker-run
+docker run --rm -p 8799:8799 \
+  -v "$HOME/.config/hitch:/var/lib/hitch/.config/hitch" \
+  hitch
+```
+
 Set `HITCH_SKIP_HOOK_INSTALL=1` to install binaries and skip hook setup in `all` or `client` mode.
 
 The current `hitch-client install` command detects Codex, Hermes, Pi, OMP, and OpenCode binaries on `PATH`, installs Hitch command hooks for every supported Codex lifecycle event into `~/.codex/hooks.json`, installs Hitch shell hooks for supported Hermes events into `~/.hermes/config.yaml`, installs a managed Pi extension at `~/.pi/agent/extensions/hitch/index.ts`, installs a managed OMP extension at `~/.omp/agent/extensions/hitch/index.ts`, and installs a managed OpenCode plugin at `~/.config/opencode/plugins/hitch.ts`. Managed shell hook commands execute `hitch-client` directly. `hitch-client uninstall` also recognizes legacy managed hooks that used `hitch adapter`.

@@ -63,6 +63,21 @@ Or build the CLI locally:
 make build
 ```
 
+Or build and run the container image:
+
+```sh
+docker build -t hitch .
+docker run --rm -p 8799:8799 hitch
+```
+
+The image uses the same logical Hitch config root as local runs: `~/.config/hitch`. `make docker-run` creates `~/.config/hitch/config.toml`, `extensions/`, and `backups/` when missing, then mounts that directory at `/var/lib/hitch/.config/hitch` in the container. The container sets `HITCH_SERVER_HOST=0.0.0.0` at runtime, so the shared config can keep the local default `server.host = "127.0.0.1"`. The runtime image includes Node.js for JavaScript/TypeScript extension adapters and Compose sets `HITCH_FACE_URL=http://host.docker.internal:8888/event` for desktop callbacks.
+
+```sh
+docker run --rm -p 8799:8799 \
+  -v "$HOME/.config/hitch:/var/lib/hitch/.config/hitch" \
+  hitch
+```
+
 Run Hitch locally:
 
 ```sh

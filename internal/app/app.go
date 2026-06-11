@@ -42,11 +42,18 @@ func resolveConfigPath(path string, provided bool) string {
 	return path
 }
 
+func applyServerHostOverride(cfg *config.Config) {
+	if host := os.Getenv("HITCH_SERVER_HOST"); host != "" {
+		cfg.Server.Host = host
+	}
+}
+
 func NewServerBundle(ctx context.Context, opts ServeOptions) (*ServerBundle, error) {
 	cfg, err := config.Load(resolveConfigPath(opts.ConfigPath, opts.ConfigPathProvided))
 	if err != nil {
 		return nil, err
 	}
+	applyServerHostOverride(&cfg)
 	logger, logCloser, err := logging.New(cfg.Log)
 	if err != nil {
 		return nil, err

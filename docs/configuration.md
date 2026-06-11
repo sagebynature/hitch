@@ -50,9 +50,9 @@ source_events = [{ harness = "codex", source_event_type = "PreToolUse" }]
 
 `payload = "hitch"` passes Hitch's normalized payload as the primary payload. `payload = "source"` passes the preserved source payload as the primary payload. Both payloads are always available in the invocation context.
 
-`handlers.<name>.working_dir` is optional. When set through a loaded config file, relative values resolve against the directory containing that config file. Hitch runs the handler command from that directory, so relative command arguments and output paths are stable regardless of where `hitch serve` was launched.
+`handlers.<name>.working_dir` is optional. When set through a loaded main config file, relative values resolve against the directory containing that config file. Hitch runs the handler command from that directory, so relative command arguments and output paths are stable regardless of where `hitch serve` was launched.
 
-Native Python extensions are discovered under `~/.config/hitch/extensions/<name>/config.toml`. An extension config uses the same routing fields and an `entrypoint = "module:function"` value; Hitch runs the extension in an isolated Python subprocess through the Hitch SDK.
+Extension-managed handlers are discovered under `~/.config/hitch/extensions/<directory>/config.toml`. Extension configs use the same routing fields. Native extension configs omit `type` or set `type = "native"` and provide `entrypoint = "module:function"`; shell extension configs set `type = "shell"` and provide `command = [...]`. Discovered extensions run from their extension directory by default, so `command = ["/bin/sh", "adapter.sh"]` looks for `adapter.sh` in that extension folder. Relative extension `working_dir` values resolve from the extension directory. Use `/bin/bash` only when the container image or local runtime is known to provide Bash.
 
 Harness event maps live in config. The default config includes the recommended low-noise mappings. Duplicate, high-volume, or product-specific source events are documented in `docs/events.md` as opt-in catalog rows; add entries in the relevant map to capture them:
 

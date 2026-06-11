@@ -1,0 +1,18 @@
+services:
+  hitch:
+    build:
+      context: .
+    image: ${DOCKER_IMAGE:-hitch:local}
+    ports:
+      - "${DOCKER_PORT:-8799}:8799"
+    environment:
+      HOME: /var/lib/hitch
+      HITCH_CONFIG: /var/lib/hitch/.config/hitch/config.toml
+      HITCH_SERVER_HOST: 0.0.0.0
+      HITCH_FACE_URL: ${HITCH_FACE_URL:-http://host.docker.internal:8888/event}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    user: "${HITCH_UID:-1000}:${HITCH_GID:-1000}"
+    volumes:
+      - ${HITCH_CONFIG_DIR:-${HOME}/.config/hitch}:/var/lib/hitch/.config/hitch
+    restart: unless-stopped

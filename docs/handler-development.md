@@ -68,11 +68,11 @@ Fields:
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `type` | No | `shell` or `native`. Missing values default to `shell` for existing command handlers. |
+| `type` | No | `shell` or `native`. Missing values default to `shell` in the main config and `native` in scanned extension configs. |
 | `command` | Shell | Command and arguments passed to `exec`. Hitch writes the invocation context to stdin and appends the selected payload JSON as one argument. |
 | `extension` | Native | Extension name under `~/.config/hitch/extensions/<name>`. |
-| `entrypoint` | Native | Python `module:function` entrypoint. Discovered extension configs supply this automatically. |
-| `working_dir` | No | Directory Hitch runs the command from. Relative values in loaded config files resolve from the config file directory. Native discovered extensions run from their extension directory. |
+| `entrypoint` | Native | Python `module:function` entrypoint. Discovered native extension configs supply this automatically. |
+| `working_dir` | No | Directory Hitch runs the command from. Relative values in loaded main config files resolve from the config file directory. Discovered extensions run from their extension directory; relative extension `working_dir` values resolve from that directory. |
 | `hitch_events` | Yes | Normalized Hitch events to match. Use `"*"` to match all events. Legacy `events` remains accepted as an alias. |
 | `source_events` | No | Exact source hook filters such as `{ harness = "codex", source_event_type = "PreToolUse" }`. Empty means every source event. |
 | `payload` | No | `hitch` for Hitch-normalized payload or `source` for preserved source payload. Defaults to `hitch`. |
@@ -113,17 +113,17 @@ The handler receives a Hitch invocation context on stdin. Existing envelope fiel
 
 `payload` is the Hitch-normalized handler contract for the event type. Use `payload.tool`, `payload.turn`, or `payload.llm` for common fields; inspect `source_payload`, `harness`, and `source_event_type` only when a harness-specific field is required or the typed payload is marked `{"unparsed": true}`. Final assistant text is exposed as `payload.turn.assistant.text` on `turn.assistant_completed`; token and cost metrics are exposed under `payload.llm.usage` on `llm.completed` when the harness provides them.
 
-## Native Python extensions
+## Extension-managed handlers
 
-Create extensions under `~/.config/hitch/extensions/<name>/`:
+Create extensions under `~/.config/hitch/extensions/<directory>/`. Hitch scans each child directory for `config.toml` and registers the handler from that file. The handler name defaults to the directory name; set `name` when the handler name should differ from the on-disk directory.
+
+Native Python extension:
 
 ```text
 ~/.config/hitch/extensions/audit_logger/
   config.toml
   handler.py
 ```
-
-`config.toml`:
 
 ```toml
 name = "audit_logger"
@@ -136,7 +136,29 @@ on_error = "fail_open"
 on_timeout = "fail_open"
 ```
 
-`handler.py`:
+Shell extension:
+
+```text
+~/.config/hitch/extensions/hitch-face/
+  config.toml
+  adapter.sh
+```
+
+```toml
+name = "hitch_face"
+type = "shell"
+command = ["/bin/sh", "adapter.sh"]
+kind = "observer"
+hitch_events = ["*"]
+payload = "hitch"
+timeout_ms = 1000
+on_error = "fail_open"
+on_timeout = "fail_open"
+```
+
+Discovered extensions run with their extension directory as the working directory by default, so relative command arguments such as `adapter.sh` resolve inside the extension folder. `working_dir` may override this; relative `working_dir` values resolve from the extension directory.
+
+Hitch runs native extensions as isolated Python subprocesses. The SDK deserializes stdin into `Context` and serializes the returned `HandlerResult` to stdout:
 
 ```python
 import sys
@@ -147,8 +169,6 @@ def handle(context: Context) -> HandlerResult:
     print(context.event.hitch_event_type, file=sys.stderr)
     return HandlerResult.none()
 ```
-
-Hitch runs native extensions as isolated Python subprocesses. The SDK deserializes stdin into `Context` and serializes the returned `HandlerResult` to stdout.
 
 ## Step 4: Return a handler result
 
